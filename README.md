@@ -1,43 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# InstantAppoint
+
+Appointment scheduling and WhatsApp reminder tool for small service businesses. Manage your calendar and send appointment reminders directly to clients via WhatsApp — no third-party messaging service required.
+
+## What it does
+
+- **Calendar** — create and manage appointments with client name, phone number, time, location, and notes
+- **WhatsApp** — link your WhatsApp account by scanning a QR code; the app uses it to send reminders to clients
+- **Reminders** — (coming soon) automated reminder messages sent before appointments
+
+Built for solo operators and small businesses where WhatsApp is the primary way to communicate with clients.
+
+## Tech stack
+
+- **Next.js** — frontend and API routes
+- **PocketBase** — database and auth
+- **whatsapp-web.js** — WhatsApp automation via Puppeteer, running as a sidecar service
 
 ## Quickstart
 
-Three services need to be running. Open a terminal for each:
-
-**1. PocketBase** (database)
 ```bash
-./pocketbase serve
+./dev.sh
 ```
 
-**2. WhatsApp service**
-```bash
-cd whatsapp-service && node server.js
-```
+That's it. The script starts all three services:
 
-**3. Next.js app**
+| Service | Port |
+|---|---|
+| Next.js app | :3000 |
+| PocketBase | :8090 |
+| WhatsApp service | :3003 |
+
+Press `Ctrl+C` to stop everything.
+
+## Manual startup
+
+If you prefer to run services individually, open three terminals:
+
 ```bash
+# PocketBase
+pocketbase serve --dir=pb_data
+
+# WhatsApp service
+cd whatsapp-service && npm start
+
+# Next.js
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to use the app.
+## WhatsApp setup
 
-> Phone numbers sent via WhatsApp must include the country code and digits only (e.g. `5215512345678`).
+1. Open the app and go to the **WhatsApp Setup** tab
+2. Click **Connect WhatsApp**
+3. Scan the QR code with your phone (WhatsApp → Settings → Linked Devices → Link a Device)
+4. Done — your session is saved and will auto-reconnect on restart
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Phone number format
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Numbers must include the country code, digits only:
+- US: `15512345678`
+- Mexico: `5215512345678` (use `521` prefix for Mexican mobile numbers, not `52`)
