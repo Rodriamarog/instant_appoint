@@ -43,7 +43,7 @@ const authHeaders = () => ({
   Authorization: `Bearer ${pb.authStore.token}`,
 })
 
-export function RemindersTab({ whatsappStatus }: { whatsappStatus: string }) {
+export function RemindersTab({ whatsappStatus }: { whatsappStatus: string | null }) {
   const [settings, setSettings] = useState<ReminderSettings>({ timing_minutes: 1440, is_active: true })
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [sentEventIds, setSentEventIds] = useState<Set<string>>(new Set())
@@ -135,6 +135,7 @@ export function RemindersTab({ whatsappStatus }: { whatsappStatus: string }) {
   }
 
   const whatsappConnected = whatsappStatus === 'connected'
+  const whatsappStatusKnown = whatsappStatus !== null
 
   if (isLoadingSettings) {
     return (
@@ -153,8 +154,8 @@ export function RemindersTab({ whatsappStatus }: { whatsappStatus: string }) {
         </p>
       </div>
 
-      {/* WhatsApp not connected warning */}
-      {!whatsappConnected && (
+      {/* WhatsApp not connected warning — only show once status is known */}
+      {whatsappStatusKnown && !whatsappConnected && (
         <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
           <BellOff className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
           <p className="text-sm text-amber-800">
