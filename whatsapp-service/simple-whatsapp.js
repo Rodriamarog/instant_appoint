@@ -148,6 +148,95 @@ class SimpleWhatsAppManager {
     }
   }
 
+  startScheduler() {
+    console.log('Reminder scheduler started (checking every 60s)');
+    this.runReminderCheck();
+    setInterval(() => this.runReminderCheck(), 60_000);
+  }
+
+  async runReminderCheck() {
+    const now = new Date();
+    const windowEnd = new Date(now.getTime() + 25 * 60 * 60 * 1000);
+
+    let events;
+    try {
+      events = await this.pb.collection('calendar_events').getFullList({
+        filter: `start_time >= "${now.toISOString()}" && start_time <= "${windowEnd.toISOString()}"`,
+      });
+    } catch (err) {
+      console.error('Scheduler: failed to query events:', err.message);
+      return;
+    }
+
+    for (const event of events) {
+      try {
+        if (!event.client_phone) continue;
+
+        // Get this user's reminder settings (fall back to defaults)
+        let timingMinutes = 1440;
+        let isActive = true;
+        try {
+          const settings = await this.pb.collection('reminder_settings')
+            .getFirstListItem(`user_id = "${event.user_id}"`);
+          timingMinutes = settings.timing_minutes;
+          isActive = settings.is_active;
+        } catch { /* no settings record — use defaults */ }
+
+        if (!isActive) continue;
+
+        // Check if reminder time has arrived
+        const reminderTime = new Date(new Date(event.start_time).getTime() - timingMinutes * 60 * 1000);
+        if (reminderTime > now) continue;
+
+        // Deduplication: skip if already sent
+        try {
+          await this.pb.collection('whatsapp_messages')
+            .getFirstListItem(`event_id = "${event.id}" && message_type = "reminder"`);
+          continue; // found → already sent
+        } catch { /* not found → proceed */ }
+
+        // Check WhatsApp client is connected
+        const client = this.clients.get(event.user_id);
+        if (!client) {
+          console.log(`Scheduler: no WhatsApp client for user ${event.user_id}, skipping event ${event.id}`);
+          continue;
+        }
+        let state;
+        try { state = await client.getState(); } catch { continue; }
+        if (state !== 'CONNECTED') continue;
+
+        // Send the message
+        const chatId = `${event.client_phone.replace(/\D/g, '')}@c.us`;
+        const message = event.notes || 'Reminder: you have an appointment soon.';
+        let msgId = '';
+        let status = 'failed';
+        try {
+          const sent = await client.sendMessage(chatId, message);
+          msgId = sent.id._serialized;
+          status = 'sent';
+          console.log(`Scheduler: reminder sent for event ${event.id} to ${event.client_phone}`);
+        } catch (err) {
+          console.error(`Scheduler: failed to send reminder for event ${event.id}:`, err.message);
+        }
+
+        // Log result (even on failure, so we know it was attempted)
+        await this.pb.collection('whatsapp_messages').create({
+          user_id: event.user_id,
+          event_id: event.id,
+          to_number: event.client_phone,
+          message_content: message,
+          message_type: 'reminder',
+          status,
+          sent_at: new Date().toISOString(),
+          message_id: msgId,
+        }).catch(err => console.error('Scheduler: failed to log message:', err.message));
+
+      } catch (err) {
+        console.error(`Scheduler: unexpected error processing event ${event.id}:`, err.message);
+      }
+    }
+  }
+
   async reconnectActiveSessions() {
     console.log('Checking for active WhatsApp sessions to restore...');
     try {
