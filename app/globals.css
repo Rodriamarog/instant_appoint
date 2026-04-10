@@ -126,6 +126,10 @@
   cursor: pointer !important;
   background-color: #111827 !important;
   color: white !important;
+  transition: background-color 0.15s ease !important;
+}
+.rbc-event:hover {
+  background-color: #374151 !important;
 }
 .rbc-event-label,
 .rbc-event-content { color: white !important; font-weight: 500 !important; }
