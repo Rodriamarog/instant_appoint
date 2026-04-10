@@ -46,6 +46,7 @@ const authHeaders = () => ({
 export function RemindersTab({ whatsappStatus }: { whatsappStatus: string }) {
   const [settings, setSettings] = useState<ReminderSettings>({ timing_minutes: 1440, is_active: true })
   const [events, setEvents] = useState<CalendarEvent[]>([])
+  const [sentEventIds, setSentEventIds] = useState<Set<string>>(new Set())
   const [isLoadingSettings, setIsLoadingSettings] = useState(true)
   const [isLoadingEvents, setIsLoadingEvents] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -54,6 +55,7 @@ export function RemindersTab({ whatsappStatus }: { whatsappStatus: string }) {
   useEffect(() => {
     loadSettings()
     loadEvents()
+    loadSentReminders()
   }, [])
 
   const loadSettings = async () => {
@@ -69,7 +71,7 @@ export function RemindersTab({ whatsappStatus }: { whatsappStatus: string }) {
 
   const loadEvents = async () => {
     try {
-      const start = new Date().toISOString()
+      const start = new Date(Date.now() - 60 * 60 * 1000).toISOString() // 1h ago to catch recently sent
       const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
       const res = await fetch(
         `/api/calendar/events?start_date=${encodeURIComponent(start)}&end_date=${encodeURIComponent(end)}`,
@@ -86,6 +88,18 @@ export function RemindersTab({ whatsappStatus }: { whatsappStatus: string }) {
     }
   }
 
+  const loadSentReminders = async () => {
+    try {
+      const res = await fetch('/api/reminders/sent', { headers: authHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setSentEventIds(new Set(data.eventIds))
+      }
+    } catch {
+      // leave empty
+    }
+  }
+
   // Derive upcoming reminders from events + current timing setting (no extra fetch needed)
   const upcomingReminders = useMemo(() => {
     const now = new Date()
@@ -94,11 +108,12 @@ export function RemindersTab({ whatsappStatus }: { whatsappStatus: string }) {
       .map(e => ({
         event: e,
         reminderAt: new Date(new Date(e.start_time).getTime() - settings.timing_minutes * 60 * 1000),
+        sent: sentEventIds.has(e.id),
       }))
-      // Keep as long as the appointment itself is still upcoming
-      .filter(r => new Date(r.event.start_time) > now)
+      // Keep as long as the appointment itself is still upcoming (or within 1h past)
+      .filter(r => new Date(r.event.start_time) > new Date(Date.now() - 60 * 60 * 1000))
       .sort((a, b) => new Date(a.event.start_time).getTime() - new Date(b.event.start_time).getTime())
-  }, [events, settings.timing_minutes])
+  }, [events, settings.timing_minutes, sentEventIds])
 
   const saveSettings = async () => {
     setIsSaving(true)
@@ -242,7 +257,7 @@ export function RemindersTab({ whatsappStatus }: { whatsappStatus: string }) {
             </div>
           ) : (
             <div className="space-y-2">
-              {upcomingReminders.map(({ event, reminderAt }) => (
+              {upcomingReminders.map(({ event, reminderAt, sent }) => (
                 <div
                   key={event.id}
                   className="flex items-start gap-4 p-4 border border-gray-100 rounded-lg hover:bg-gray-50 transition-colors"
@@ -258,9 +273,11 @@ export function RemindersTab({ whatsappStatus }: { whatsappStatus: string }) {
                   <div className="flex-1 min-w-0 space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-medium text-gray-900 truncate">{event.title}</p>
-                      {reminderAt <= new Date()
-                        ? <Badge variant="secondary" className="text-xs shrink-0 bg-amber-100 text-amber-700 border-amber-200">Due</Badge>
-                        : <Badge variant="outline" className="text-xs shrink-0 text-gray-500">Scheduled</Badge>
+                      {sent
+                        ? <Badge variant="secondary" className="text-xs shrink-0 bg-green-100 text-green-700 border-green-200">Sent</Badge>
+                        : reminderAt <= new Date()
+                          ? <Badge variant="secondary" className="text-xs shrink-0 bg-amber-100 text-amber-700 border-amber-200">Due</Badge>
+                          : <Badge variant="outline" className="text-xs shrink-0 text-gray-500">Scheduled</Badge>
                       }
                     </div>
 
