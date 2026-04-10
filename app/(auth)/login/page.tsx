@@ -59,7 +59,7 @@ export default function LoginPage() {
       console.log('Redirecting to dashboard...')
 
       // Don't reset loading state - we're redirecting
-      window.location.href = '/dashboard'
+      window.location.href = '/calendar'
       return // Exit early to prevent setIsLoading(false)
     } catch (err: any) {
       console.error('Login error:', err)
