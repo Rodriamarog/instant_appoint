@@ -148,6 +148,35 @@ class SimpleWhatsAppManager {
     }
   }
 
+  async reconnectActiveSessions() {
+    console.log('Checking for active WhatsApp sessions to restore...');
+    try {
+      const result = await this.pb.collection('whatsapp_accounts').getList(1, 100, {
+        filter: 'is_active = true'
+      });
+
+      if (result.items.length === 0) {
+        console.log('No active sessions to restore.');
+        return;
+      }
+
+      console.log(`Restoring ${result.items.length} WhatsApp session(s)...`);
+
+      for (let i = 0; i < result.items.length; i++) {
+        const account = result.items[i];
+        // Stagger reconnects by 3s each to avoid spawning all Puppeteer instances at once
+        setTimeout(() => {
+          console.log(`Auto-reconnecting user: ${account.user_id}`);
+          this.connect(account.user_id).catch((err) => {
+            console.error(`Auto-reconnect failed for ${account.user_id}:`, err.message);
+          });
+        }, i * 3000);
+      }
+    } catch (error) {
+      console.error('Failed to query active sessions (non-fatal):', error.message);
+    }
+  }
+
   async sendMessage(userId, to, message) {
     const client = this.clients.get(userId);
     if (!client) {

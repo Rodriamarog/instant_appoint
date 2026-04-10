@@ -107,6 +107,8 @@ const PORT = process.env.PORT || 3003;
 
 server.listen(PORT, () => {
   console.log(`Simple WhatsApp service running on port ${PORT}`);
+  // Restore any sessions that were active before the last shutdown
+  whatsapp.reconnectActiveSessions();
 });
 
 // Graceful shutdown
