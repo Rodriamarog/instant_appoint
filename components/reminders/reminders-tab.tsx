@@ -95,7 +95,8 @@ export function RemindersTab({ whatsappStatus }: { whatsappStatus: string }) {
         event: e,
         reminderAt: new Date(new Date(e.start_time).getTime() - settings.timing_minutes * 60 * 1000),
       }))
-      .filter(r => r.reminderAt > now)
+      // Keep as long as the appointment itself is still upcoming
+      .filter(r => new Date(r.event.start_time) > now)
       .sort((a, b) => new Date(a.event.start_time).getTime() - new Date(b.event.start_time).getTime())
   }, [events, settings.timing_minutes])
 
@@ -257,9 +258,10 @@ export function RemindersTab({ whatsappStatus }: { whatsappStatus: string }) {
                   <div className="flex-1 min-w-0 space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-medium text-gray-900 truncate">{event.title}</p>
-                      <Badge variant="outline" className="text-xs shrink-0 text-gray-500">
-                        Scheduled
-                      </Badge>
+                      {reminderAt <= new Date()
+                        ? <Badge variant="secondary" className="text-xs shrink-0 bg-amber-100 text-amber-700 border-amber-200">Due</Badge>
+                        : <Badge variant="outline" className="text-xs shrink-0 text-gray-500">Scheduled</Badge>
+                      }
                     </div>
 
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
