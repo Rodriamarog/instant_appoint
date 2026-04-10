@@ -1,21 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { pb } from '@/lib/pocketbase'
 
-function getUserIdFromRequest(request: NextRequest): string | null {
+async function authenticate(request: NextRequest): Promise<string | null> {
   const authHeader = request.headers.get('Authorization')
   if (!authHeader?.startsWith('Bearer ')) return null
   const token = authHeader.substring(7)
   try {
-    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString())
-    return payload.id ?? null
+    pb.authStore.save(token)
+    await pb.collection('users').authRefresh()
   } catch {
     return null
   }
+  if (!pb.authStore.isValid) return null
+  return pb.authStore.model?.id ?? null
 }
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = getUserIdFromRequest(request)
+    const userId = await authenticate(request)
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
@@ -40,7 +42,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const userId = getUserIdFromRequest(request)
+    const userId = await authenticate(request)
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await request.json()

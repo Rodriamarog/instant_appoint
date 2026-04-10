@@ -148,7 +148,11 @@ export default function DashboardPage() {
         `/api/calendar/events?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
         { headers: { Authorization: `Bearer ${pb.authStore.token}` } }
       )
-      if (!response.ok) return
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        console.error('Failed to load calendar events:', response.status, err)
+        return
+      }
       const data = await response.json()
       const converted: BigCalendarEvent[] = (data.events || []).map((e: CalendarEvent) => ({
         id: e.id,
