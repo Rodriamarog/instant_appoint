@@ -156,12 +156,15 @@ class SimpleWhatsAppManager {
 
   async runReminderCheck() {
     const now = new Date();
+    // Look 1h into the past so recently-passed appointments aren't missed if the
+    // service was briefly down or the scheduler just started.
+    const windowStart = new Date(now.getTime() - 60 * 60 * 1000);
     const windowEnd = new Date(now.getTime() + 25 * 60 * 60 * 1000);
 
     let events;
     try {
       events = await this.pb.collection('calendar_events').getFullList({
-        filter: `start_time >= "${now.toISOString()}" && start_time <= "${windowEnd.toISOString()}"`,
+        filter: `start_time >= "${windowStart.toISOString()}" && start_time <= "${windowEnd.toISOString()}"`,
       });
     } catch (err) {
       console.error('Scheduler: failed to query events:', err.message);
