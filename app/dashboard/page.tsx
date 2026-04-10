@@ -15,6 +15,7 @@ import { Loader2 } from 'lucide-react'
 import { pb } from '@/lib/pocketbase'
 import { WhatsAppClient } from '@/lib/whatsapp-client'
 import { EventDialog } from '@/components/calendar/event-dialog'
+import { RemindersTab } from '@/components/reminders/reminders-tab'
 
 const localizer = momentLocalizer(moment)
 
@@ -276,29 +277,7 @@ export default function DashboardPage() {
           </div>
         )
       case 'reminders':
-        return (
-          <div className="space-y-5">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Reminders</h2>
-              <p className="text-gray-600">
-                Set up and manage appointment reminder notifications.
-              </p>
-            </div>
-            <Card>
-              <CardContent className="p-8">
-                <div className="text-center space-y-3">
-                  <div className="w-12 h-12 bg-gray-100 rounded-xl mx-auto flex items-center justify-center">
-                    <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900">Reminder Management</h3>
-                  <p className="text-sm text-gray-500">Reminder functionality will be implemented here</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )
+        return <RemindersTab whatsappStatus={whatsappStatus} />
       case 'whatsapp':
         return (
           <div className="space-y-5">
