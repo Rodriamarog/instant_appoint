@@ -117,6 +117,29 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* react-big-calendar overrides */
+.rbc-toolbar button { border: none !important; }
+.rbc-event {
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 4px 8px !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+  transition: all 0.2s ease-in-out !important;
+  cursor: pointer !important;
+  background: linear-gradient(135deg, #111827 0%, #374151 100%) !important;
+  color: white !important;
+}
+.rbc-event:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+  filter: brightness(1.1) !important;
+}
+.rbc-event-label,
+.rbc-event-content { color: white !important; font-weight: 500 !important; }
+.rbc-day-bg { cursor: pointer !important; }
+.rbc-day-bg:hover { background-color: rgba(0,0,0,0.04) !important; }
+.rbc-today { background-color: rgba(0,0,0,0.03) !important; }
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

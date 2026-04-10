@@ -1,0 +1,30 @@
+{
+  "name": "whatsapp-service",
+  "version": "1.0.0",
+  "description": "WhatsApp Web.js service for InstantAppoint",
+  "main": "server.js",
+  "scripts": {
+    "start": "node simple-server.js",
+    "dev": "nodemon simple-server.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "whatsapp-web.js",
+    "nodejs"
+  ],
+  "author": "InstantAppoint",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.1",
+    "express": "^4.18.2",
+    "pocketbase": "^0.26.8",
+    "qrcode": "^1.5.3",
+    "socket.io": "^4.7.5",
+    "uuid": "^9.0.1",
+    "whatsapp-web.js": "^1.26.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}

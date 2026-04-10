@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# PocketBase data (database files, uploads — never commit)
+pb_data/
+
+# WhatsApp service
+/whatsapp-service/node_modules/
+/whatsapp-service/.wwebjs_auth/
+/whatsapp-service/.wwebjs_cache/

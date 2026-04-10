@@ -1,20 +1,27 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Getting Started
+## Quickstart
 
-First, run the development server:
+Three services need to be running. Open a terminal for each:
 
+**1. PocketBase** (database)
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+./pocketbase serve
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+**2. WhatsApp service**
+```bash
+cd whatsapp-service && node server.js
+```
+
+**3. Next.js app**
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) to use the app.
+
+> Phone numbers sent via WhatsApp must include the country code and digits only (e.g. `5215512345678`).
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
