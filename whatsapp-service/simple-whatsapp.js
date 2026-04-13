@@ -35,7 +35,7 @@ class SimpleWhatsAppManager {
     const client = new Client({
       authStrategy: new LocalAuth({ clientId: userId }),
       puppeteer: {
-        headless: true,
+        headless: false,
         args: ['--no-sandbox', '--disable-setuid-sandbox']
       }
     });
@@ -68,13 +68,26 @@ class SimpleWhatsAppManager {
       }
     });
 
-    client.on('disconnected', async () => {
-      console.log(`WhatsApp disconnected for ${userId}`);
+    client.on('disconnected', async (reason) => {
+      console.log(`WhatsApp disconnected for ${userId} — reason: ${reason}`);
 
-      await this.updateDatabase(userId, 'disconnected');
+      await this.updateDatabase(userId, 'disconnected', null, null, reason);
 
       if (this.io) {
-        this.io.to(`user_${userId}`).emit('connection_update', { status: 'disconnected' });
+        this.io.to(`user_${userId}`).emit('connection_update', { status: 'disconnected', reason });
+      }
+
+      this.clients.delete(userId);
+    });
+
+    client.on('auth_failure', async (msg) => {
+      const reason = `auth_failure: ${msg}`;
+      console.log(`WhatsApp auth failure for ${userId} — reason: ${reason}`);
+
+      await this.updateDatabase(userId, 'disconnected', null, null, reason);
+
+      if (this.io) {
+        this.io.to(`user_${userId}`).emit('connection_update', { status: 'disconnected', reason });
       }
 
       this.clients.delete(userId);
@@ -89,7 +102,7 @@ class SimpleWhatsAppManager {
     return { status: 'initializing' };
   }
 
-  async updateDatabase(userId, status, phoneNumber = null, qrCode = null) {
+  async updateDatabase(userId, status, phoneNumber = null, qrCode = null, disconnectReason = null) {
     try {
       let record = null;
       try {
@@ -106,6 +119,7 @@ class SimpleWhatsAppManager {
         is_active: status === 'connected',
         ...(phoneNumber !== null && { phone_number: phoneNumber }),
         ...(qrCode !== null && { qr_code: qrCode }),
+        ...(disconnectReason !== null && { disconnect_reason: disconnectReason }),
       };
 
       if (record) {

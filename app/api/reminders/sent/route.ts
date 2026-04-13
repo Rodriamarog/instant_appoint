@@ -20,12 +20,21 @@ export async function GET(request: NextRequest) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const records = await pb.collection('whatsapp_messages').getFullList({
+    const records = await pb.collection('whatsapp_messages').getList(1, 50, {
       filter: `user_id = "${userId}" && message_type = "reminder" && status = "sent"`,
-    })
+      sort: '-sent_at',
+    }).then(r => r.items)
 
     const eventIds = records.map(r => r.event_id).filter(Boolean)
-    return NextResponse.json({ eventIds })
+    const messages = records.map(r => ({
+      id: r.id,
+      event_id: r.event_id,
+      to_number: r.to_number,
+      message_content: r.message_content,
+      sent_at: r.sent_at,
+      status: r.status,
+    }))
+    return NextResponse.json({ eventIds, messages })
   } catch {
     return NextResponse.json({ eventIds: [] })
   }

@@ -17,6 +17,7 @@ const COUNTRY_CODES = [
 export default function WhatsAppPage() {
   const [whatsappClient] = useState(() => new WhatsAppClient())
   const [whatsappStatus, setWhatsappStatus] = useState('not_initialized')
+  const [disconnectReason, setDisconnectReason] = useState<string | null>(null)
   const [qrCode, setQrCode] = useState<string | null>(null)
   const [connectedNumber, setConnectedNumber] = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
@@ -46,6 +47,7 @@ export default function WhatsAppPage() {
       if (data.status === 'disconnected') {
         setConnectedNumber(null)
         setQrCode(null)
+        setDisconnectReason(data.reason ?? null)
       }
       setIsConnecting(false)
     })
@@ -142,6 +144,13 @@ export default function WhatsAppPage() {
             <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
               <p className="text-sm text-green-800">
                 <strong>Connected Number:</strong> +{connectedNumber}
+              </p>
+            </div>
+          )}
+          {whatsappStatus === 'disconnected' && disconnectReason && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-800">
+                <strong>Disconnected:</strong> {disconnectReason}
               </p>
             </div>
           )}
