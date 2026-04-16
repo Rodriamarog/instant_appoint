@@ -9,6 +9,7 @@ const NAV_LINKS = [
   { href: '/calendar',  label: 'Calendar' },
   { href: '/reminders', label: 'Reminders' },
   { href: '/whatsapp',  label: 'WhatsApp Setup' },
+  { href: '/chat',      label: 'Chat' },
 ]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
