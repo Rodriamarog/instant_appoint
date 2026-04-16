@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@types/js-cookie": "^3.0.6",
     "@types/react-big-calendar": "^1.16.3",
     "class-variance-authority": "^0.7.1",

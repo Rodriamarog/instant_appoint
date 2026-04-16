@@ -1,21 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import PocketBase from 'pocketbase'
-import fs from 'fs'
+import { generateReply, ConversationMessage } from './ai-conversation'
+import { sendWhatsAppCloudMessage } from './whatsapp-cloud-api'
 
 const VERIFY_TOKEN = 'neurocrow_webhook_verification'
 const PB_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'http://127.0.0.1:8090'
 const PB_ADMIN_EMAIL = process.env.POCKETBASE_ADMIN_EMAIL!
 const PB_ADMIN_PASSWORD = process.env.POCKETBASE_ADMIN_PASSWORD!
 
-function wlog(msg: string) {
-  const line = `[${new Date().toISOString()}] ${msg}\n`
-  try { fs.appendFileSync('C:/Users/rodri/webhook.log', line) } catch {}
-  console.log(msg)
-}
-
 export async function handleWebhookGet(request: NextRequest) {
   const { searchParams } = new URL(request.url)
-
   const mode = searchParams.get('hub.mode')
   const token = searchParams.get('hub.verify_token')
   const challenge = searchParams.get('hub.challenge')
@@ -32,11 +26,9 @@ export async function handleWebhookPost(request: NextRequest) {
   // Always return 200 fast — Meta requires quick ack
   try {
     const body = await request.json()
-    wlog(`[webhook] POST received: ${JSON.stringify(body).slice(0, 300)}`)
-    wlog(`[webhook] ENV check — PB_URL: ${PB_URL}, EMAIL: ${PB_ADMIN_EMAIL ? 'set' : 'MISSING'}, PASS: ${PB_ADMIN_PASSWORD ? 'set' : 'MISSING'}`)
 
     const change = body?.entry?.[0]?.changes?.[0]
-    if (!change) { wlog('[webhook] no change, returning'); return NextResponse.json({ status: 'ok' }, { status: 200 }) }
+    if (!change) return NextResponse.json({ status: 'ok' }, { status: 200 })
 
     const field = change.field as string
     const value = change.value
@@ -71,17 +63,9 @@ export async function handleWebhookPost(request: NextRequest) {
     const phoneNumberId = value?.metadata?.phone_number_id as string
     if (!phoneNumberId) return NextResponse.json({ status: 'ok' }, { status: 200 })
 
-    wlog(`[webhook] processing ${direction} msg from ${customerPhone} on phoneNumberId ${phoneNumberId}`)
-
     // Admin PB auth
     const adminPb = new PocketBase(PB_URL)
-    try {
-      await adminPb.collection('_superusers').authWithPassword(PB_ADMIN_EMAIL, PB_ADMIN_PASSWORD)
-      wlog('[webhook] admin auth ok')
-    } catch (e: unknown) {
-      wlog(`[webhook] admin auth FAILED: ${e instanceof Error ? e.message : String(e)}`)
-      return NextResponse.json({ status: 'ok' }, { status: 200 })
-    }
+    await adminPb.collection('_superusers').authWithPassword(PB_ADMIN_EMAIL, PB_ADMIN_PASSWORD)
 
     // Resolve which business user owns this phone number
     let account
@@ -89,13 +73,13 @@ export async function handleWebhookPost(request: NextRequest) {
       account = await adminPb.collection('whatsapp_accounts').getFirstListItem(
         `phone_number_id = "${phoneNumberId}"`
       )
-      wlog(`[webhook] account found: ${account.user_id}`)
-    } catch (e: unknown) {
-      wlog(`[webhook] No whatsapp_account for phone_number_id ${phoneNumberId}: ${e instanceof Error ? e.message : String(e)}`)
+    } catch {
+      console.warn('[webhook] No whatsapp_account for phone_number_id:', phoneNumberId)
       return NextResponse.json({ status: 'ok' }, { status: 200 })
     }
 
     const userId = account.user_id as string
+    const accessToken = account.access_token as string
     const now = new Date().toISOString()
 
     // Upsert conversation
@@ -114,7 +98,7 @@ export async function handleWebhookPost(request: NextRequest) {
       })
     }
 
-    // Save message
+    // Save inbound message
     await adminPb.collection('whatsapp_messages').create({
       user_id: userId,
       to_number: customerPhone,
@@ -126,13 +110,50 @@ export async function handleWebhookPost(request: NextRequest) {
       message_id: messageId,
     })
 
-    wlog(`[webhook] message saved, conversation ${conv.id}`)
+    // Only generate AI reply for inbound messages (not echo captures)
+    if (direction === 'inbound') {
+      // Load conversation history (last 20 messages)
+      const history = await adminPb.collection('whatsapp_messages').getList(1, 20, {
+        filter: `conversation_id = "${conv.id}"`,
+        sort: 'created',
+      })
 
-    // TODO: AI analysis goes here (future step)
+      const conversationHistory: ConversationMessage[] = history.items
+        .slice(0, -1) // exclude the message we just saved
+        .map(m => ({
+          role: m.direction === 'inbound' ? 'user' : 'model',
+          content: m.message_content as string,
+        }))
+
+      // Generate AI reply
+      const replyText = await generateReply(conversationHistory, messageText)
+
+      // Send reply via Cloud API
+      const replyMessageId = await sendWhatsAppCloudMessage(
+        phoneNumberId,
+        accessToken,
+        customerPhone,
+        replyText
+      )
+
+      // Save outbound reply
+      await adminPb.collection('whatsapp_messages').create({
+        user_id: userId,
+        to_number: customerPhone,
+        message_content: replyText,
+        message_type: 'text',
+        direction: 'outbound',
+        conversation_id: conv.id,
+        sent_at: new Date().toISOString(),
+        message_id: replyMessageId,
+      })
+
+      console.log(`[webhook] AI reply sent to ${customerPhone}`)
+    }
 
     return NextResponse.json({ status: 'ok' }, { status: 200 })
   } catch (error) {
-    wlog(`[webhook] UNCAUGHT ERROR: ${error instanceof Error ? error.message : String(error)}`)
+    console.error('[webhook] error:', error)
     return NextResponse.json({ status: 'ok' }, { status: 200 })
   }
 }
