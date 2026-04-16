@@ -114,12 +114,12 @@ export async function handleWebhookPost(request: NextRequest) {
     if (direction === 'inbound') {
       try {
       // Load conversation history (last 20 messages)
-      const history = await adminPb.collection('whatsapp_messages').getList(1, 20, {
+      const history = await adminPb.collection('whatsapp_messages').getFullList({
         filter: `conversation_id = "${conv.id}"`,
-        sort: 'created',
+        sort: 'sent_at',
       })
 
-      const conversationHistory: ConversationMessage[] = history.items
+      const conversationHistory: ConversationMessage[] = history
         .slice(0, -1) // exclude the message we just saved
         .map(m => ({
           role: m.direction === 'inbound' ? 'user' : 'model',
