@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import PocketBase from 'pocketbase'
+import fs from 'fs'
 
 const VERIFY_TOKEN = 'neurocrow_webhook_verification'
 const PB_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'http://127.0.0.1:8090'
 const PB_ADMIN_EMAIL = process.env.POCKETBASE_ADMIN_EMAIL!
 const PB_ADMIN_PASSWORD = process.env.POCKETBASE_ADMIN_PASSWORD!
+
+function wlog(msg: string) {
+  const line = `[${new Date().toISOString()}] ${msg}\n`
+  try { fs.appendFileSync('C:/Users/rodri/webhook.log', line) } catch {}
+  console.log(msg)
+}
 
 export async function handleWebhookGet(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -25,9 +32,11 @@ export async function handleWebhookPost(request: NextRequest) {
   // Always return 200 fast — Meta requires quick ack
   try {
     const body = await request.json()
+    wlog(`[webhook] POST received: ${JSON.stringify(body).slice(0, 300)}`)
+    wlog(`[webhook] ENV check — PB_URL: ${PB_URL}, EMAIL: ${PB_ADMIN_EMAIL ? 'set' : 'MISSING'}, PASS: ${PB_ADMIN_PASSWORD ? 'set' : 'MISSING'}`)
 
     const change = body?.entry?.[0]?.changes?.[0]
-    if (!change) return NextResponse.json({ status: 'ok' }, { status: 200 })
+    if (!change) { wlog('[webhook] no change, returning'); return NextResponse.json({ status: 'ok' }, { status: 200 }) }
 
     const field = change.field as string
     const value = change.value
@@ -62,9 +71,17 @@ export async function handleWebhookPost(request: NextRequest) {
     const phoneNumberId = value?.metadata?.phone_number_id as string
     if (!phoneNumberId) return NextResponse.json({ status: 'ok' }, { status: 200 })
 
+    wlog(`[webhook] processing ${direction} msg from ${customerPhone} on phoneNumberId ${phoneNumberId}`)
+
     // Admin PB auth
     const adminPb = new PocketBase(PB_URL)
-    await adminPb.collection('_superusers').authWithPassword(PB_ADMIN_EMAIL, PB_ADMIN_PASSWORD)
+    try {
+      await adminPb.collection('_superusers').authWithPassword(PB_ADMIN_EMAIL, PB_ADMIN_PASSWORD)
+      wlog('[webhook] admin auth ok')
+    } catch (e: unknown) {
+      wlog(`[webhook] admin auth FAILED: ${e instanceof Error ? e.message : String(e)}`)
+      return NextResponse.json({ status: 'ok' }, { status: 200 })
+    }
 
     // Resolve which business user owns this phone number
     let account
@@ -72,8 +89,9 @@ export async function handleWebhookPost(request: NextRequest) {
       account = await adminPb.collection('whatsapp_accounts').getFirstListItem(
         `phone_number_id = "${phoneNumberId}"`
       )
-    } catch {
-      console.warn('[webhook] No whatsapp_account found for phone_number_id:', phoneNumberId)
+      wlog(`[webhook] account found: ${account.user_id}`)
+    } catch (e: unknown) {
+      wlog(`[webhook] No whatsapp_account for phone_number_id ${phoneNumberId}: ${e instanceof Error ? e.message : String(e)}`)
       return NextResponse.json({ status: 'ok' }, { status: 200 })
     }
 
@@ -108,11 +126,13 @@ export async function handleWebhookPost(request: NextRequest) {
       message_id: messageId,
     })
 
+    wlog(`[webhook] message saved, conversation ${conv.id}`)
+
     // TODO: AI analysis goes here (future step)
 
     return NextResponse.json({ status: 'ok' }, { status: 200 })
   } catch (error) {
-    console.error('[webhook] Error processing event:', error)
+    wlog(`[webhook] UNCAUGHT ERROR: ${error instanceof Error ? error.message : String(error)}`)
     return NextResponse.json({ status: 'ok' }, { status: 200 })
   }
 }
