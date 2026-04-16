@@ -112,6 +112,7 @@ export async function handleWebhookPost(request: NextRequest) {
 
     // Only generate AI reply for inbound messages (not echo captures)
     if (direction === 'inbound') {
+      try {
       // Load conversation history (last 20 messages)
       const history = await adminPb.collection('whatsapp_messages').getList(1, 20, {
         filter: `conversation_id = "${conv.id}"`,
@@ -125,8 +126,11 @@ export async function handleWebhookPost(request: NextRequest) {
           content: m.message_content as string,
         }))
 
+      console.log('[webhook] calling Gemini, history length:', conversationHistory.length)
+
       // Generate AI reply
       const replyText = await generateReply(conversationHistory, messageText)
+      console.log('[webhook] Gemini reply:', replyText.slice(0, 100))
 
       // Send reply via Cloud API
       const replyMessageId = await sendWhatsAppCloudMessage(
@@ -135,6 +139,7 @@ export async function handleWebhookPost(request: NextRequest) {
         customerPhone,
         replyText
       )
+      console.log('[webhook] sent, wamid:', replyMessageId)
 
       // Save outbound reply
       await adminPb.collection('whatsapp_messages').create({
@@ -149,6 +154,9 @@ export async function handleWebhookPost(request: NextRequest) {
       })
 
       console.log(`[webhook] AI reply sent to ${customerPhone}`)
+      } catch (aiError) {
+        console.error('[webhook] AI/send step failed:', aiError)
+      }
     }
 
     return NextResponse.json({ status: 'ok' }, { status: 200 })
