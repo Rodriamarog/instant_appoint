@@ -24,7 +24,7 @@ When the customer and business agree on a specific date and time, confirm the ap
 Reply in the same language the customer uses.`
 
   const chat = model.startChat({
-    systemInstruction: systemPrompt,
+    systemInstruction: { role: 'user', parts: [{ text: systemPrompt }] },
     history: history.map(m => ({
       role: m.role,
       parts: [{ text: m.content }],
