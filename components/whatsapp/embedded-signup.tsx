@@ -98,9 +98,8 @@ export default function WhatsAppEmbeddedSignup({ onSuccess }: Props) {
 
     try {
       window.FB.login(
-        async (response: FBResponse) => {
+        (response: FBResponse) => {
           if (!response.authResponse) {
-            // User closed the popup without completing
             setStatus('idle')
             return
           }
@@ -108,33 +107,35 @@ export default function WhatsAppEmbeddedSignup({ onSuccess }: Props) {
           const code = response.authResponse.code
           const signupData = JSON.parse(sessionStorage.getItem('wa_signup_data') ?? '{}')
 
-          try {
-            const res = await fetch('/api/whatsapp/exchange-token', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${pb.authStore.token}`,
-              },
-              body: JSON.stringify({
-                code,
-                waba_id: signupData.waba_id,
-                phone_number_id: signupData.phone_number_id,
-              }),
-            })
+          void (async () => {
+            try {
+              const res = await fetch('/api/whatsapp/exchange-token', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${pb.authStore.token}`,
+                },
+                body: JSON.stringify({
+                  code,
+                  waba_id: signupData.waba_id,
+                  phone_number_id: signupData.phone_number_id,
+                }),
+              })
 
-            if (!res.ok) {
-              const err = await res.json()
-              throw new Error(err.error ?? 'Token exchange failed')
+              if (!res.ok) {
+                const err = await res.json()
+                throw new Error(err.error ?? 'Token exchange failed')
+              }
+
+              sessionStorage.removeItem('wa_signup_data')
+              setStatus('success')
+              onSuccess()
+            } catch (err: unknown) {
+              console.error(err)
+              setStatus('error')
+              setErrorMsg(err instanceof Error ? err.message : 'Failed to save WhatsApp Business account.')
             }
-
-            sessionStorage.removeItem('wa_signup_data')
-            setStatus('success')
-            onSuccess()
-          } catch (err: unknown) {
-            console.error(err)
-            setStatus('error')
-            setErrorMsg(err instanceof Error ? err.message : 'Failed to save WhatsApp Business account.')
-          }
+          })()
         },
         {
           config_id: CONFIG_ID,
