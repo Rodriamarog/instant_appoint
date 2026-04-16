@@ -55,6 +55,18 @@ export async function POST(request: NextRequest) {
     const accessToken = tokenData.access_token
     console.log('[exchange-token] token exchange success, saving to PocketBase...')
 
+    // Subscribe app to this WABA's webhook events so inbound messages are delivered
+    const subRes = await fetch(
+      `https://graph.facebook.com/v25.0/${waba_id}/subscribed_apps`,
+      { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` } }
+    )
+    const subData = await subRes.json()
+    if (!subData.success) {
+      console.warn('[exchange-token] WABA webhook subscription failed:', subData)
+    } else {
+      console.log('[exchange-token] WABA webhook subscription confirmed')
+    }
+
     // Use admin credentials for writes (collection rules are admin-only)
     const adminPb = new PocketBase(PB_URL)
     await adminPb.collection('_superusers').authWithPassword(PB_ADMIN_EMAIL, PB_ADMIN_PASSWORD)
