@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Loader2 } from 'lucide-react'
 import { pb } from '@/lib/pocketbase'
 import { WhatsAppClient } from '@/lib/whatsapp-client'
+import WhatsAppEmbeddedSignup from '@/components/whatsapp/embedded-signup'
 
 const COUNTRY_CODES = [
   { label: '+1',  value: '1',   flag: '🇺🇸' },
@@ -199,6 +200,19 @@ export default function WhatsAppPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* WhatsApp Business API */}
+      <Card>
+        <CardHeader>
+          <CardTitle>WhatsApp Business API</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-gray-600">
+            Connect a WhatsApp Business account via Meta&apos;s official API. This is the recommended option for production use.
+          </p>
+          <WhatsAppEmbeddedSignup onSuccess={loadWhatsAppStatus} />
+        </CardContent>
+      </Card>
 
       {/* Test Message */}
       {whatsappStatus === 'connected' && (
