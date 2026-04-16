@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const genai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
-const model = genai.getGenerativeModel({ model: 'gemini-2.0-flash' })
+const model = genai.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
 export interface ConversationMessage {
   role: 'user' | 'model'
