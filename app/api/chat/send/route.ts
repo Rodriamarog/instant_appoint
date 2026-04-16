@@ -36,9 +36,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Get WhatsApp account
+    // Get WhatsApp account matching the conversation's phone number
     const account = await adminPb.collection('whatsapp_accounts').getFirstListItem(
-      `user_id = "${userId}" && is_active = true`
+      `phone_number_id = "${conv.phone_number_id}"`
     )
 
     // Send via Cloud API

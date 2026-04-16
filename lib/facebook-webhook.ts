@@ -88,13 +88,14 @@ export async function handleWebhookPost(request: NextRequest) {
       conv = await adminPb.collection('conversations').getFirstListItem(
         `user_id = "${userId}" && customer_phone = "${customerPhone}" && status = "active"`
       )
-      await adminPb.collection('conversations').update(conv.id, { last_message_at: now })
+      await adminPb.collection('conversations').update(conv.id, { last_message_at: now, phone_number_id: phoneNumberId })
     } catch {
       conv = await adminPb.collection('conversations').create({
         user_id: userId,
         customer_phone: customerPhone,
         status: 'active',
         last_message_at: now,
+        phone_number_id: phoneNumberId,
       })
     }
 
