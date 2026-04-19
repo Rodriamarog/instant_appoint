@@ -143,6 +143,7 @@ export default function WhatsAppEmbeddedSignup({ onSuccess }: Props) {
           override_default_response_type: true,
           extras: {
             version: 'v4',
+            sessionInfoVersion: '3',
             featureType: 'whatsapp_business_app_onboarding',
             setup: {},
           },
