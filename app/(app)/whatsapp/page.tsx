@@ -18,6 +18,7 @@ const COUNTRY_CODES = [
 export default function WhatsAppPage() {
   const [whatsappClient] = useState(() => new WhatsAppClient())
   const [whatsappStatus, setWhatsappStatus] = useState('not_initialized')
+  const [accountType, setAccountType] = useState<string | null>(null)
   const [disconnectReason, setDisconnectReason] = useState<string | null>(null)
   const [qrCode, setQrCode] = useState<string | null>(null)
   const [connectedNumber, setConnectedNumber] = useState<string | null>(null)
@@ -63,6 +64,7 @@ export default function WhatsAppPage() {
       const status = await whatsappClient.getStatus()
       setWhatsappStatus(status.status)
       setConnectedNumber(status.connectedNumber ?? null)
+      setAccountType(status.accountType ?? null)
     } catch {
       setWhatsappStatus('not_initialized')
     }
@@ -115,102 +117,37 @@ export default function WhatsAppPage() {
         </p>
       </div>
 
-      {/* Connection Status */}
+      {/* WhatsApp Business API */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Connection Status</CardTitle>
-            <Badge variant={
-              whatsappStatus === 'connected' ? 'default' :
-              whatsappStatus === 'waiting_qr' || whatsappStatus === 'connecting' || whatsappStatus === 'initializing' ? 'secondary' :
-              whatsappStatus === 'error' ? 'destructive' : 'outline'
-            }>
-              {whatsappStatus === 'connected' && 'Connected'}
-              {whatsappStatus === 'waiting_qr' && 'Waiting for QR scan'}
-              {whatsappStatus === 'connecting' && 'Connecting...'}
-              {whatsappStatus === 'initializing' && (
-                <span className="flex items-center gap-1">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Generating QR code...
-                </span>
-              )}
-              {whatsappStatus === 'disconnected' && 'Disconnected'}
-              {whatsappStatus === 'not_initialized' && 'Not connected'}
-              {whatsappStatus === 'error' && 'Error'}
+            <CardTitle>WhatsApp Business API</CardTitle>
+            <Badge variant={whatsappStatus === 'connected' && accountType === 'business_api' ? 'default' : 'outline'}>
+              {whatsappStatus === 'connected' && accountType === 'business_api' ? 'Connected' : 'Not connected'}
             </Badge>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {connectedNumber && (
-            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-sm text-green-800">
-                <strong>Connected Number:</strong> +{connectedNumber}
-              </p>
-            </div>
-          )}
-          {whatsappStatus === 'disconnected' && disconnectReason && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-800">
-                <strong>Disconnected:</strong> {disconnectReason}
-              </p>
-            </div>
-          )}
-          <div className="flex gap-3">
-            {whatsappStatus === 'connected' ? (
-              <Button onClick={disconnectWhatsApp} className="px-4 py-2 text-sm bg-black text-white hover:bg-gray-800">
-                Disconnect WhatsApp
-              </Button>
-            ) : (
-              <Button onClick={startWhatsAppConnection} disabled={isConnecting} className="px-4 py-2 text-sm bg-black text-white hover:bg-gray-800">
-                {isConnecting ? 'Starting...' : whatsappStatus === 'waiting_qr' ? 'Restart WhatsApp' : 'Connect WhatsApp'}
-              </Button>
-            )}
-            <Button onClick={loadWhatsAppStatus} variant="outline" className="px-4 py-2 text-sm">
-              Refresh Status
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* QR Code */}
-      {(qrCode || whatsappStatus === 'initializing' || whatsappStatus === 'waiting_qr') && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Scan QR Code</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center space-y-4">
-              <p className="text-sm text-gray-600">
-                Open WhatsApp on your phone, go to Settings → Linked Devices → Link a Device, and scan this QR code:
-              </p>
-              <div className="flex justify-center">
-                {qrCode ? (
-                  <img src={qrCode} alt="WhatsApp QR Code" className="w-64 h-64 border border-gray-200 rounded-lg" />
-                ) : (
-                  <div className="w-64 h-64 border border-gray-200 rounded-lg flex items-center justify-center bg-gray-50">
-                    <div className="text-center space-y-2">
-                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-gray-400" />
-                      <p className="text-sm text-gray-500">Generating QR code...</p>
-                    </div>
-                  </div>
-                )}
+          {whatsappStatus === 'connected' && accountType === 'business_api' ? (
+            <>
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-sm text-green-800">
+                  <strong>Connected number:</strong> +{connectedNumber ?? '—'}
+                </p>
               </div>
-              <p className="text-xs text-gray-500">QR code refreshes every 30 seconds</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* WhatsApp Business API */}
-      <Card>
-        <CardHeader>
-          <CardTitle>WhatsApp Business API</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-gray-600">
-            Connect a WhatsApp Business account via Meta&apos;s official API. This is the recommended option for production use.
-          </p>
-          <WhatsAppEmbeddedSignup onSuccess={loadWhatsAppStatus} />
+              <p className="text-sm text-gray-500">
+                Your WhatsApp Business number is connected via the Cloud API. Messages will be handled automatically.
+              </p>
+              <WhatsAppEmbeddedSignup onSuccess={loadWhatsAppStatus} />
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-gray-600">
+                Connect your WhatsApp Business number via Meta&apos;s official API.
+              </p>
+              <WhatsAppEmbeddedSignup onSuccess={loadWhatsAppStatus} />
+            </>
+          )}
         </CardContent>
       </Card>
 
