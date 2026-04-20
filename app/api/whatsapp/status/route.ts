@@ -21,31 +21,34 @@ export async function GET(request: NextRequest) {
 
     const userId = userPb.authStore.model?.id as string
 
-    // Check for Cloud API account first
-    try {
-      const account = await userPb.collection('whatsapp_accounts').getFirstListItem(
-        `user_id = "${userId}" && account_type = "business_api" && is_active = true`
-      )
-      return NextResponse.json({
-        status: 'connected',
-        connectedNumber: account.phone_number || null,
-        phone_number_id: account.phone_number_id,
-        accountType: 'business_api',
-      })
-    } catch {
-      // No Cloud API account — fall through to legacy whatsapp-web.js service
-    }
-
-    // Legacy QR-based connection
+    // Legacy QR-based status
+    let legacyStatus = { status: 'not_initialized', connectedNumber: null as string | null }
     try {
       const response = await fetch(`${WHATSAPP_SERVICE_URL}/api/whatsapp/status/${userId}`)
-      if (!response.ok) {
-        return NextResponse.json({ status: 'not_initialized' })
+      if (response.ok) {
+        legacyStatus = await response.json()
       }
-      return NextResponse.json(await response.json())
     } catch {
-      return NextResponse.json({ status: 'not_initialized' })
+      // service not running
     }
+
+    // Cloud API accounts
+    let cloudAccounts: { id: string; phone_number: string; phone_number_id: string; waba_id: string }[] = []
+    try {
+      const records = await userPb.collection('whatsapp_accounts').getFullList({
+        filter: `user_id = "${userId}" && account_type = "business_api" && is_active = true`,
+      })
+      cloudAccounts = records.map(r => ({
+        id: r.id,
+        phone_number: r.phone_number as string,
+        phone_number_id: r.phone_number_id as string,
+        waba_id: r.waba_id as string,
+      }))
+    } catch {
+      // no records
+    }
+
+    return NextResponse.json({ legacy: legacyStatus, cloudAccounts })
   } catch (error) {
     console.error('Error getting WhatsApp status:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
