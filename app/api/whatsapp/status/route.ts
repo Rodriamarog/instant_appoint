@@ -1,78 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { pb } from '@/lib/pocketbase'
+import PocketBase from 'pocketbase'
 
+const PB_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'http://127.0.0.1:8090'
 const WHATSAPP_SERVICE_URL = process.env.WHATSAPP_SERVICE_URL || 'http://localhost:3003'
 
 export async function GET(request: NextRequest) {
   try {
-    // Check authentication via Authorization header
     const authHeader = request.headers.get('Authorization')
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'No auth token provided' }, { status: 401 })
     }
 
-    const token = authHeader.substring(7) // Remove 'Bearer ' prefix
-
+    const userPb = new PocketBase(PB_URL)
+    userPb.authStore.save(authHeader.substring(7))
     try {
-      pb.authStore.save(token)
-      await pb.collection('users').authRefresh()
-    } catch (error) {
-      console.error('Error validating auth token:', error)
+      await userPb.collection('users').authRefresh()
+    } catch {
       return NextResponse.json({ error: 'Invalid auth token' }, { status: 401 })
     }
 
-    if (!pb.authStore.isValid) {
-      return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
-    }
+    const userId = userPb.authStore.model?.id as string
 
-    const userId = pb.authStore.model?.id
-    if (!userId) {
-      return NextResponse.json({ error: 'User ID not found' }, { status: 401 })
-    }
-
-    // Get status from WhatsApp service
-    const response = await fetch(`${WHATSAPP_SERVICE_URL}/api/whatsapp/status/${userId}`)
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        return NextResponse.json({
-          status: 'not_initialized',
-          message: 'WhatsApp session not found'
-        })
-      }
-
-      const errorData = await response.json()
-      return NextResponse.json(
-        { error: 'Failed to get WhatsApp status', details: errorData },
-        { status: 500 }
-      )
-    }
-
-    const statusData = await response.json()
-
-    // Update PocketBase record with latest status
+    // Check for Cloud API account first
     try {
-      const whatsappAccount = await pb.collection('whatsapp_accounts').getFirstListItem(
-        `user_id = "${userId}"`
+      const account = await userPb.collection('whatsapp_accounts').getFirstListItem(
+        `user_id = "${userId}" && account_type = "business_api" && is_active = true`
       )
-
-      await pb.collection('whatsapp_accounts').update(whatsappAccount.id, {
-        status: statusData.status,
-        phone_number: statusData.connectedNumber || whatsappAccount.phone_number,
-        last_seen: new Date().toISOString()
+      return NextResponse.json({
+        status: 'connected',
+        connectedNumber: account.phone_number || null,
+        phone_number_id: account.phone_number_id,
+        accountType: 'business_api',
       })
-    } catch (error) {
-      // Record might not exist, that's okay
-      console.log('WhatsApp account record not found in PocketBase')
+    } catch {
+      // No Cloud API account — fall through to legacy whatsapp-web.js service
     }
 
-    return NextResponse.json(statusData)
+    // Legacy QR-based connection
+    try {
+      const response = await fetch(`${WHATSAPP_SERVICE_URL}/api/whatsapp/status/${userId}`)
+      if (!response.ok) {
+        return NextResponse.json({ status: 'not_initialized' })
+      }
+      return NextResponse.json(await response.json())
+    } catch {
+      return NextResponse.json({ status: 'not_initialized' })
+    }
   } catch (error) {
     console.error('Error getting WhatsApp status:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

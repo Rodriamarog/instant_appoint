@@ -62,7 +62,7 @@ export default function WhatsAppPage() {
     try {
       const status = await whatsappClient.getStatus()
       setWhatsappStatus(status.status)
-      setConnectedNumber(status.connectedNumber)
+      setConnectedNumber(status.connectedNumber ?? null)
     } catch {
       setWhatsappStatus('not_initialized')
     }
