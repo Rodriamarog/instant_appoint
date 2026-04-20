@@ -71,7 +71,15 @@ export async function POST(request: NextRequest) {
     const adminPb = new PocketBase(PB_URL)
     await adminPb.collection('_superusers').authWithPassword(PB_ADMIN_EMAIL, PB_ADMIN_PASSWORD)
 
-    const record = { account_type: 'business_api', waba_id, phone_number_id, access_token: accessToken, status: 'connected', is_active: true }
+    // Fetch verified_name for the phone number
+    let verified_name = ''
+    try {
+      const pnRes = await fetch(`https://graph.facebook.com/v21.0/${phone_number_id}?fields=verified_name,display_phone_number&access_token=${accessToken}`)
+      const pnData = await pnRes.json()
+      verified_name = pnData.verified_name ?? ''
+    } catch { /* non-fatal */ }
+
+    const record = { account_type: 'business_api', waba_id, phone_number_id, access_token: accessToken, status: 'connected', is_active: true, verified_name }
 
     try {
       const existing = await adminPb.collection('whatsapp_accounts').getFirstListItem(`user_id = "${userId}"`)

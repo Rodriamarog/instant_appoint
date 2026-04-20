@@ -14,6 +14,7 @@ interface CloudAccount {
   phone_number: string
   phone_number_id: string
   waba_id: string
+  verified_name: string
 }
 
 export default function WhatsAppPage() {
@@ -124,9 +125,10 @@ export default function WhatsAppPage() {
               {cloudAccounts.map(acc => (
                 <div key={acc.id} className="p-3 bg-green-50 border border-green-200 rounded-lg">
                   <p className="text-sm text-green-800">
-                    <strong>Connected number:</strong> +{acc.phone_number || acc.phone_number_id}
+                    <strong>{acc.verified_name || 'WhatsApp Business'}</strong>
                   </p>
-                  <p className="text-xs text-green-600 mt-0.5">WABA: {acc.waba_id}</p>
+                  <p className="text-sm text-green-700 mt-0.5">+{acc.phone_number || acc.phone_number_id}</p>
+                  <p className="text-xs text-green-500 mt-0.5">WABA: {acc.waba_id}</p>
                 </div>
               ))}
             </div>

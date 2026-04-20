@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
         phone_number: r.phone_number as string,
         phone_number_id: r.phone_number_id as string,
         waba_id: r.waba_id as string,
+        verified_name: r.verified_name as string,
       }))
     } catch {
       // no records
