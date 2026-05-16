@@ -186,7 +186,7 @@ export default function WhatsAppPage() {
               </p>
               <div className="flex justify-center">
                 {qrCode ? (
-                  <img src={qrCode} alt="WhatsApp QR Code" className="w-64 h-64 border border-gray-200 rounded-lg" />
+                  <img src={qrCode ?? undefined} alt="WhatsApp QR Code" className="w-64 h-64 border border-gray-200 rounded-lg" />
                 ) : (
                   <div className="w-64 h-64 border border-gray-200 rounded-lg flex items-center justify-center bg-gray-50">
                     <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
