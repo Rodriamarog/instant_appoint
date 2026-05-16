@@ -143,7 +143,8 @@ export default function WhatsAppPage() {
       </Card>
 
       {/* Legacy QR Connection */}
-      <Card>
+      {/* Hidden for App Review demo — uncomment to restore QR flow */}
+      {false && <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>WhatsApp Web (QR)</CardTitle>
@@ -209,7 +210,7 @@ export default function WhatsAppPage() {
             </Button>
           </div>
         </CardContent>
-      </Card>
+      </Card>}
     </div>
   )
 }
