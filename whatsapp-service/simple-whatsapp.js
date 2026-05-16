@@ -5,8 +5,17 @@ const PocketBase = require('pocketbase/cjs');
 class SimpleWhatsAppManager {
   constructor() {
     this.clients = new Map(); // userId -> client
-    this.pb = new PocketBase('http://127.0.0.1:8090');
+    this.pb = new PocketBase(process.env.PB_URL || 'http://127.0.0.1:8090');
+    this.pbReady = this._initAdmin();
     this.io = null;
+  }
+
+  async _initAdmin() {
+    const email = process.env.PB_ADMIN_EMAIL;
+    const password = process.env.PB_ADMIN_PASSWORD;
+    if (email && password) {
+      await this.pb.collection('_superusers').authWithPassword(email, password);
+    }
   }
 
   setSocketIO(io) {
@@ -36,7 +45,14 @@ class SimpleWhatsAppManager {
       authStrategy: new LocalAuth({ clientId: userId }),
       puppeteer: {
         headless: false,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-blink-features=AutomationControlled',
+          '--window-size=1280,800',
+        ],
+        defaultViewport: { width: 1280, height: 800 },
+        ignoreDefaultArgs: ['--enable-automation'],
       }
     });
 
@@ -94,8 +110,13 @@ class SimpleWhatsAppManager {
     });
 
     // Fire-and-forget: initialize() resolves before QR is emitted, so we must not await it
-    client.initialize().catch((err) => {
+    client.initialize().catch(async (err) => {
+      const reason = `initialize_failed: ${err.message}`;
       console.error(`Initialize failed for ${userId}:`, err.message);
+      await this.updateDatabase(userId, 'disconnected', null, null, reason);
+      if (this.io) {
+        this.io.to(`user_${userId}`).emit('connection_update', { status: 'disconnected', reason });
+      }
       this.clients.delete(userId);
     });
 
@@ -138,7 +159,17 @@ class SimpleWhatsAppManager {
   async getStatus(userId) {
     const client = this.clients.get(userId);
     if (!client) {
-      return { status: 'not_initialized' };
+      // No in-memory client — check DB for last known state
+      try {
+        const record = await this.pb.collection('whatsapp_accounts')
+          .getFirstListItem(`user_id = "${userId}"`);
+        return {
+          status: record.status,
+          connectedNumber: record.phone_number || null,
+        };
+      } catch {
+        return { status: 'not_initialized' };
+      }
     }
 
     try {
@@ -147,9 +178,18 @@ class SimpleWhatsAppManager {
         status: state === 'CONNECTED' ? 'connected' : 'waiting_qr',
         connectedNumber: client.info?.wid?.user
       };
-    } catch (error) {
-      // getState() throws when client is still starting up
-      return { status: 'initializing' };
+    } catch {
+      // getState() throws while still starting up — check DB for authoritative state
+      try {
+        const record = await this.pb.collection('whatsapp_accounts')
+          .getFirstListItem(`user_id = "${userId}"`);
+        return {
+          status: record.status,
+          connectedNumber: record.phone_number || null,
+        };
+      } catch {
+        return { status: 'initializing' };
+      }
     }
   }
 
@@ -162,7 +202,8 @@ class SimpleWhatsAppManager {
     }
   }
 
-  startScheduler() {
+  async startScheduler() {
+    await this.pbReady;
     console.log('Reminder scheduler started (checking every 60s)');
     this.runReminderCheck();
     setInterval(() => this.runReminderCheck(), 60_000);
