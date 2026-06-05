@@ -1,3 +1,35 @@
+export async function sendWhatsAppTemplate(
+  phoneNumberId: string,
+  accessToken: string,
+  to: string,
+  templateName: string,
+  languageCode: string
+): Promise<string> {
+  const res = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to,
+      type: 'template',
+      template: {
+        name: templateName,
+        language: { code: languageCode },
+      },
+    }),
+  })
+
+  const data = await res.json()
+  if (!res.ok || data.error) {
+    throw new Error(`WhatsApp template send failed: ${JSON.stringify(data.error ?? data)}`)
+  }
+
+  return data.messages?.[0]?.id ?? ''
+}
+
 export async function sendWhatsAppCloudMessage(
   phoneNumberId: string,
   accessToken: string,
