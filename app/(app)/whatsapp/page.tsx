@@ -100,8 +100,11 @@ export default function WhatsAppPage() {
       const res = await fetch('/api/whatsapp/templates', {
         headers: { Authorization: `Bearer ${pb.authStore.token}` },
       })
-      if (!res.ok) return
       const data = await res.json()
+      if (!res.ok) {
+        setSendFeedback({ ok: false, msg: data.error ?? 'Failed to load templates' })
+        return
+      }
       setTemplates(data.templates ?? [])
     } finally {
       setLoadingTemplates(false)

@@ -29,8 +29,11 @@ export async function GET(request: NextRequest) {
       `user_id = "${userId}" && account_type = "business_api" && is_active = true`
     )
   } catch {
+    console.error('[templates] no account found for userId:', userId)
     return NextResponse.json({ error: 'No connected WhatsApp account found' }, { status: 404 })
   }
+
+  console.log('[templates] fetching for waba_id:', account.waba_id)
 
   const res = await fetch(
     `https://graph.facebook.com/v21.0/${account.waba_id}/message_templates?fields=name,status,category,language,components&limit=100`,
@@ -39,8 +42,10 @@ export async function GET(request: NextRequest) {
   const data = await res.json()
 
   if (!res.ok || data.error) {
+    console.error('[templates] Meta API error:', JSON.stringify(data.error ?? data))
     return NextResponse.json({ error: 'Failed to fetch templates', details: data.error }, { status: 500 })
   }
 
+  console.log('[templates] returned', data.data?.length ?? 0, 'templates')
   return NextResponse.json({ templates: data.data ?? [] })
 }
