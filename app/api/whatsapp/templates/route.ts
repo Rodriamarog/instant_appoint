@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
     { headers: { Authorization: `Bearer ${account.access_token}` } }
   )
   const data = await res.json()
+  console.log('[templates] raw response:', JSON.stringify(data).slice(0, 500))
 
   if (!res.ok || data.error) {
     console.error('[templates] Meta API error:', JSON.stringify(data.error ?? data))
