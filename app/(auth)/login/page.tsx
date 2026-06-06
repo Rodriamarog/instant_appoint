@@ -36,15 +36,19 @@ export default function LoginPage() {
     }
   }
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
     setError('')
     setVerificationMessage('')
 
+    const formData = new FormData(e.currentTarget)
+    const emailVal = (formData.get('email') as string) || email
+    const passwordVal = (formData.get('password') as string) || password
+
     try {
-      console.log('Attempting to login with:', email)
-      await pb.collection('users').authWithPassword(email, password)
+      console.log('Attempting to login with:', emailVal)
+      await pb.collection('users').authWithPassword(emailVal, passwordVal)
 
       // Check if user is verified
       const user = pb.authStore.model
