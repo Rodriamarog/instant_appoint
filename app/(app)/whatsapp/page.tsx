@@ -105,7 +105,17 @@ export default function WhatsAppPage() {
         setSendFeedback({ ok: false, msg: data.error ?? 'Failed to load templates' })
         return
       }
-      setTemplates(data.templates ?? [])
+      const fetched: Template[] = data.templates ?? []
+      // hello_world is always available on any WABA for testing
+      const helloWorld: Template = {
+        name: 'hello_world',
+        status: 'APPROVED',
+        category: 'UTILITY',
+        language: 'en_US',
+        components: [{ type: 'BODY', text: 'Hello World! Welcome and congratulations!! This message demonstrates your ability to send a WhatsApp message notification from Meta.' }],
+      }
+      const hasHelloWorld = fetched.some(t => t.name === 'hello_world')
+      setTemplates(hasHelloWorld ? fetched : [helloWorld, ...fetched])
     } finally {
       setLoadingTemplates(false)
     }
