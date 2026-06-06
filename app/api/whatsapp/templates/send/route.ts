@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   }
   const userId = userPb.authStore.model?.id as string
 
-  const { template_name, language_code, to } = await request.json()
+  const { template_name, language_code, to, body_parameters } = await request.json()
   if (!template_name || !language_code || !to) {
     return NextResponse.json({ error: 'template_name, language_code, and to are required' }, { status: 400 })
   }
@@ -43,7 +43,8 @@ export async function POST(request: NextRequest) {
     account.access_token as string,
     to,
     template_name,
-    language_code
+    language_code,
+    body_parameters ?? []
   )
 
   return NextResponse.json({ success: true, message_id: wamid })

@@ -3,8 +3,23 @@ export async function sendWhatsAppTemplate(
   accessToken: string,
   to: string,
   templateName: string,
-  languageCode: string
+  languageCode: string,
+  bodyParameters?: string[]
 ): Promise<string> {
+  const templatePayload: Record<string, unknown> = {
+    name: templateName,
+    language: { code: languageCode },
+  }
+
+  if (bodyParameters && bodyParameters.length > 0) {
+    templatePayload.components = [
+      {
+        type: 'body',
+        parameters: bodyParameters.map(text => ({ type: 'text', text })),
+      },
+    ]
+  }
+
   const res = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
     method: 'POST',
     headers: {
@@ -15,10 +30,7 @@ export async function sendWhatsAppTemplate(
       messaging_product: 'whatsapp',
       to,
       type: 'template',
-      template: {
-        name: templateName,
-        language: { code: languageCode },
-      },
+      template: templatePayload,
     }),
   })
 

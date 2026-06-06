@@ -23,7 +23,7 @@ interface Template {
   status: 'APPROVED' | 'PENDING' | 'REJECTED' | 'PAUSED' | string
   category: string
   language: string
-  components: { type: string; text?: string }[]
+  components: { type: string; text?: string; example?: { body_text?: string[][] } }[]
 }
 
 export default function WhatsAppPage() {
@@ -42,7 +42,7 @@ export default function WhatsAppPage() {
   // Templates state
   const [templates, setTemplates] = useState<Template[]>([])
   const [loadingTemplates, setLoadingTemplates] = useState(false)
-  const [sendTarget, setSendTarget] = useState<{ name: string; lang: string } | null>(null)
+  const [sendTarget, setSendTarget] = useState<{ name: string; lang: string; bodyParams: string[] } | null>(null)
   const [testPhone, setTestPhone] = useState('')
   const [sendingTemplate, setSendingTemplate] = useState(false)
   const [sendFeedback, setSendFeedback] = useState<{ ok: boolean; msg: string } | null>(null)
@@ -122,7 +122,7 @@ export default function WhatsAppPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${pb.authStore.token}`,
         },
-        body: JSON.stringify({ template_name: sendTarget.name, language_code: sendTarget.lang, to: testPhone }),
+        body: JSON.stringify({ template_name: sendTarget.name, language_code: sendTarget.lang, to: testPhone, body_parameters: sendTarget.bodyParams }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -245,7 +245,12 @@ export default function WhatsAppPage() {
                       {isApproved && (
                         <Button
                           className="text-xs px-2 py-1 h-auto bg-black text-white hover:bg-gray-800"
-                          onClick={() => { setSendTarget(isOpen ? null : { name: t.name, lang: t.language }); setSendFeedback(null) }}
+                          onClick={() => {
+                            if (isOpen) { setSendTarget(null); return }
+                            const bodyExample = t.components.find(c => c.type === 'BODY')?.example?.body_text?.[0] ?? []
+                            setSendTarget({ name: t.name, lang: t.language, bodyParams: bodyExample })
+                            setSendFeedback(null)
+                          }}
                         >
                           {isOpen ? 'Cancel' : 'Send test'}
                         </Button>
