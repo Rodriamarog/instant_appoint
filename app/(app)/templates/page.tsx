@@ -40,7 +40,7 @@ export default function TemplatesPage() {
 
   // Send test
   const [sendTarget, setSendTarget] = useState<{ name: string; lang: string } | null>(null)
-  const [testPhone, setTestPhone] = useState('')
+  const [testPhone, setTestPhone] = useState('16197612314')
   const [sending, setSending] = useState(false)
   const [sendFeedback, setSendFeedback] = useState<{ ok: boolean; msg: string; templateName: string } | null>(null)
 
