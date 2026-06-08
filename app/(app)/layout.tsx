@@ -6,10 +6,11 @@ import Link from 'next/link'
 import { pb } from '@/lib/pocketbase'
 
 const NAV_LINKS = [
-  { href: '/calendar',  label: 'Calendar' },
-  { href: '/reminders', label: 'Reminders' },
-  { href: '/whatsapp',  label: 'WhatsApp Setup' },
-  { href: '/chat',      label: 'Chat' },
+  { href: '/calendar',   label: 'Calendar' },
+  { href: '/reminders',  label: 'Reminders' },
+  { href: '/whatsapp',   label: 'WhatsApp Setup' },
+  { href: '/templates',  label: 'Templates' },
+  { href: '/chat',       label: 'Chat' },
 ]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

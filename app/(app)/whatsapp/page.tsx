@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Loader2 } from 'lucide-react'
 import { pb } from '@/lib/pocketbase'
 import { WhatsAppClient } from '@/lib/whatsapp-client'
@@ -16,14 +15,6 @@ interface CloudAccount {
   phone_number_id: string
   waba_id: string
   verified_name: string
-}
-
-interface Template {
-  name: string
-  status: 'APPROVED' | 'PENDING' | 'REJECTED' | 'PAUSED' | string
-  category: string
-  language: string
-  components: { type: string; text?: string; example?: { body_text?: string[][] } }[]
 }
 
 export default function WhatsAppPage() {
@@ -38,14 +29,6 @@ export default function WhatsAppPage() {
 
   // Cloud API state
   const [cloudAccounts, setCloudAccounts] = useState<CloudAccount[]>([])
-
-  // Templates state
-  const [templates, setTemplates] = useState<Template[]>([])
-  const [loadingTemplates, setLoadingTemplates] = useState(false)
-  const [sendTarget, setSendTarget] = useState<{ name: string; lang: string; bodyParams: string[] } | null>(null)
-  const [testPhone, setTestPhone] = useState('')
-  const [sendingTemplate, setSendingTemplate] = useState(false)
-  const [sendFeedback, setSendFeedback] = useState<{ ok: boolean; msg: string } | null>(null)
 
   useEffect(() => {
     const userId = pb.authStore.model?.id
@@ -88,64 +71,8 @@ export default function WhatsAppPage() {
       setLegacyStatus(data.legacy?.status ?? 'not_initialized')
       setLegacyNumber(data.legacy?.connectedNumber ?? null)
       setCloudAccounts(data.cloudAccounts ?? [])
-      if ((data.cloudAccounts ?? []).length > 0) loadTemplates()
     } catch {
       setLegacyStatus('not_initialized')
-    }
-  }
-
-  const loadTemplates = async () => {
-    setLoadingTemplates(true)
-    try {
-      const res = await fetch('/api/whatsapp/templates', {
-        headers: { Authorization: `Bearer ${pb.authStore.token}` },
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setSendFeedback({ ok: false, msg: data.error ?? 'Failed to load templates' })
-        return
-      }
-      const fetched: Template[] = data.templates ?? []
-      // hello_world is always available on any WABA for testing
-      const helloWorld: Template = {
-        name: 'hello_world',
-        status: 'APPROVED',
-        category: 'UTILITY',
-        language: 'en_US',
-        components: [{ type: 'BODY', text: 'Hello World! Welcome and congratulations!! This message demonstrates your ability to send a WhatsApp message notification from Meta.' }],
-      }
-      const hasHelloWorld = fetched.some(t => t.name === 'hello_world')
-      setTemplates(hasHelloWorld ? fetched : [helloWorld, ...fetched])
-    } finally {
-      setLoadingTemplates(false)
-    }
-  }
-
-  const sendTemplate = async () => {
-    if (!sendTarget || !testPhone) return
-    setSendingTemplate(true)
-    setSendFeedback(null)
-    try {
-      const res = await fetch('/api/whatsapp/templates/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${pb.authStore.token}`,
-        },
-        body: JSON.stringify({ template_name: sendTarget.name, language_code: sendTarget.lang, to: testPhone, body_parameters: sendTarget.bodyParams }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setSendFeedback({ ok: true, msg: 'Template sent successfully!' })
-        setSendTarget(null)
-        setTestPhone('')
-      } else {
-        setSendFeedback({ ok: false, msg: data.error ?? 'Failed to send template' })
-      }
-    } catch {
-      setSendFeedback({ ok: false, msg: 'Network error' })
-    } finally {
-      setSendingTemplate(false)
     }
   }
 
@@ -215,86 +142,11 @@ export default function WhatsAppPage() {
         </CardContent>
       </Card>
 
-      {/* Message Templates */}
       {cloudAccounts.length > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Message Templates</CardTitle>
-              <Button variant="outline" className="text-sm px-3 py-1.5 h-auto" onClick={loadTemplates} disabled={loadingTemplates}>
-                {loadingTemplates ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Refresh'}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {loadingTemplates && templates.length === 0 && (
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading templates...
-              </div>
-            )}
-            {!loadingTemplates && templates.length === 0 && (
-              <p className="text-sm text-gray-500">No templates found for this account.</p>
-            )}
-            {templates.map(t => {
-              const body = t.components.find(c => c.type === 'BODY')?.text ?? ''
-              const isApproved = t.status === 'APPROVED'
-              const isOpen = sendTarget?.name === t.name && sendTarget?.lang === t.language
-              return (
-                <div key={t.name + t.language} className="border border-gray-200 rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-medium text-sm truncate">{t.name}</span>
-                      <span className="text-xs text-gray-400 shrink-0">{t.language}</span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant={isApproved ? 'default' : t.status === 'PENDING' ? 'secondary' : 'destructive'}>
-                        {t.status}
-                      </Badge>
-                      <span className="text-xs text-gray-400">{t.category}</span>
-                      {isApproved && (
-                        <Button
-                          className="text-xs px-2 py-1 h-auto bg-black text-white hover:bg-gray-800"
-                          onClick={() => {
-                            if (isOpen) { setSendTarget(null); return }
-                            const bodyExample = t.components.find(c => c.type === 'BODY')?.example?.body_text?.[0] ?? []
-                            setSendTarget({ name: t.name, lang: t.language, bodyParams: bodyExample })
-                            setSendFeedback(null)
-                          }}
-                        >
-                          {isOpen ? 'Cancel' : 'Send test'}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  {body && <p className="text-xs text-gray-500 bg-gray-50 rounded p-2">{body}</p>}
-                  {isOpen && (
-                    <div className="flex gap-2 pt-1">
-                      <Input
-                        placeholder="Phone number (e.g. 521234567890)"
-                        value={testPhone}
-                        onChange={e => setTestPhone(e.target.value)}
-                        className="text-sm h-8"
-                      />
-                      <Button
-                        onClick={sendTemplate}
-                        disabled={sendingTemplate || !testPhone}
-                        className="h-8 px-3 text-sm bg-black text-white hover:bg-gray-800 shrink-0"
-                      >
-                        {sendingTemplate ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Send'}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-            {sendFeedback && (
-              <p className={`text-sm ${sendFeedback.ok ? 'text-green-600' : 'text-red-600'}`}>
-                {sendFeedback.msg}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <p className="text-sm text-gray-500">
+          Manage and send message templates in the{' '}
+          <a href="/templates" className="underline font-medium text-gray-700">Templates</a> tab.
+        </p>
       )}
 
       {/* Legacy QR Connection */}
