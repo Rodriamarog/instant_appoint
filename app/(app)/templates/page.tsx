@@ -42,7 +42,7 @@ export default function TemplatesPage() {
   const [sendTarget, setSendTarget] = useState<{ name: string; lang: string } | null>(null)
   const [testPhone, setTestPhone] = useState('')
   const [sending, setSending] = useState(false)
-  const [sendFeedback, setSendFeedback] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [sendFeedback, setSendFeedback] = useState<{ ok: boolean; msg: string; templateName: string } | null>(null)
 
   useEffect(() => { loadAll() }, [])
 
@@ -103,22 +103,23 @@ export default function TemplatesPage() {
     if (!sendTarget || !testPhone) return
     setSending(true)
     setSendFeedback(null)
+    const name = sendTarget.name
     try {
       const res = await fetch('/api/whatsapp/templates/send', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ template_name: sendTarget.name, language_code: sendTarget.lang, to: testPhone }),
+        body: JSON.stringify({ template_name: name, language_code: sendTarget.lang, to: testPhone }),
       })
       const data = await res.json()
       if (res.ok) {
-        setSendFeedback({ ok: true, msg: `Sent! Message ID: ${data.message_id}` })
+        setSendFeedback({ ok: true, msg: 'Message sent successfully!', templateName: name })
         setSendTarget(null)
         setTestPhone('')
       } else {
-        setSendFeedback({ ok: false, msg: data.error ?? 'Failed to send' })
+        setSendFeedback({ ok: false, msg: data.error ?? 'Failed to send', templateName: name })
       }
     } catch {
-      setSendFeedback({ ok: false, msg: 'Network error' })
+      setSendFeedback({ ok: false, msg: 'Network error', templateName: name })
     } finally {
       setSending(false)
     }
@@ -261,7 +262,7 @@ export default function TemplatesPage() {
                       <Button
                         className="text-xs px-2 py-1 h-auto bg-black text-white hover:bg-gray-800"
                         onClick={() => {
-                          if (isOpen) { setSendTarget(null); return }
+                          if (isOpen) { setSendTarget(null); setSendFeedback(null); return }
                           setSendTarget({ name: t.name, lang: t.language })
                           setSendFeedback(null)
                         }}
@@ -273,28 +274,26 @@ export default function TemplatesPage() {
                 </div>
                 {body && <p className="text-xs text-gray-500 bg-gray-50 rounded p-2">{body}</p>}
                 {isOpen && (
-                  <div className="space-y-2 pt-1">
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Phone number (e.g. 16197612314)"
-                        value={testPhone}
-                        onChange={e => setTestPhone(e.target.value)}
-                        className="text-sm h-8"
-                      />
-                      <Button
-                        onClick={sendTemplate}
-                        disabled={sending || !testPhone}
-                        className="h-8 px-3 text-sm bg-black text-white hover:bg-gray-800 shrink-0"
-                      >
-                        {sending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Send'}
-                      </Button>
-                    </div>
-                    {sendFeedback && (
-                      <p className={`text-sm ${sendFeedback.ok ? 'text-green-600' : 'text-red-600'}`}>
-                        {sendFeedback.msg}
-                      </p>
-                    )}
+                  <div className="flex gap-2 pt-1">
+                    <Input
+                      placeholder="Phone number (e.g. 16197612314)"
+                      value={testPhone}
+                      onChange={e => setTestPhone(e.target.value)}
+                      className="text-sm h-8"
+                    />
+                    <Button
+                      onClick={sendTemplate}
+                      disabled={sending || !testPhone}
+                      className="h-8 px-3 text-sm bg-black text-white hover:bg-gray-800 shrink-0"
+                    >
+                      {sending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Send'}
+                    </Button>
                   </div>
+                )}
+                {sendFeedback?.templateName === t.name && (
+                  <p className={`text-sm ${sendFeedback.ok ? 'text-green-600' : 'text-red-600'}`}>
+                    {sendFeedback.msg}
+                  </p>
                 )}
               </div>
             )
