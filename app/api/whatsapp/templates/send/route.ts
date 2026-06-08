@@ -38,14 +38,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No connected WhatsApp account found' }, { status: 404 })
   }
 
-  const wamid = await sendWhatsAppTemplate(
-    account.phone_number_id as string,
-    account.access_token as string,
-    to,
-    template_name,
-    language_code,
-    body_parameters ?? []
-  )
+  let wamid: string
+  try {
+    wamid = await sendWhatsAppTemplate(
+      account.phone_number_id as string,
+      account.access_token as string,
+      to,
+      template_name,
+      language_code,
+      body_parameters ?? []
+    )
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
 
   return NextResponse.json({ success: true, message_id: wamid })
 }
