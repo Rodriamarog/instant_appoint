@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import PocketBase from 'pocketbase'
 import { sendWhatsAppCloudMessage } from '@/lib/whatsapp-cloud-api'
 
-const PB_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'http://127.0.0.1:8090'
+const PB_URL = process.env.POCKETBASE_INTERNAL_URL || 'http://127.0.0.1:8090'
 const PB_ADMIN_EMAIL = process.env.POCKETBASE_ADMIN_EMAIL!
 const PB_ADMIN_PASSWORD = process.env.POCKETBASE_ADMIN_PASSWORD!
 

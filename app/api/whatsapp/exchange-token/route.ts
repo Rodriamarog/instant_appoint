@@ -3,7 +3,7 @@ import PocketBase from 'pocketbase'
 
 const APP_ID = process.env.META_APP_ID!
 const APP_SECRET = process.env.META_APP_SECRET!
-const PB_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'http://127.0.0.1:8090'
+const PB_URL = process.env.POCKETBASE_INTERNAL_URL || 'http://127.0.0.1:8090'
 const PB_ADMIN_EMAIL = process.env.POCKETBASE_ADMIN_EMAIL!
 const PB_ADMIN_PASSWORD = process.env.POCKETBASE_ADMIN_PASSWORD!
 

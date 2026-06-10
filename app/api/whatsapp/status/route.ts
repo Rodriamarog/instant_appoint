@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import PocketBase from 'pocketbase'
 
-const PB_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'http://127.0.0.1:8090'
+const PB_URL = process.env.POCKETBASE_INTERNAL_URL || 'http://127.0.0.1:8090'
 const WHATSAPP_SERVICE_URL = process.env.WHATSAPP_SERVICE_URL || 'http://localhost:3003'
 
 export async function GET(request: NextRequest) {

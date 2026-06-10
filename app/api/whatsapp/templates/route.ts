@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import PocketBase from 'pocketbase'
 
-const PB_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'http://127.0.0.1:8090'
+const PB_URL = process.env.POCKETBASE_INTERNAL_URL || 'http://127.0.0.1:8090'
 const PB_ADMIN_EMAIL = process.env.POCKETBASE_ADMIN_EMAIL!
 const PB_ADMIN_PASSWORD = process.env.POCKETBASE_ADMIN_PASSWORD!
 
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   let account
   try {
     account = await adminPb.collection('whatsapp_accounts').getFirstListItem(
-      `user_id = "${userId}" && account_type = "business_api" && is_active = true`
+      `user_id = "${userId}" && account_type = "business_api" && is_active = true && waba_id = "506463685879575"`
     )
   } catch {
     console.error('[templates] no account found for userId:', userId)
