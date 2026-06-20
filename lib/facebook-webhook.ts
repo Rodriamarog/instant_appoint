@@ -4,6 +4,9 @@ import { generateReply, ConversationMessage } from './ai-conversation'
 import { sendWhatsAppCloudMessage } from './whatsapp-cloud-api'
 
 const VERIFY_TOKEN = 'neurocrow_webhook_verification'
+const CALENDAFLOW_VERIFY_TOKEN = 'calendaflow_webhook_verify_2026'
+const CALENDAFLOW_PHONE_NUMBER_ID = '1078215982040649'
+const CALENDAFLOW_WEBHOOK_URL = process.env.CALENDAFLOW_WEBHOOK_URL || 'http://localhost:3005/webhook'
 const PB_URL = process.env.POCKETBASE_INTERNAL_URL || 'http://127.0.0.1:8090'
 const PB_ADMIN_EMAIL = process.env.POCKETBASE_ADMIN_EMAIL!
 const PB_ADMIN_PASSWORD = process.env.POCKETBASE_ADMIN_PASSWORD!
@@ -14,7 +17,7 @@ export async function handleWebhookGet(request: NextRequest) {
   const token = searchParams.get('hub.verify_token')
   const challenge = searchParams.get('hub.challenge')
 
-  if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+  if (mode === 'subscribe' && (token === VERIFY_TOKEN || token === CALENDAFLOW_VERIFY_TOKEN)) {
     console.log('Facebook webhook verified')
     return new NextResponse(challenge, { status: 200 })
   }
@@ -62,6 +65,15 @@ export async function handleWebhookPost(request: NextRequest) {
 
     const phoneNumberId = value?.metadata?.phone_number_id as string
     if (!phoneNumberId) return NextResponse.json({ status: 'ok' }, { status: 200 })
+
+    if (phoneNumberId === CALENDAFLOW_PHONE_NUMBER_ID) {
+      fetch(CALENDAFLOW_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).catch(err => console.error('[webhook] Calendaflow forward failed:', err))
+      return NextResponse.json({ status: 'ok' }, { status: 200 })
+    }
 
     // Admin PB auth
     const adminPb = new PocketBase(PB_URL)

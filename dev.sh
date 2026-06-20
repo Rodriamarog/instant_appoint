@@ -16,7 +16,7 @@ echo -e "${CYAN}Starting InstantAppoint...${NC}"
 
 # Start PocketBase
 echo -e "${GREEN}[pocketbase]${NC} Starting on :8090"
-pocketbase serve --dir="$ROOT/pb_data" &
+pocketbase serve --http=127.0.0.1:8090 --dir="$ROOT/pb_data" &
 PB_PID=$!
 
 # Start WhatsApp service

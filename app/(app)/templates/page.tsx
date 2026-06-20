@@ -27,6 +27,7 @@ const LANGUAGES = [
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<Template[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [hasAccount, setHasAccount] = useState(false)
 
   // Create form
@@ -66,10 +67,15 @@ export default function TemplatesPage() {
   }
 
   const loadTemplates = async () => {
-    const res = await fetch('/api/whatsapp/templates', { headers: authHeaders() })
+    const res = await fetch('/api/whatsapp/templates', { headers: authHeaders(), cache: 'no-store' })
     const data = await res.json()
     if (!res.ok) return
     setTemplates(data.templates ?? [])
+  }
+
+  const refreshTemplates = async () => {
+    setRefreshing(true)
+    try { await loadTemplates() } finally { setRefreshing(false) }
   }
 
   const createTemplate = async () => {
@@ -114,7 +120,7 @@ export default function TemplatesPage() {
       if (res.ok) {
         setSendFeedback({ ok: true, msg: 'Message sent successfully!', templateName: name })
         setSendTarget(null)
-        setTestPhone('')
+        setTestPhone('16197612314')
       } else {
         setSendFeedback({ ok: false, msg: data.error ?? 'Failed to send', templateName: name })
       }
@@ -233,7 +239,8 @@ export default function TemplatesPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Your templates</CardTitle>
-            <Button variant="outline" className="text-sm px-3 py-1.5 h-auto" onClick={loadTemplates}>
+            <Button variant="outline" className="text-sm px-3 py-1.5 h-auto gap-1.5" onClick={refreshTemplates} disabled={refreshing}>
+              {refreshing && <Loader2 className="h-3 w-3 animate-spin" />}
               Refresh
             </Button>
           </div>
@@ -251,13 +258,13 @@ export default function TemplatesPage() {
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="font-medium text-sm truncate">{t.name}</span>
-                    <span className="text-xs text-gray-400 shrink-0">{t.language}</span>
+                    <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded shrink-0">{t.language}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <Badge variant={isApproved ? 'default' : t.status === 'PENDING' ? 'secondary' : 'destructive'}>
+                    <Badge className={isApproved ? 'bg-green-100 text-green-700 border-green-200' : t.status === 'PENDING' ? 'bg-gray-100 text-gray-600 border-gray-200' : 'bg-red-100 text-red-600 border-red-200'}>
                       {t.status}
                     </Badge>
-                    <span className="text-xs text-gray-400">{t.category}</span>
+                    <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded shrink-0">{t.category}</span>
                     {isApproved && (
                       <Button
                         className="text-xs px-2 py-1 h-auto bg-black text-white hover:bg-gray-800"

@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     // Log message in PocketBase
     try {
       const whatsappAccount = await pb.collection('whatsapp_accounts').getFirstListItem(
-        `user_id = "${userId}"`
+        `user_id = "${userId}" && waba_id = "506463685879575"`
       )
 
       await pb.collection('whatsapp_messages').create({
