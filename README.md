@@ -71,7 +71,6 @@ stored but gets no AI auto-reply.
 | Variable | Required | Description |
 |---|---|---|
 | `NEUROCROW_ROUTER_SECRET` | yes | Shared secret for router deliveries. Must equal the router's `DEST_SECRET_INSTANTAPPOINT`. If unset, every webhook POST is rejected. |
-| `CALENDAFLOW_WEBHOOK_URL` | no | Where events for the Calendaflow number are forwarded (default `http://localhost:3005/webhook`). Temporary, removed at the router cutover. |
 
 ## WhatsApp setup
 
