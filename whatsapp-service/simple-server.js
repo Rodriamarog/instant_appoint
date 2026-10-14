@@ -7,9 +7,16 @@ const SimpleWhatsAppManager = require('./simple-whatsapp');
 
 const app = express();
 const server = http.createServer(app);
+// FRONTEND_URL may list several origins, comma-separated, so the app can be served
+// from more than one hostname at once (e.g. during a domain move).
+const allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:3000")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const io = socketIo(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -17,7 +24,7 @@ const io = socketIo(server, {
 
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  origin: allowedOrigins,
   credentials: true
 }));
 app.use(express.json());

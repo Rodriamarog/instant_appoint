@@ -6,7 +6,7 @@ export class WhatsAppClient {
   private readonly baseUrl: string
   private userId: string | null = null
 
-  constructor(baseUrl: string = 'http://localhost:3003') {
+  constructor(baseUrl: string = process.env.NEXT_PUBLIC_WHATSAPP_SERVICE_URL || 'http://localhost:3003') {
     this.baseUrl = baseUrl
   }
 
