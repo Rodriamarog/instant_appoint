@@ -27,7 +27,7 @@ function routerRequest(payload: unknown, opts: { timestamp?: number; secret?: st
 }
 
 const PHONE_NUMBER_ID = '555000111'
-const CALENDAFLOW_PHONE_NUMBER_ID = '1078215982040649'
+const UNKNOWN_PHONE_NUMBER_ID = '1078215982040649'
 
 // In-memory stand-in for PocketBase.
 function fakeStore(accounts: Record<string, { userId: string; accessToken: string }> = {
@@ -84,7 +84,6 @@ function whatsappPayload(changes: { phoneNumberId?: string; messages?: unknown[]
 function setup(overrides: { store?: WebhookStore; secret?: string } = {}) {
   const { store, messages } = fakeStore()
   const sent: { phoneNumberId: string; to: string; text: string }[] = []
-  const forwarded: string[] = []
   const handler = createWebhookPostHandler({
     secret: overrides.secret ?? SECRET,
     now: () => NOW,
@@ -94,11 +93,8 @@ function setup(overrides: { store?: WebhookStore; secret?: string } = {}) {
       sent.push({ phoneNumberId, to, text })
       return `wamid.reply-${sent.length}`
     },
-    forwardToCalendaflow: rawBody => {
-      forwarded.push(rawBody)
-    },
   })
-  return { handler, messages, sent, forwarded }
+  return { handler, messages, sent }
 }
 
 describe('webhook POST from the router', () => {
@@ -242,39 +238,18 @@ describe('processing a signed WhatsApp payload', () => {
   })
 })
 
-describe('Calendaflow forwarding (kept until the router cutover)', () => {
-  it('forwards the raw body once for the Calendaflow number and does not process its messages', async () => {
-    const { handler, messages, sent, forwarded } = setup()
+describe('numbers without an account', () => {
+  it('ignores their messages and still processes the other numbers in the payload', async () => {
+    const { handler, messages, sent } = setup()
     const payload = whatsappPayload([
-      [{ phoneNumberId: CALENDAFLOW_PHONE_NUMBER_ID, messages: [textMessage('wamid.cf1', '521000000001', 'cita')] }],
-      [{ phoneNumberId: CALENDAFLOW_PHONE_NUMBER_ID, messages: [textMessage('wamid.cf2', '521000000002', 'cita')] }],
-    ])
-    const req = routerRequest(payload)
-    const rawBody = JSON.stringify(payload)
-    const res = await handler(req)
-
-    expect(res.status).toBe(200)
-    expect(forwarded).toEqual([rawBody])
-    expect(messages).toEqual([])
-    expect(sent).toEqual([])
-  })
-
-  it('still processes other numbers in a payload that also has Calendaflow changes', async () => {
-    const { handler, messages, forwarded } = setup()
-    const payload = whatsappPayload([
-      [{ phoneNumberId: CALENDAFLOW_PHONE_NUMBER_ID, messages: [textMessage('wamid.cf', '521000000001', 'cita')] }],
+      [{ phoneNumberId: UNKNOWN_PHONE_NUMBER_ID, messages: [textMessage('wamid.unknown', '521000000001', 'cita')] }],
       [{ messages: [textMessage('wamid.ia', '521000000002', 'hola')] }],
     ])
-    await handler(routerRequest(payload))
+    const res = await handler(routerRequest(payload))
 
-    expect(forwarded).toHaveLength(1)
+    expect(res.status).toBe(200)
     expect(messages.filter(m => m.direction === 'inbound').map(m => m.messageId)).toEqual(['wamid.ia'])
-  })
-
-  it('does not forward payloads for other numbers', async () => {
-    const { handler, forwarded } = setup()
-    await handler(routerRequest(whatsappPayload([[{ messages: [textMessage('wamid.x', '521000000002', 'hola')] }]])))
-    expect(forwarded).toEqual([])
+    expect(sent.map(s => s.phoneNumberId)).toEqual([PHONE_NUMBER_ID])
   })
 })
 
@@ -296,7 +271,6 @@ describe('failures', () => {
       store,
       generateReply: async () => { throw new Error('Gemini down') },
       sendMessage: async () => 'never',
-      forwardToCalendaflow: () => {},
     })
     const res = await handler(routerRequest(whatsappPayload([[{ messages: [textMessage('wamid.g', '521000000001', 'hola')] }]])))
     expect(res.status).toBe(200)

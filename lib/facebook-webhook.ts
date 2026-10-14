@@ -7,10 +7,6 @@ import { isValidRouterDelivery } from './router-signature'
 // (hooks.neurocrow.com). The router answers Meta's GET verification, checks Meta's
 // signature, and re-signs each delivery with NEUROCROW_ROUTER_SECRET.
 
-// Temporary: until the router cutover, Calendaflow's number still arrives here and is
-// forwarded as-is. Removed in the cutover ticket (the router routes it directly).
-const CALENDAFLOW_PHONE_NUMBER_ID = '1078215982040649'
-const CALENDAFLOW_WEBHOOK_URL = process.env.CALENDAFLOW_WEBHOOK_URL || 'http://localhost:3005/webhook'
 // No AI auto-reply to a message older than this, by its own WhatsApp timestamp.
 const MAX_AUTO_REPLY_AGE_MS = 15 * 60 * 1000
 const PB_URL = process.env.POCKETBASE_INTERNAL_URL || 'http://127.0.0.1:8090'
@@ -43,7 +39,6 @@ export interface WebhookDeps {
   store: WebhookStore
   generateReply: (history: ConversationMessage[], text: string) => Promise<string>
   sendMessage: (phoneNumberId: string, accessToken: string, to: string, text: string) => Promise<string>
-  forwardToCalendaflow: (rawBody: string) => void
 }
 
 interface IncomingText {
@@ -117,10 +112,6 @@ function extractTexts(payload: unknown): IncomingText[] {
     }
   }
   return out
-}
-
-function mentionsPhoneNumber(payload: unknown, phoneNumberId: string): boolean {
-  return allChanges(payload).some(c => c?.value?.metadata?.phone_number_id === phoneNumberId)
 }
 
 async function processText(deps: WebhookDeps, msg: IncomingText) {
@@ -198,13 +189,8 @@ export function createWebhookPostHandler(deps: WebhookDeps) {
       return Response.json({ error: 'invalid JSON' }, { status: 400 })
     }
 
-    if (mentionsPhoneNumber(payload, CALENDAFLOW_PHONE_NUMBER_ID)) {
-      deps.forwardToCalendaflow(rawBody)
-    }
-
     try {
       for (const msg of extractTexts(payload)) {
-        if (msg.phoneNumberId === CALENDAFLOW_PHONE_NUMBER_ID) continue
         if (inFlight.has(msg.messageId)) continue
         inFlight.add(msg.messageId)
         try {
@@ -322,13 +308,6 @@ export function handleWebhookPost(request: Request) {
     store: pocketBaseStore(),
     generateReply,
     sendMessage: sendWhatsAppCloudMessage,
-    forwardToCalendaflow: rawBody => {
-      fetch(CALENDAFLOW_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: rawBody,
-      }).catch(err => console.error('[webhook] Calendaflow forward failed:', err))
-    },
   })
   return handler(request)
 }
