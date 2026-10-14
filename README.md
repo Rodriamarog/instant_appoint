@@ -47,6 +47,32 @@ cd whatsapp-service && npm start
 npm run dev
 ```
 
+## Tests
+
+```bash
+npm test
+```
+
+## WhatsApp Cloud API webhooks
+
+Meta does not call this app directly. All WhatsApp webhooks go through the Neurocrow webhook
+router (`hooks.neurocrow.com`), which answers Meta's verification, checks Meta's signature, and
+POSTs each event to `/api/webhook` signed with a shared secret:
+
+- `X-Neurocrow-Timestamp`: unix seconds
+- `X-Neurocrow-Signature-256`: `sha256=` + hex HMAC-SHA256(secret, `timestamp + "." + body`)
+- `X-Neurocrow-Delivery-Id`: unique per delivery
+
+`/api/webhook` rejects (401) any POST without a valid signature or with a timestamp more than
+5 minutes off. There is no GET handler any more. Delivery is at-least-once, so messages are
+deduped on the WhatsApp message id. A message more than 15 minutes old (by its own timestamp) is
+stored but gets no AI auto-reply.
+
+| Variable | Required | Description |
+|---|---|---|
+| `NEUROCROW_ROUTER_SECRET` | yes | Shared secret for router deliveries. Must equal the router's `DEST_SECRET_INSTANTAPPOINT`. If unset, every webhook POST is rejected. |
+| `CALENDAFLOW_WEBHOOK_URL` | no | Where events for the Calendaflow number are forwarded (default `http://localhost:3005/webhook`). Temporary, removed at the router cutover. |
+
 ## WhatsApp setup
 
 1. Open the app and go to the **WhatsApp Setup** tab

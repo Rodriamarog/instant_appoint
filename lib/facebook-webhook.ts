@@ -1,180 +1,334 @@
-import { NextRequest, NextResponse } from 'next/server'
 import PocketBase from 'pocketbase'
 import { generateReply, ConversationMessage } from './ai-conversation'
 import { sendWhatsAppCloudMessage } from './whatsapp-cloud-api'
+import { isValidRouterDelivery } from './router-signature'
 
-const VERIFY_TOKEN = 'neurocrow_webhook_verification'
-const CALENDAFLOW_VERIFY_TOKEN = 'calendaflow_webhook_verify_2026'
+// WhatsApp webhooks reach this app only through the Neurocrow webhook router
+// (hooks.neurocrow.com). The router answers Meta's GET verification, checks Meta's
+// signature, and re-signs each delivery with NEUROCROW_ROUTER_SECRET.
+
+// Temporary: until the router cutover, Calendaflow's number still arrives here and is
+// forwarded as-is. Removed in the cutover ticket (the router routes it directly).
 const CALENDAFLOW_PHONE_NUMBER_ID = '1078215982040649'
 const CALENDAFLOW_WEBHOOK_URL = process.env.CALENDAFLOW_WEBHOOK_URL || 'http://localhost:3005/webhook'
+// No AI auto-reply to a message older than this, by its own WhatsApp timestamp.
+const MAX_AUTO_REPLY_AGE_MS = 15 * 60 * 1000
 const PB_URL = process.env.POCKETBASE_INTERNAL_URL || 'http://127.0.0.1:8090'
 const PB_ADMIN_EMAIL = process.env.POCKETBASE_ADMIN_EMAIL!
 const PB_ADMIN_PASSWORD = process.env.POCKETBASE_ADMIN_PASSWORD!
 
-export async function handleWebhookGet(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-  const mode = searchParams.get('hub.mode')
-  const token = searchParams.get('hub.verify_token')
-  const challenge = searchParams.get('hub.challenge')
-
-  if (mode === 'subscribe' && (token === VERIFY_TOKEN || token === CALENDAFLOW_VERIFY_TOKEN)) {
-    console.log('Facebook webhook verified')
-    return new NextResponse(challenge, { status: 200 })
-  }
-
-  return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+export interface StoredMessage {
+  messageId: string
+  conversationId: string
+  customerPhone: string
+  content: string
+  direction: 'inbound' | 'outbound'
+  sentAt: string
 }
 
-export async function handleWebhookPost(request: NextRequest) {
-  // Always return 200 fast — Meta requires quick ack
-  try {
-    const body = await request.json()
+/** Persistence used by the webhook (PocketBase in production). */
+export interface WebhookStore {
+  findAccount(phoneNumberId: string): Promise<{ userId: string; accessToken: string } | null>
+  hasMessage(messageId: string): Promise<boolean>
+  /** Returns the id of the customer's active conversation, creating it if needed. */
+  upsertConversation(userId: string, customerPhone: string, phoneNumberId: string, at: string): Promise<string>
+  saveMessage(userId: string, message: StoredMessage): Promise<void>
+  /** All messages of a conversation, oldest first. */
+  conversationHistory(conversationId: string): Promise<StoredMessage[]>
+}
 
-    const change = body?.entry?.[0]?.changes?.[0]
-    if (!change) return NextResponse.json({ status: 'ok' }, { status: 200 })
+export interface WebhookDeps {
+  secret: string
+  now: () => Date
+  store: WebhookStore
+  generateReply: (history: ConversationMessage[], text: string) => Promise<string>
+  sendMessage: (phoneNumberId: string, accessToken: string, to: string, text: string) => Promise<string>
+  forwardToCalendaflow: (rawBody: string) => void
+}
 
-    const field = change.field as string
-    const value = change.value
+interface IncomingText {
+  phoneNumberId: string
+  customerPhone: string
+  content: string
+  messageId: string
+  direction: 'inbound' | 'outbound'
+  timestamp?: number
+}
 
-    let customerPhone: string
-    let messageText: string
-    let messageId: string
+// The parts of a Meta WhatsApp webhook payload this handler reads. Everything is
+// optional because the payload is untrusted JSON.
+interface MetaMessage {
+  id?: string
+  type?: string
+  from?: string
+  to?: string
+  timestamp?: string
+  text?: { body?: unknown }
+}
+interface MetaChange {
+  field?: string
+  value?: {
+    metadata?: { phone_number_id?: unknown }
+    messages?: MetaMessage[]
+    message_echoes?: MetaMessage[]
+  }
+}
+
+/** Every change of every entry in the payload. */
+function allChanges(payload: unknown): MetaChange[] {
+  const entries = (payload as { entry?: unknown } | null)?.entry
+  if (!Array.isArray(entries)) return []
+  return entries.flatMap(entry => (Array.isArray(entry?.changes) ? (entry.changes as MetaChange[]) : []))
+}
+
+/** Pulls every text message (inbound) and echo (outbound) out of every entry and change. */
+function extractTexts(payload: unknown): IncomingText[] {
+  const out: IncomingText[] = []
+  for (const change of allChanges(payload)) {
+    const value = change?.value
+    const phoneNumberId = value?.metadata?.phone_number_id
+    if (typeof phoneNumberId !== 'string' || !phoneNumberId) continue
+
+    let items: unknown
     let direction: 'inbound' | 'outbound'
-
-    if (field === 'messages') {
-      // Inbound: customer → business
-      if (!value?.messages?.length) return NextResponse.json({ status: 'ok' }, { status: 200 })
-      const msg = value.messages[0]
-      if (msg.type !== 'text') return NextResponse.json({ status: 'ok' }, { status: 200 })
-      customerPhone = msg.from
-      messageText = msg.text.body
-      messageId = msg.id
+    if (change.field === 'messages') {
+      items = value?.messages
       direction = 'inbound'
-    } else if (field === 'smb_message_echoes') {
-      // Outbound echo: business app → customer
-      if (!value?.message_echoes?.length) return NextResponse.json({ status: 'ok' }, { status: 200 })
-      const echo = value.message_echoes[0]
-      if (echo.type !== 'text') return NextResponse.json({ status: 'ok' }, { status: 200 })
-      customerPhone = echo.to
-      messageText = echo.text.body
-      messageId = echo.id
+    } else if (change.field === 'smb_message_echoes') {
+      items = value?.message_echoes
       direction = 'outbound'
     } else {
-      return NextResponse.json({ status: 'ok' }, { status: 200 })
+      continue
+    }
+    if (!Array.isArray(items)) continue
+
+    for (const item of items as MetaMessage[]) {
+      const customerPhone = direction === 'inbound' ? item?.from : item?.to
+      if (item?.type !== 'text' || typeof item.text?.body !== 'string' || !item.id || !customerPhone) continue
+      const ts = Number(item.timestamp)
+      out.push({
+        phoneNumberId,
+        customerPhone,
+        content: item.text.body,
+        messageId: item.id,
+        direction,
+        timestamp: Number.isFinite(ts) && ts > 0 ? ts : undefined,
+      })
+    }
+  }
+  return out
+}
+
+function mentionsPhoneNumber(payload: unknown, phoneNumberId: string): boolean {
+  return allChanges(payload).some(c => c?.value?.metadata?.phone_number_id === phoneNumberId)
+}
+
+async function processText(deps: WebhookDeps, msg: IncomingText) {
+  const { store } = deps
+  // The router delivers at least once, so the same message can arrive more than once.
+  if (await store.hasMessage(msg.messageId)) {
+    console.log('[webhook] duplicate message ignored:', msg.messageId)
+    return
+  }
+  const account = await store.findAccount(msg.phoneNumberId)
+  if (!account) {
+    console.warn('[webhook] No whatsapp_account for phone_number_id:', msg.phoneNumberId)
+    return
+  }
+
+  const now = deps.now().toISOString()
+  const conversationId = await store.upsertConversation(account.userId, msg.customerPhone, msg.phoneNumberId, now)
+  await store.saveMessage(account.userId, {
+    messageId: msg.messageId,
+    conversationId,
+    customerPhone: msg.customerPhone,
+    content: msg.content,
+    direction: msg.direction,
+    sentAt: now,
+  })
+
+  // Only generate AI reply for inbound messages (not echo captures)
+  if (msg.direction !== 'inbound') return
+
+  // A late delivery (e.g. after an outage) is stored but never answered by the bot.
+  const ageMs = msg.timestamp === undefined ? Infinity : deps.now().getTime() - msg.timestamp * 1000
+  if (ageMs > MAX_AUTO_REPLY_AGE_MS) {
+    console.log('[webhook] message too old for auto-reply:', msg.messageId)
+    return
+  }
+
+  try {
+    const history = await store.conversationHistory(conversationId)
+    const conversationHistory: ConversationMessage[] = history
+      .filter(m => m.messageId !== msg.messageId) // exclude the message we just saved
+      .map(m => ({ role: m.direction === 'inbound' ? 'user' : 'model', content: m.content }))
+
+    const replyText = await deps.generateReply(conversationHistory, msg.content)
+    const replyMessageId = await deps.sendMessage(msg.phoneNumberId, account.accessToken, msg.customerPhone, replyText)
+
+    await store.saveMessage(account.userId, {
+      messageId: replyMessageId,
+      conversationId,
+      customerPhone: msg.customerPhone,
+      content: replyText,
+      direction: 'outbound',
+      sentAt: deps.now().toISOString(),
+    })
+    console.log(`[webhook] AI reply sent to ${msg.customerPhone}, wamid: ${replyMessageId}`)
+  } catch (aiError) {
+    console.error('[webhook] AI/send step failed:', aiError)
+  }
+}
+
+export function createWebhookPostHandler(deps: WebhookDeps) {
+  // Message ids being processed right now, so two concurrent deliveries of the
+  // same message can't both pass the hasMessage check.
+  const inFlight = new Set<string>()
+
+  return async function POST(request: Request): Promise<Response> {
+    const rawBody = await request.text()
+    if (!isValidRouterDelivery(deps.secret, rawBody, request.headers, deps.now())) {
+      return Response.json({ error: 'invalid signature' }, { status: 401 })
     }
 
-    const phoneNumberId = value?.metadata?.phone_number_id as string
-    if (!phoneNumberId) return NextResponse.json({ status: 'ok' }, { status: 200 })
+    let payload: unknown
+    try {
+      payload = JSON.parse(rawBody)
+    } catch {
+      return Response.json({ error: 'invalid JSON' }, { status: 400 })
+    }
 
-    if (phoneNumberId === CALENDAFLOW_PHONE_NUMBER_ID) {
+    if (mentionsPhoneNumber(payload, CALENDAFLOW_PHONE_NUMBER_ID)) {
+      deps.forwardToCalendaflow(rawBody)
+    }
+
+    try {
+      for (const msg of extractTexts(payload)) {
+        if (msg.phoneNumberId === CALENDAFLOW_PHONE_NUMBER_ID) continue
+        if (inFlight.has(msg.messageId)) continue
+        inFlight.add(msg.messageId)
+        try {
+          await processText(deps, msg)
+        } finally {
+          inFlight.delete(msg.messageId)
+        }
+      }
+    } catch (error) {
+      // Non-2xx makes the router retry; dedupe makes the retry safe.
+      console.error('[webhook] error:', error)
+      return Response.json({ error: 'processing failed' }, { status: 500 })
+    }
+    return Response.json({ status: 'ok' }, { status: 200 })
+  }
+}
+
+function isNotFound(err: unknown) {
+  return (err as { status?: number })?.status === 404
+}
+
+function pocketBaseStore(): WebhookStore {
+  const client = new PocketBase(PB_URL)
+  client.autoCancellation(false) // concurrent webhook requests share this client
+  // Re-authenticate whenever the superuser token is missing or expired.
+  const pb = async () => {
+    if (!client.authStore.isValid) {
+      await client.collection('_superusers').authWithPassword(PB_ADMIN_EMAIL, PB_ADMIN_PASSWORD)
+    }
+    return client
+  }
+
+  return {
+    async findAccount(phoneNumberId) {
+      const client = await pb()
+      try {
+        const account = await client
+          .collection('whatsapp_accounts')
+          .getFirstListItem(client.filter('phone_number_id = {:phoneNumberId}', { phoneNumberId }))
+        return { userId: account.user_id as string, accessToken: account.access_token as string }
+      } catch (err) {
+        if (isNotFound(err)) return null
+        throw err
+      }
+    },
+    async hasMessage(messageId) {
+      const client = await pb()
+      const res = await client
+        .collection('whatsapp_messages')
+        .getList(1, 1, { filter: client.filter('message_id = {:messageId}', { messageId }) })
+      return res.totalItems > 0
+    },
+    async upsertConversation(userId, customerPhone, phoneNumberId, at) {
+      const client = await pb()
+      try {
+        const conv = await client
+          .collection('conversations')
+          .getFirstListItem(
+            client.filter('user_id = {:userId} && customer_phone = {:customerPhone} && status = "active"', {
+              userId,
+              customerPhone,
+            })
+          )
+        await client.collection('conversations').update(conv.id, { last_message_at: at, phone_number_id: phoneNumberId })
+        return conv.id
+      } catch (err) {
+        if (!isNotFound(err)) throw err
+        const conv = await client.collection('conversations').create({
+          user_id: userId,
+          customer_phone: customerPhone,
+          status: 'active',
+          last_message_at: at,
+          phone_number_id: phoneNumberId,
+        })
+        return conv.id
+      }
+    },
+    async saveMessage(userId, m) {
+      await (await pb()).collection('whatsapp_messages').create({
+        user_id: userId,
+        to_number: m.customerPhone,
+        message_content: m.content,
+        message_type: 'text',
+        direction: m.direction,
+        conversation_id: m.conversationId,
+        sent_at: m.sentAt,
+        message_id: m.messageId,
+      })
+    },
+    async conversationHistory(conversationId) {
+      const client = await pb()
+      const records = await client.collection('whatsapp_messages').getFullList({
+        filter: client.filter('conversation_id = {:conversationId}', { conversationId }),
+        sort: 'sent_at',
+      })
+      return records.map(r => ({
+        messageId: r.message_id as string,
+        conversationId: r.conversation_id as string,
+        customerPhone: r.to_number as string,
+        content: r.message_content as string,
+        direction: r.direction as 'inbound' | 'outbound',
+        sentAt: r.sent_at as string,
+      }))
+    },
+  }
+}
+
+let handler: ((request: Request) => Promise<Response>) | null = null
+
+export function handleWebhookPost(request: Request) {
+  // Built on first request so env vars are read at runtime, not at build time.
+  handler ??= createWebhookPostHandler({
+    secret: process.env.NEUROCROW_ROUTER_SECRET ?? '',
+    now: () => new Date(),
+    store: pocketBaseStore(),
+    generateReply,
+    sendMessage: sendWhatsAppCloudMessage,
+    forwardToCalendaflow: rawBody => {
       fetch(CALENDAFLOW_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: rawBody,
       }).catch(err => console.error('[webhook] Calendaflow forward failed:', err))
-      return NextResponse.json({ status: 'ok' }, { status: 200 })
-    }
-
-    // Admin PB auth
-    const adminPb = new PocketBase(PB_URL)
-    await adminPb.collection('_superusers').authWithPassword(PB_ADMIN_EMAIL, PB_ADMIN_PASSWORD)
-
-    // Resolve which business user owns this phone number
-    let account
-    try {
-      account = await adminPb.collection('whatsapp_accounts').getFirstListItem(
-        `phone_number_id = "${phoneNumberId}"`
-      )
-    } catch {
-      console.warn('[webhook] No whatsapp_account for phone_number_id:', phoneNumberId)
-      return NextResponse.json({ status: 'ok' }, { status: 200 })
-    }
-
-    const userId = account.user_id as string
-    const accessToken = account.access_token as string
-    const now = new Date().toISOString()
-
-    // Upsert conversation
-    let conv
-    try {
-      conv = await adminPb.collection('conversations').getFirstListItem(
-        `user_id = "${userId}" && customer_phone = "${customerPhone}" && status = "active"`
-      )
-      await adminPb.collection('conversations').update(conv.id, { last_message_at: now, phone_number_id: phoneNumberId })
-    } catch {
-      conv = await adminPb.collection('conversations').create({
-        user_id: userId,
-        customer_phone: customerPhone,
-        status: 'active',
-        last_message_at: now,
-        phone_number_id: phoneNumberId,
-      })
-    }
-
-    // Save inbound message
-    await adminPb.collection('whatsapp_messages').create({
-      user_id: userId,
-      to_number: customerPhone,
-      message_content: messageText,
-      message_type: 'text',
-      direction,
-      conversation_id: conv.id,
-      sent_at: now,
-      message_id: messageId,
-    })
-
-    // Only generate AI reply for inbound messages (not echo captures)
-    if (direction === 'inbound') {
-      try {
-      // Load conversation history (last 20 messages)
-      const history = await adminPb.collection('whatsapp_messages').getFullList({
-        filter: `conversation_id = "${conv.id}"`,
-        sort: 'sent_at',
-      })
-
-      const conversationHistory: ConversationMessage[] = history
-        .slice(0, -1) // exclude the message we just saved
-        .map(m => ({
-          role: m.direction === 'inbound' ? 'user' : 'model',
-          content: m.message_content as string,
-        }))
-
-      console.log('[webhook] calling Gemini, history length:', conversationHistory.length)
-
-      // Generate AI reply
-      const replyText = await generateReply(conversationHistory, messageText)
-      console.log('[webhook] Gemini reply:', replyText.slice(0, 100))
-
-      // Send reply via Cloud API
-      const replyMessageId = await sendWhatsAppCloudMessage(
-        phoneNumberId,
-        accessToken,
-        customerPhone,
-        replyText
-      )
-      console.log('[webhook] sent, wamid:', replyMessageId)
-
-      // Save outbound reply
-      await adminPb.collection('whatsapp_messages').create({
-        user_id: userId,
-        to_number: customerPhone,
-        message_content: replyText,
-        message_type: 'text',
-        direction: 'outbound',
-        conversation_id: conv.id,
-        sent_at: new Date().toISOString(),
-        message_id: replyMessageId,
-      })
-
-      console.log(`[webhook] AI reply sent to ${customerPhone}`)
-      } catch (aiError) {
-        console.error('[webhook] AI/send step failed:', aiError)
-      }
-    }
-
-    return NextResponse.json({ status: 'ok' }, { status: 200 })
-  } catch (error) {
-    console.error('[webhook] error:', error)
-    return NextResponse.json({ status: 'ok' }, { status: 200 })
-  }
+    },
+  })
+  return handler(request)
 }
