@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import PocketBase from 'pocketbase'
+import { resolvePhoneNumberId } from '@/lib/embedded-signup'
 
 const APP_ID = process.env.META_APP_ID!
 const APP_SECRET = process.env.META_APP_SECRET!
@@ -31,13 +32,15 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { code, waba_id, phone_number_id } = body
+    const { code, waba_id } = body
 
-    console.log('[exchange-token] received:', { userId, code: code?.slice(0, 20) + '...', waba_id, phone_number_id })
+    console.log('[exchange-token] received:', { userId, waba_id, phone_number_id: body.phone_number_id })
 
-    if (!code || !waba_id || !phone_number_id) {
-      console.error('[exchange-token] missing fields:', { code: !!code, waba_id, phone_number_id })
-      return NextResponse.json({ error: 'Missing code, waba_id or phone_number_id' }, { status: 400 })
+    // phone_number_id may be missing: a WhatsApp Business app (coexistence) signup
+    // doesn't always send it. It's looked up from the WABA after the token exchange.
+    if (!code || !waba_id) {
+      console.error('[exchange-token] missing fields:', { code: !!code, waba_id })
+      return NextResponse.json({ error: 'Missing code or waba_id' }, { status: 400 })
     }
 
     // Exchange code for access token server-side
@@ -54,6 +57,12 @@ export async function POST(request: NextRequest) {
 
     const accessToken = tokenData.access_token
     console.log('[exchange-token] token exchange success, saving to PocketBase...')
+
+    const phone_number_id = await resolvePhoneNumberId(waba_id, body.phone_number_id || undefined, accessToken)
+    if (!phone_number_id) {
+      console.error('[exchange-token] could not tell which phone number was onboarded:', { waba_id })
+      return NextResponse.json({ error: 'Could not determine the WhatsApp phone number' }, { status: 400 })
+    }
 
     // Subscribe app to this WABA's webhook events so inbound messages are delivered
     const subRes = await fetch(

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { pb } from '@/lib/pocketbase'
+import { parseSignupMessage } from '@/lib/embedded-signup'
 
 const FB_APP_ID = '1195277397801905'
 const CONFIG_ID = '986479390379975'
@@ -59,26 +60,22 @@ export default function WhatsAppEmbeddedSignup({ onSuccess }: Props) {
       document.body.appendChild(script)
     }
 
-    // Listen for embedded signup events (FINISH, CANCEL, ERROR)
+    // Listen for embedded signup events (FINISH, the coexistence finish, CANCEL, ERROR)
     const handleMessage = (event: MessageEvent) => {
       if (event.origin !== 'https://www.facebook.com') return
-      try {
-        const data = JSON.parse(event.data)
-        if (data.type !== 'WA_EMBEDDED_SIGNUP') return
+      const result = parseSignupMessage(event.data)
+      if (!result) return
 
-        if (data.event === 'FINISH') {
-          sessionStorage.setItem('wa_signup_data', JSON.stringify({
-            waba_id: data.data.waba_id,
-            phone_number_id: data.data.phone_number_id,
-          }))
-        } else if (data.event === 'CANCEL') {
-          setStatus('idle')
-        } else if (data.event === 'ERROR') {
-          setStatus('error')
-          setErrorMsg(data.data?.error_message ?? 'Unknown error from Facebook')
-        }
-      } catch {
-        // non-JSON messages from Facebook, ignore
+      if (result.kind === 'finish') {
+        sessionStorage.setItem('wa_signup_data', JSON.stringify({
+          waba_id: result.wabaId,
+          phone_number_id: result.phoneNumberId,
+        }))
+      } else if (result.kind === 'cancel') {
+        setStatus('idle')
+      } else {
+        setStatus('error')
+        setErrorMsg(result.message)
       }
     }
 
