@@ -199,7 +199,7 @@ export function RemindersPage() {
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         <Card>
-          <CardHeader className="flex-row items-center justify-between">
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Upcoming</CardTitle>
             {upcoming !== null && <Count>{upcoming.length}</Count>}
           </CardHeader>
@@ -257,7 +257,7 @@ export function RemindersPage() {
         </Card>
 
         <Card>
-          <CardHeader className="flex-row items-center justify-between">
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Sent</CardTitle>
             <Count>{sent.length}</Count>
           </CardHeader>
