@@ -8,6 +8,7 @@ import {
   liveConversations,
   type Conversation,
 } from '@/lib/conversations'
+import { errorMessage } from '@/lib/errors'
 import type { Feed } from '@/lib/feed'
 import {
   formatTime,
@@ -46,7 +47,7 @@ export function ChatPage({
 
   const describe = useCallback((error: unknown) => {
     setProblem(
-      error instanceof Error ? error.message : 'Something went wrong. Try again.',
+      errorMessage(error, 'Something went wrong. Try again.'),
     )
   }, [])
 

@@ -1,3 +1,4 @@
+import { call } from '@/lib/api'
 import { liveFeed, pollingFeed, type Feed } from '@/lib/feed'
 import { pb } from '@/lib/pocketbase'
 
@@ -170,26 +171,14 @@ export async function sendReply(
   conversationId: string,
   text: string,
 ): Promise<Message> {
-  const response = await fetch('/api/chat/send', {
-    method: 'POST',
-    cache: 'no-store',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${pb.authStore.token}`,
+  return call<Message>(
+    '/api/chat/send',
+    {
+      method: 'POST',
+      body: JSON.stringify({ conversation_id: conversationId, message: text }),
     },
-    body: JSON.stringify({ conversation_id: conversationId, message: text }),
-  })
-
-  const body: unknown = await response.json().catch(() => null)
-
-  if (!response.ok) {
-    throw new Error(
-      (body as { message?: string } | null)?.message ??
-        'The message could not be sent. Please try again.',
-    )
-  }
-
-  return body as Message
+    'The message could not be sent. Please try again.',
+  )
 }
 
 /**

@@ -11,11 +11,8 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { pb } from '@/lib/pocketbase'
-
-function messageOf(err: unknown, fallback: string) {
-  return err instanceof Error && err.message ? err.message : fallback
-}
+import { requestVerification, signIn } from '@/lib/auth'
+import { errorMessage } from '@/lib/errors'
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
@@ -37,10 +34,10 @@ export function LoginPage() {
     setVerificationMessage('')
 
     try {
-      await pb.collection('users').requestVerification(email)
+      await requestVerification(email)
       setVerificationMessage('Verification email sent! Check your inbox.')
     } catch (err) {
-      setError(messageOf(err, 'Failed to send verification email'))
+      setError(errorMessage(err, 'Failed to send verification email'))
     } finally {
       setIsResendingVerification(false)
     }
@@ -57,24 +54,12 @@ export function LoginPage() {
     const passwordVal = (formData.get('password') as string) || password
 
     try {
-      await pb.collection('users').authWithPassword(emailVal, passwordVal)
-
-      // Mail delivery is not configured yet, so an account that registered
-      // through the form is never verified. Letting it in anyway would make
-      // the pending #11 verification work a no-op.
-      const user = pb.authStore.record
-      if (user && !user.verified) {
-        pb.authStore.clear()
-        setError(
-          'Please verify your email address before logging in. Check your email for the verification link.',
-        )
-        setIsLoading(false)
-        return
-      }
-
+      // An unverified account is refused by lib/auth, which clears the
+      // session again rather than leaving a half-signed-in page.
+      await signIn(emailVal, passwordVal)
       navigate('/calendar')
     } catch (err) {
-      setError(messageOf(err, 'Failed to login'))
+      setError(errorMessage(err, 'Failed to login'))
       setIsLoading(false) // Only reset on error; success navigates away.
     }
   }
