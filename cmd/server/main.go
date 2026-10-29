@@ -20,6 +20,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 
+	"github.com/Rodriamarog/instant_appoint/internal/chat"
 	"github.com/Rodriamarog/instant_appoint/internal/gemini"
 	"github.com/Rodriamarog/instant_appoint/internal/meta"
 	"github.com/Rodriamarog/instant_appoint/internal/pbstore"
@@ -79,6 +80,10 @@ func main() {
 		}
 
 		whatsapp.Register(se.Router, client)
+
+		// The chat page reads straight from PocketBase; only sending a reply
+		// needs the account's access token, so only that is a route.
+		chat.Register(se.Router, client)
 
 		pbstore.RegisterWebhook(se.Router, inboundWebhook(se.App, client))
 

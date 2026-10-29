@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router'
 import { RequireAuth } from '@/components/require-auth'
 import { Shell } from '@/components/shell'
 import { CalendarPage } from '@/pages/calendar'
+import { ChatPage } from '@/pages/chat'
 import { HomePage } from '@/pages/home'
 import { LoginPage } from '@/pages/login'
 import { NotFoundPage } from '@/pages/not-found'
@@ -27,6 +28,7 @@ export function App() {
       <Route element={<RequireAuth />}>
         <Route element={<Shell />}>
           <Route path="calendar" element={<CalendarPage />} />
+          <Route path="chat" element={<ChatPage />} />
           <Route path="whatsapp" element={<WhatsAppPage />} />
           <Route path="reminders" element={<RemindersPage />} />
           <Route path="templates" element={<TemplatesPage />} />
