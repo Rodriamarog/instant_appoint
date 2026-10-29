@@ -128,13 +128,26 @@ export function liveFeed<T>(
 
       const stale = unsubscribe
       unsubscribe = null
-      void stale?.()
 
-      // A cleared store is a sign-out. The guard is already taking the page
-      // away, and a subscription without a session would be refused anyway.
-      if (token) {
-        open()
-      }
+      // The old subscription has to be gone before the new one is asked for,
+      // and this await is load-bearing. The SDK batches subscription changes
+      // made in one tick and sends nothing when the batch nets out to the
+      // same set — so dropping and re-adding together is seen as no change,
+      // no request is sent, and the new listener is never attached to the
+      // stream. The page then looks subscribed and receives nothing. Measured
+      // against pocketbase 0.26 in a browser, not reasoned about.
+      Promise.resolve(stale?.())
+        .catch(() => {
+          // A failed unsubscribe still leaves the old listener detached from
+          // this feed; reopening is the recovery either way.
+        })
+        .then(() => {
+          // A cleared store is a sign-out. The guard is already taking the
+          // page away, and a subscription without a session would be refused.
+          if (!closed && token) {
+            open()
+          }
+        })
     })
 
     return () => {

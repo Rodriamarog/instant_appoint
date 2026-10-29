@@ -15,18 +15,34 @@ type Subscriber = (event: { action: string; record: Record<string, unknown> }) =
  * Stands in for a collection's realtime channel, and remembers how many times
  * it has been subscribed to — which is what the token-refresh case is about.
  */
+/**
+ * Stands in for pocketbase's realtime service, including the one piece of its
+ * behaviour that bit in a browser: a subscription asked for while an
+ * unsubscribe is still settling is swallowed. The SDK batches subscription
+ * changes made in one tick and sends nothing when the batch nets out to the
+ * same set, so the new listener never reaches the stream and the caller is
+ * left looking subscribed and hearing nothing.
+ */
 function stubRealtime() {
   const subscribers: Subscriber[] = []
   const unsubscribed: number[] = []
+  const order: string[] = []
+  let settling = 0
 
   const subscribe = vi.fn((_topic: string, callback: Subscriber) => {
-    const index = subscribers.push(callback) - 1
+    const swallowed = settling > 0
+    const index = subscribers.push(swallowed ? () => {} : callback) - 1
+    order.push(`subscribe ${index}${swallowed ? ' (swallowed)' : ''}`)
 
     return Promise.resolve(() => {
-      unsubscribed.push(index)
-      subscribers[index] = () => {}
+      settling += 1
 
-      return Promise.resolve()
+      return Promise.resolve().then(() => {
+        settling -= 1
+        unsubscribed.push(index)
+        subscribers[index] = () => {}
+        order.push(`unsubscribe ${index}`)
+      })
     })
   })
 
@@ -37,6 +53,7 @@ function stubRealtime() {
   return {
     subscribe,
     unsubscribed,
+    order,
     /** Delivers one event to every live subscriber. */
     deliver(record: Record<string, unknown> = {}) {
       for (const subscriber of [...subscribers]) {
@@ -166,6 +183,58 @@ test('a live feed resubscribes when the session token is refreshed', async () =>
   // The new subscription is a working one, not just an extra call.
   realtime.deliver()
   await vi.waitFor(() => expect(seen.at(-1)).toEqual(['a message']))
+})
+
+/**
+ * Measured against pocketbase 0.26 in a browser, not reasoned about: the SDK
+ * batches subscription changes made in one tick and sends nothing when the
+ * batch nets out to the same set. Dropping and re-adding together is seen as
+ * no change, so no request goes out and the new listener is never attached to
+ * the stream — the page looks subscribed and is handed nothing. Doing it in
+ * that order cost a live run to find.
+ */
+test('the old subscription is gone before the new one is asked for', async () => {
+  const realtime = stubRealtime()
+
+  open(
+    liveFeed<string>({
+      collection: 'whatsapp_messages',
+      load: () => Promise.resolve(['a message']),
+    }),
+  )
+
+  await vi.waitFor(() => expect(realtime.order).toEqual(['subscribe 0']))
+
+  signIn('the-refreshed-token')
+
+  await vi.waitFor(() =>
+    expect(realtime.order).toEqual(['subscribe 0', 'unsubscribe 0', 'subscribe 1']),
+  )
+})
+
+test('the resubscribed feed is still delivered to', async () => {
+  const realtime = stubRealtime()
+  let rows = ['one']
+  const seen: string[][] = []
+
+  open(
+    liveFeed<string>({
+      collection: 'whatsapp_messages',
+      load: () => Promise.resolve([...rows]),
+    }),
+    (items) => seen.push(items),
+  )
+
+  await vi.waitFor(() => expect(realtime.subscribe).toHaveBeenCalledTimes(1))
+
+  signIn('the-refreshed-token')
+  await vi.waitFor(() => expect(realtime.unsubscribed).toEqual([0]))
+  await vi.waitFor(() => expect(realtime.subscribe).toHaveBeenCalledTimes(2))
+
+  rows = ['one', 'two']
+  realtime.deliver()
+
+  await vi.waitFor(() => expect(seen.at(-1)).toEqual(['one', 'two']))
 })
 
 test('a live feed signed out does not resubscribe', async () => {
