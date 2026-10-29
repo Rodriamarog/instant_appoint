@@ -81,12 +81,25 @@ beforeEach(() => {
     return stub as unknown as ReturnType<typeof pb.collection>
   })
 
+  // The settings dialog asks the server for the account's approved
+  // templates. Stubbed empty so these tests stay about the page.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ templates: [] }),
+      } as Response),
+    ),
+  )
+
   pb.authStore.save('not-a-real-token', signedInUser)
 })
 
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
   pb.authStore.clear()
 })
