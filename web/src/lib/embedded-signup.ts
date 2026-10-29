@@ -8,6 +8,25 @@
  * server, because it needs the Meta app secret.
  */
 
+/**
+ * Which Meta app this signup runs against, and which Embedded Signup
+ * configuration inside it.
+ *
+ * Both are public identifiers of a Facebook app, not secrets — the app secret
+ * never leaves the server — so shipping them in the bundle the browser
+ * downloads is fine. What is not fine is that they were *hardcoded*: the
+ * server reads its half of the same app from META_APP_ID, so an owner whose
+ * Meta app differs had an Embedded Signup that failed until somebody edited
+ * this file and rebuilt. They now come from the build environment, with the
+ * values this app was built against as defaults.
+ *
+ * VITE_META_APP_ID must name the same app as the server's META_APP_ID. The
+ * token exchange is done by the server with that app's secret, and Meta
+ * refuses a code issued by a different app.
+ */
+export const FB_APP_ID = import.meta.env.VITE_META_APP_ID || '1195277397801905'
+export const CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || '986479390379975'
+
 export type SignupResult =
   | { kind: 'finish'; wabaId: string; phoneNumberId?: string }
   | { kind: 'cancel' }

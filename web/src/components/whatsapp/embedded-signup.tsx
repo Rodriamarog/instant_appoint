@@ -2,17 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { call } from '@/lib/api'
-import { parseSignupMessage } from '@/lib/embedded-signup'
+import { CONFIG_ID, FB_APP_ID, parseSignupMessage } from '@/lib/embedded-signup'
 import { errorMessage } from '@/lib/errors'
-
-/**
- * The Meta app this signup runs against, and the Embedded Signup
- * configuration inside it. Both identify a public Facebook app rather than a
- * secret, which is why they can live in code the browser downloads; the app
- * secret never leaves the server.
- */
-const FB_APP_ID = '1195277397801905'
-const CONFIG_ID = '986479390379975'
 
 /** Meta only posts signup results from this origin. */
 const FB_ORIGIN = 'https://www.facebook.com'
