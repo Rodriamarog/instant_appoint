@@ -47,3 +47,18 @@ pb_data/
 /whatsapp-service/node_modules/
 /whatsapp-service/.wwebjs_auth/
 /whatsapp-service/.wwebjs_cache/
+
+# Go build output
+/instant_appoint
+/instant_appoint.exe
+/server
+/server.exe
+
+# Vite SPA
+/web/node_modules/
+/web/.vite/
+# web/dist is a build artifact, but .gitkeep must stay committed:
+# //go:embed all:dist is a compile error if the directory is missing, so a
+# fresh clone has to be able to `go build` before Vite has ever run.
+/web/dist/*
+!/web/dist/.gitkeep

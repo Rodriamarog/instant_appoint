@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>InstantAppoint &mdash; UI not built</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font: 16px/1.6 ui-sans-serif, system-ui, sans-serif;
+        background: #fafafa;
+        color: #111827;
+      }
+      main { max-width: 40rem; padding: 2rem; }
+      code {
+        background: #11182710;
+        padding: 0.15em 0.4em;
+        border-radius: 4px;
+        font-family: ui-monospace, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>The UI has not been built yet</h1>
+      <p>
+        This binary was compiled without a <code>web/dist</code> bundle, so the
+        placeholder shell is being served instead of the app.
+      </p>
+      <p>Build the frontend and recompile:</p>
+      <pre><code>cd web &amp;&amp; npm install &amp;&amp; npm run build
+go build ./cmd/server</code></pre>
+      <p>
+        The PocketBase admin UI is unaffected and is available at
+        <a href="/_/">/_/</a>.
+      </p>
+    </main>
+  </body>
+</html>
