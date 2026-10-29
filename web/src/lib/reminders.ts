@@ -99,27 +99,18 @@ export async function listUpcomingReminders(
  *
  * whatsapp_messages is a shared log — chat writes to it too — so the two
  * markers that make a row a *reminder* are part of the query rather than
- * assumed. #9 is what starts writing them; until then this is empty, and the
- * collection itself does not exist until #6 creates it, which is why a 404 is
- * read as "none" rather than as a failure.
+ * assumed. An empty list means nothing has been sent yet; a failure is a
+ * failure and is allowed to surface.
  */
 export async function listSentReminders(): Promise<SentReminder[]> {
   const owner = pb.authStore.record?.id ?? ''
 
-  try {
-    const page = await pb.collection('whatsapp_messages').getList<SentReminder>(1, 50, {
-      filter: pb.filter(
-        'user_id = {:userId} && message_type = "reminder" && status = "sent"',
-        { userId: owner },
-      ),
-      sort: '-sent_at',
-    })
+  const page = await pb.collection('whatsapp_messages').getList<SentReminder>(1, 50, {
+    filter: pb.filter('user_id = {:userId} && message_type = "reminder" && status = "sent"', {
+      userId: owner,
+    }),
+    sort: '-sent_at',
+  })
 
-    return page.items
-  } catch (error) {
-    if ((error as { status?: number } | null)?.status === 404) {
-      return []
-    }
-    throw error
-  }
+  return page.items
 }

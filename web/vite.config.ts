@@ -26,13 +26,6 @@ function keepDistTracked(): Plugin {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), keepDistTracked()],
-  css: {
-    // Tailwind runs through @tailwindcss/vite, not PostCSS. An empty object
-    // stops Vite searching parent directories, where it would otherwise pick
-    // up the legacy Next.js postcss.config.mjs at the repo root and fail on
-    // its @tailwindcss/postcss plugin. Harmless to keep once that file goes.
-    postcss: {},
-  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

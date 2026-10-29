@@ -157,19 +157,16 @@ test('the soonest reminder is listed first', async () => {
   expect(upcoming.map((r) => r.event.id)).toEqual(['first', 'second', 'third'])
 })
 
-test('nothing has been sent until the scheduler lands, and that is not an error', async () => {
-  // whatsapp_messages is created by #6 and filled by #9. Until then the
-  // query 404s on a collection that is not there yet, and the page has to
-  // show an empty Sent column rather than fall over.
+test('a failure reading the sent reminders is not passed off as "none"', async () => {
+  // This used to tolerate a 404, because whatsapp_messages did not exist when
+  // this module was written. It does now, so a 404 means something is wrong
+  // and the page should say so rather than show an empty Sent column.
   sentFailure = Object.assign(new Error('Missing or invalid collection context.'), {
     status: 404,
   })
 
-  await expect(listSentReminders()).resolves.toEqual([])
-  await expect(listUpcomingReminders(1440, NOW)).resolves.toEqual([])
-})
+  await expect(listSentReminders()).rejects.toThrow()
 
-test('a real failure reading the sent reminders is not passed off as "none"', async () => {
   sentFailure = Object.assign(new Error('Something went wrong'), { status: 500 })
 
   await expect(listSentReminders()).rejects.toThrow()
