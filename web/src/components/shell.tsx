@@ -1,21 +1,27 @@
-import { Link, Outlet, useLocation } from 'react-router'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 
-const links = [
-  { to: '/', label: 'Home' },
-  { to: '/calendar', label: 'Calendar' },
-]
+import { signOut } from '@/lib/auth'
+
+/** Later tickets add Reminders, WhatsApp Setup, Templates and Chat here. */
+const links = [{ to: '/calendar', label: 'Calendar' }]
 
 /**
- * The layout every app route renders inside. The real navigation and the auth
- * guard arrive with the page ports.
+ * The layout every signed-in page renders inside. It assumes a session: the
+ * RequireAuth route above it never renders it without one.
  */
 export function Shell() {
   const { pathname } = useLocation()
+  const navigate = useNavigate()
+
+  const handleSignOut = () => {
+    signOut()
+    navigate('/login', { replace: true })
+  }
 
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b">
-        <nav className="mx-auto flex max-w-5xl gap-6 px-6 py-4 text-sm">
+        <nav className="mx-auto flex max-w-5xl items-center gap-6 px-6 py-4 text-sm">
           <span className="font-heading font-semibold">InstantAppoint</span>
           {links.map(({ to, label }) => (
             <Link
@@ -28,6 +34,13 @@ export function Shell() {
               {label}
             </Link>
           ))}
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="ml-auto rounded-lg bg-black px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800"
+          >
+            Sign Out
+          </button>
         </nav>
       </header>
 

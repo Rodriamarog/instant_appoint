@@ -56,7 +56,8 @@ that a plain `//go:embed` skips.)
 
 ```bash
 ./instantappoint serve                                  # http://127.0.0.1:8090
-./instantappoint superuser upsert you@example.com <pw>   # first boot only
+./instantappoint superuser upsert you@example.com <pw>   # admin UI account, see below
+./instantappoint seed                                    # dev fixtures, see below
 ./instantappoint migrate up                              # apply migrations without serving
 ```
 
@@ -64,6 +65,38 @@ that a plain `//go:embed` skips.)
 `Automigrate` is off, so edits made in the admin UI are never written back as migration files.
 
 Data lives in `pb_data/` next to the binary (`--dir` to move it). It is gitignored; never commit it.
+
+### Administrator account
+
+`superuser upsert` takes the email and password as arguments and never prompts, so it works in
+a Dockerfile, an entrypoint script or CI with stdin closed. It creates the account if the email
+is unknown and resets the password if it is not, which makes it safe to run on every boot.
+
+```bash
+./instantappoint superuser upsert you@example.com <at-least-10-characters>
+```
+
+Then sign in at `/_/`. (`superuser create` exists too, but it fails on an email that already
+exists — prefer `upsert`.)
+
+### The seed command
+
+Registration sends a verification email and the login page refuses an unverified account, so
+a fresh database cannot be logged into until mail delivery is configured. `seed` writes an
+already-verified test account straight to the collection:
+
+```bash
+./instantappoint seed
+SEED_EMAIL=dev@instantappoint.test
+SEED_PASSWORD=devpassword123
+SEED_USER_ID=giecjjw8596s8wu
+```
+
+One `KEY=value` per line on stdout (the prose goes to stderr), so a script can read it with
+`eval "$(./instantappoint seed 2>/dev/null | grep '^SEED_')"`. It applies migrations first, so
+it works against a database that has never been served, and it is idempotent: re-running
+restores the password and the verified flag rather than failing. **Development only** — the
+credentials are public, in this file and in the source.
 
 | Path | Serves |
 |---|---|
@@ -91,6 +124,7 @@ changes in this mode, because Vite serves `web/src` directly rather than the emb
 
 ```bash
 go test ./...                  # Go
+cd web && npm test             # SPA (vitest + jsdom)
 cd web && npm run build        # type-check + production build
 ```
 

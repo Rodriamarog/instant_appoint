@@ -3,7 +3,8 @@ import { fileURLToPath, URL } from 'node:url'
 
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig, type Plugin } from 'vite'
+import type { Plugin } from 'vite'
+import { defineConfig } from 'vitest/config'
 
 /** Where `go run ./cmd/server serve` listens by default. */
 const goServer = 'http://127.0.0.1:8090'
@@ -36,6 +37,12 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
+  },
+  test: {
+    // The guard and the auth pages are DOM behaviour, so the suite needs a
+    // document and a localStorage for the PocketBase auth store.
+    environment: 'jsdom',
+    include: ['src/**/*.test.{ts,tsx}'],
   },
   server: {
     port: 5173,
