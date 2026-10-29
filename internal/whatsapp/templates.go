@@ -59,17 +59,14 @@ func requireAccount(e *core.RequestEvent) (*core.Record, error) {
 
 // metaError turns a Graph failure into one readable sentence.
 //
-// Meta's raw body never reaches the browser: a failing call can carry the app
-// secret in the query string it echoes, and the rest is written for a
-// developer reading a log. Only error.message is quoted, because it is the
-// part that says what a person has to change — "Template name already exists"
-// is the whole answer to a failed create.
+// Meta's raw body reaches neither the browser nor the log: a failing call can
+// carry the app secret in the query string it echoes. meta.Explain and
+// meta.Sanitise own that rule; see them for what is left out and why.
 func metaError(e *core.RequestEvent, fallback string, err error) error {
-	e.App.Logger().Error("a Meta Graph call failed", "user_id", e.Auth.Id, "error", err)
+	e.App.Logger().Error("a Meta Graph call failed", "user_id", e.Auth.Id, "error", meta.Sanitise(err))
 
-	var apiErr *meta.APIError
-	if errors.As(err, &apiErr) && apiErr.Message != "" {
-		return e.InternalServerError("Meta rejected the request: "+apiErr.Message, err)
+	if explanation, ok := meta.Explain(err); ok {
+		return e.InternalServerError("Meta rejected the request: "+explanation, err)
 	}
 
 	return e.InternalServerError(fallback, err)

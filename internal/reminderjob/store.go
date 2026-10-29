@@ -17,10 +17,6 @@ import (
 	"github.com/Rodriamarog/instant_appoint/migrations"
 )
 
-// calendarEventsCollection is the appointments table. The migration that
-// creates it keeps its name private.
-const calendarEventsCollection = "calendar_events"
-
 // The markers that make a row in the shared message log a reminder. Both are
 // in the predicate of the unique index the claim relies on, so neither is a
 // label: changing either changes what the database enforces.
@@ -84,7 +80,7 @@ func (s *Store) ActiveSettings(context.Context) ([]reminders.Settings, error) {
 // exclude every appointment in its own second.
 func (s *Store) AppointmentsStartingBetween(_ context.Context, from, to time.Time) ([]reminders.Appointment, error) {
 	records, err := s.app.FindRecordsByFilter(
-		calendarEventsCollection,
+		migrations.CalendarEventsCollection,
 		"start_time >= {:from} && start_time <= {:to}",
 		"start_time", 0, 0,
 		dbx.Params{"from": isotime.Format(from), "to": isotime.Format(to)},
@@ -160,16 +156,17 @@ func (s *Store) ReminderAttempts(_ context.Context, appointmentIDs []string) (ma
 	}
 
 	var rows []struct {
-		EventID string `db:"event_id"`
-		Status  string `db:"status"`
-		SentAt  string `db:"sent_at"`
+		EventID   string `db:"event_id"`
+		Status    string `db:"status"`
+		SentAt    string `db:"sent_at"`
+		MessageID string `db:"message_id"`
 	}
 
 	// A plain IN, which PocketBase's filter language has no spelling for —
 	// writing one as a chain of ORs would put one bound parameter per
 	// appointment into the query text every minute.
 	err := s.app.DB().
-		Select("event_id", "status", "sent_at").
+		Select("event_id", "status", "sent_at", "message_id").
 		From(migrations.WhatsAppMessagesCollection).
 		Where(dbx.HashExp{"message_type": reminderMessage}).
 		AndWhere(dbx.In("event_id", ids...)).
@@ -184,6 +181,21 @@ func (s *Store) ReminderAttempts(_ context.Context, appointmentIDs []string) (ma
 		switch row.Status {
 		case statusSent:
 			attempt.Sent = true
+
+			// A sent row with no message id is a claim whose send never
+			// finished reporting back — the process died between writing the
+			// claim and recording what Meta said. reminders.Attempt.Abandoned
+			// decides, from how old it is, whether that is still in flight.
+			if row.MessageID == "" {
+				attempt.Incomplete = true
+				if at, err := isotime.Parse(row.SentAt); err == nil {
+					attempt.ClaimedAt = at
+				} else {
+					// Unreadable, so unaged. Treating it as claimed right now
+					// keeps it suppressed rather than resending every minute.
+					attempt.ClaimedAt = time.Now()
+				}
+			}
 
 		case statusFailed:
 			attempt.Failures++
@@ -205,6 +217,14 @@ func (s *Store) ReminderAttempts(_ context.Context, appointmentIDs []string) (ma
 // that a reservation: a second run writing the same row is refused by the
 // database, which is the only place the race is visible. Nothing in Go could
 // have seen the other run.
+//
+// A refusal is not automatically another live run, though. The row holding the
+// reservation may have been left by a process that died mid-send, in which
+// case it says sent, carries no message id, and would suppress this reminder
+// for good. Once it is old enough to be certainly dead
+// (reminders.ReclaimAfter) it is turned into a failed attempt — which releases
+// the index, leaves the crash in the audit trail and counts towards the retry
+// bound — and the claim is written again.
 func (s *Store) Claim(ctx context.Context, claim reminders.Claim) (string, error) {
 	collection, err := s.app.FindCollectionByNameOrId(migrations.WhatsAppMessagesCollection)
 	if err != nil {
@@ -222,20 +242,46 @@ func (s *Store) Claim(ctx context.Context, claim reminders.Claim) (string, error
 		return "", fmt.Errorf("resolve the customer's conversation: %w", err)
 	}
 
-	record := core.NewRecord(collection)
-	record.Set("user_id", claim.UserID)
-	record.Set("to_number", claim.ToNumber)
-	record.Set("message_content", claim.Content)
-	record.Set("message_type", reminderMessage)
-	// Both of these were left empty by the scheduler this replaces, so a
-	// reminder belonged to no conversation and had no direction.
-	record.Set("direction", outbound)
-	record.Set("conversation_id", conversationID)
-	record.Set("event_id", claim.AppointmentID)
-	record.Set("status", statusSent)
-	record.Set("sent_at", at)
-	record.Set("whatsapp_account_id", claim.AccountID)
+	write := func() *core.Record {
+		record := core.NewRecord(collection)
+		record.Set("user_id", claim.UserID)
+		record.Set("to_number", claim.ToNumber)
+		record.Set("message_content", claim.Content)
+		record.Set("message_type", reminderMessage)
+		// Both of these were left empty by the scheduler this replaces, so a
+		// reminder belonged to no conversation and had no direction.
+		record.Set("direction", outbound)
+		record.Set("conversation_id", conversationID)
+		record.Set("event_id", claim.AppointmentID)
+		record.Set("status", statusSent)
+		record.Set("sent_at", at)
+		record.Set("whatsapp_account_id", claim.AccountID)
 
+		return record
+	}
+
+	record := write()
+	err = s.app.Save(record)
+	switch {
+	case err == nil:
+		return record.Id, nil
+
+	case !pbstore.IsUniqueViolation(err):
+		return "", err
+	}
+
+	released, releaseErr := s.releaseAbandonedClaim(claim.AppointmentID, claim.At)
+	if releaseErr != nil {
+		return "", fmt.Errorf("check whether the existing claim was abandoned: %w", releaseErr)
+	}
+	if !released {
+		return "", reminders.ErrAlreadyClaimed
+	}
+
+	// Two runs can reach this together, both having seen the same dead row.
+	// The index settles that the same way it settles every other race: one of
+	// them is refused, and steps away.
+	record = write()
 	if err := s.app.Save(record); err != nil {
 		if pbstore.IsUniqueViolation(err) {
 			return "", reminders.ErrAlreadyClaimed
@@ -245,6 +291,58 @@ func (s *Store) Claim(ctx context.Context, claim reminders.Claim) (string, error
 	}
 
 	return record.Id, nil
+}
+
+// releaseAbandonedClaim turns a claim nothing is finishing into a failed
+// attempt, and says whether it did.
+//
+// Only a row that is certainly dead is touched: status='sent' with no message
+// id, written at least reminders.ReclaimAfter ago. A claim a live run is still
+// working through is left exactly where it is.
+func (s *Store) releaseAbandonedClaim(appointmentID string, now time.Time) (bool, error) {
+	record, err := s.app.FindFirstRecordByFilter(
+		migrations.WhatsAppMessagesCollection,
+		"event_id = {:eventID} && message_type = {:type} && status = {:status} && message_id = {:empty}",
+		dbx.Params{
+			"eventID": appointmentID,
+			"type":    reminderMessage,
+			"status":  statusSent,
+			"empty":   "",
+		},
+	)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		// Either nothing holds the reminder any more, or what holds it has a
+		// message id: a reminder that really did go out.
+		return false, nil
+
+	case err != nil:
+		return false, err
+	}
+
+	claimedAt, err := isotime.Parse(record.GetString("sent_at"))
+	if err != nil {
+		// Its age is unknowable, so it cannot be declared dead. Resending on
+		// a guess would mean resending every minute.
+		s.app.Logger().Warn("reminders: an unfinished claim has an unreadable timestamp and is being left alone",
+			"claim_id", record.Id, "event_id", appointmentID, "error", err)
+
+		return false, nil
+	}
+
+	if !(reminders.Attempt{Sent: true, Incomplete: true, ClaimedAt: claimedAt}).Abandoned(now) {
+		return false, nil
+	}
+
+	record.Set("status", statusFailed)
+	if err := s.app.Save(record); err != nil {
+		return false, err
+	}
+
+	s.app.Logger().Warn("reminders: a claim was left unfinished and is being retried — the send may have reached Meta before the process stopped, so the customer may see it twice",
+		"claim_id", record.Id, "event_id", appointmentID, "claimed_at", record.GetString("sent_at"))
+
+	return true, nil
 }
 
 // MarkSent records the WhatsApp message id against a claim.

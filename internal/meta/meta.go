@@ -95,6 +95,51 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("meta: request failed (http %d): %s", e.Status, e.Body)
 }
 
+// Safe is the whole of this failure that may leave the process: Meta's own
+// explanation and the codes, never Body.
+//
+// Body is kept on the error because Meta puts failures in places the typed
+// fields do not reach, but it is also a verbatim echo of the request — which
+// for several of these calls quotes the app secret in the query string. The
+// default Error() prints it whenever Meta explained nothing, so anything
+// carrying one of these to a log line or an HTTP response goes through here
+// instead. This is the one place that rule is written down.
+func (e *APIError) Safe() string {
+	message := e.Message
+	if message == "" {
+		message = "Meta refused the request and explained nothing"
+	}
+
+	return fmt.Sprintf("%s (http %d, code %d/%d)", message, e.Status, e.Code, e.Subcode)
+}
+
+// Explain returns Meta's own sentence about err, and whether there was one.
+//
+// This is the part written for a person — "Message failed to send because more
+// than 24 hours have passed" is the whole answer to a refused reply — and the
+// only part a caller may put in front of one. Everything else about the
+// failure, the body above all, stays here.
+func Explain(err error) (string, bool) {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Message == "" {
+		return "", false
+	}
+
+	return apiErr.Message, true
+}
+
+// Sanitise returns err with Meta's raw response body left out, for a failure
+// on its way somewhere it should not travel whole — a log line, a wrapped
+// return value. An error that is not a Meta failure comes back unchanged.
+func Sanitise(err error) error {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return err
+	}
+
+	return errors.New("meta: " + apiErr.Safe())
+}
+
 // errorEnvelope is the shape every Graph error arrives in.
 type errorEnvelope struct {
 	Error *struct {
