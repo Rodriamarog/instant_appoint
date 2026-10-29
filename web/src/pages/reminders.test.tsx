@@ -65,7 +65,10 @@ beforeEach(() => {
         getFullList: () => Promise.resolve(appointments),
       },
       whatsapp_messages: {
+        // Two reads now: the sent column is a page of history, and the
+        // already-reminded set is asked for by appointment id.
         getList: () => Promise.resolve({ items: [] }),
+        getFullList: () => Promise.resolve([]),
       },
       whatsapp_accounts: {
         getFullList: () => Promise.resolve(connectedAccount ? [connectedAccount] : []),

@@ -2,7 +2,13 @@ import { liveFeed, pollingFeed, type Feed } from '@/lib/feed'
 import { pb } from '@/lib/pocketbase'
 
 /**
- * The messages in a thread, and the one way to add to it.
+ * whatsapp_messages: the one module that knows this collection's name, its
+ * shape and its filters.
+ *
+ * It is a shared log. A chat reply, an inbound message and an appointment
+ * reminder are all rows in it, told apart by message_type — which is why the
+ * reminders page's reads live here too rather than in a second module with a
+ * second name for the same collection and a second shape for the same rows.
  *
  * Reading is the browser talking to PocketBase directly: whatsapp_messages is
  * owner-read, so the access rules scope the thread to the person asking, and
@@ -16,7 +22,7 @@ import { pb } from '@/lib/pocketbase'
  */
 export const COLLECTION = 'whatsapp_messages'
 
-/** One message in a thread. */
+/** One message in the log. */
 export interface Message {
   id: string
   user_id: string
@@ -26,6 +32,85 @@ export interface Message {
   message_type: string
   message_id: string
   sent_at: string
+  /** Where it went. Empty on an inbound message. */
+  to_number: string
+  /** The appointment a reminder is about. Empty on everything else. */
+  event_id: string
+  status: string
+}
+
+/**
+ * The two markers that make a row in this shared log a reminder that went
+ * out. Both are in the predicate of the unique index the scheduler claims
+ * against, so neither is a label: changing either changes what the database
+ * enforces.
+ */
+const SENT_REMINDER = 'message_type = "reminder" && status = "sent"'
+
+/** How many appointment ids go into one filter. */
+const EVENT_ID_CHUNK = 50
+
+/**
+ * The reminders that have gone out, most recent first.
+ *
+ * Capped, because this is what the page lists and a page does not show a
+ * thousand rows. Deciding whether a reminder is still *upcoming* must not
+ * read this: see remindedEventIds.
+ */
+export async function listSentReminders(perPage = 50): Promise<Message[]> {
+  const owner = pb.authStore.record?.id ?? ''
+
+  const page = await pb.collection(COLLECTION).getList<Message>(1, perPage, {
+    filter: pb.filter(`user_id = {:userId} && ${SENT_REMINDER}`, { userId: owner }),
+    sort: '-sent_at',
+  })
+
+  return page.items
+}
+
+/**
+ * Which of these appointments have already had their reminder sent.
+ *
+ * Scoped to the appointments asked about rather than to a page of history.
+ * The exclusion this feeds has to be complete — a sent reminder missing from
+ * it reappears as upcoming and due, and the page says a reminder is about to
+ * go out that went out weeks ago — so it can be neither capped nor
+ * approximated by the most recent N rows.
+ *
+ * The ids go in as a chain of ORs because PocketBase's filter language has no
+ * IN, and in chunks because that chain becomes the query string.
+ */
+export async function remindedEventIds(eventIds: string[]): Promise<Set<string>> {
+  const unique = [...new Set(eventIds.filter(Boolean))]
+  if (unique.length === 0) {
+    return new Set()
+  }
+
+  const owner = pb.authStore.record?.id ?? ''
+  const chunks: string[][] = []
+  for (let i = 0; i < unique.length; i += EVENT_ID_CHUNK) {
+    chunks.push(unique.slice(i, i + EVENT_ID_CHUNK))
+  }
+
+  const pages = await Promise.all(
+    chunks.map((chunk) => {
+      const params: Record<string, string> = { userId: owner }
+      const clauses = chunk.map((id, index) => {
+        params[`e${index}`] = id
+
+        return `event_id = {:e${index}}`
+      })
+
+      return pb.collection(COLLECTION).getFullList<Message>({
+        filter: pb.filter(
+          `user_id = {:userId} && ${SENT_REMINDER} && (${clauses.join(' || ')})`,
+          params,
+        ),
+      })
+    }),
+  )
+
+  return new Set(pages.flat().map((message) => message.event_id))
 }
 
 /**

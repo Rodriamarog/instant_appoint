@@ -3,6 +3,8 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { listConversations } from '@/lib/conversations'
 import {
   listMessages,
+  listSentReminders,
+  remindedEventIds,
   sendReply,
   withMessage,
   type Message,
@@ -32,6 +34,9 @@ function message(id: string, sentAt: string): Message {
     message_type: 'text',
     message_id: 'wamid.' + id,
     sent_at: sentAt,
+    to_number: '5215512345678',
+    event_id: '',
+    status: 'sent',
   }
 }
 
@@ -166,4 +171,88 @@ test('a message merged into a thread lands in order and never twice', () => {
 
   const again = withMessage(withNew, message('b', '2026-10-29T12:00:01.000Z'))
   expect(again.map((item) => item.id)).toEqual(['a', 'b', 'c'])
+})
+
+/**
+ * The sent column on the reminders page. Capped on purpose — nobody reads a
+ * thousand rows — which is exactly why deciding what is still *upcoming*
+ * must not read it. See remindedEventIds.
+ */
+test('the sent reminders are one page of the signed-in person’s reminder rows, newest first', async () => {
+  const getList = vi.fn((_page: number, _perPage: number, _options?: ListOptions) =>
+    Promise.resolve({ items: [] as Message[] }),
+  )
+  vi.spyOn(pb, 'collection').mockReturnValue({
+    getList,
+  } as unknown as ReturnType<typeof pb.collection>)
+
+  await listSentReminders()
+
+  const [page, perPage, options] = getList.mock.calls[0]
+  expect([page, perPage]).toEqual([1, 50])
+  expect(options?.sort).toBe('-sent_at')
+  expect(options?.filter).toContain('message_type = "reminder"')
+  expect(options?.filter).toContain('status = "sent"')
+  expect(options?.filter).toContain("user_id = 'user123'")
+})
+
+/**
+ * A 404 used to be read as "none", because whatsapp_messages did not exist
+ * when this was written. It does now, so a failure is a failure and the page
+ * must be allowed to say so rather than show an empty column.
+ */
+test('a failure reading the sent reminders is not passed off as "none"', async () => {
+  for (const status of [404, 500]) {
+    vi.spyOn(pb, 'collection').mockReturnValue({
+      getList: () =>
+        Promise.reject(Object.assign(new Error('nope'), { status })),
+    } as unknown as ReturnType<typeof pb.collection>)
+
+    await expect(listSentReminders()).rejects.toThrow()
+  }
+})
+
+test('the already-sent question is asked about given appointments, and only those', async () => {
+  const getFullList = stubList([
+    { ...message('m1', '2026-10-29T12:00:00.000Z'), event_id: 'evtA' },
+  ])
+
+  const reminded = await remindedEventIds(['evtA', 'evtB'])
+
+  expect(reminded).toEqual(new Set(['evtA']))
+  const filter = getFullList.mock.calls[0][0]?.filter ?? ''
+  expect(filter).toContain("event_id = 'evtA'")
+  expect(filter).toContain("event_id = 'evtB'")
+  expect(filter).toContain('message_type = "reminder"')
+})
+
+/**
+ * PocketBase has no IN, so the ids go in as a chain of ORs — and that chain
+ * becomes the query string. Enough appointments and it has to be split, which
+ * must not change the answer.
+ */
+test('a long list of appointments is asked for in several queries, and the answers join up', async () => {
+  const ids = Array.from({ length: 120 }, (_, index) => `evt${index}`)
+  const getFullList = vi.fn((options?: ListOptions) =>
+    Promise.resolve(
+      ids
+        .filter((id) => (options?.filter ?? '').includes(`'${id}'`))
+        .map((id) => ({ ...message(id, '2026-10-29T12:00:00.000Z'), event_id: id })),
+    ),
+  )
+  vi.spyOn(pb, 'collection').mockReturnValue({
+    getFullList,
+  } as unknown as ReturnType<typeof pb.collection>)
+
+  const reminded = await remindedEventIds(ids)
+
+  expect(getFullList.mock.calls.length).toBeGreaterThan(1)
+  expect(reminded.size).toBe(120)
+})
+
+test('asking about no appointments asks the database nothing', async () => {
+  const getFullList = stubList([])
+
+  expect(await remindedEventIds([])).toEqual(new Set())
+  expect(getFullList).not.toHaveBeenCalled()
 })
