@@ -5,27 +5,16 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/pocketbase/dbx"
-	validation "github.com/pocketbase/ozzo-validation/v4"
 	"github.com/pocketbase/pocketbase/core"
-	sqlite "modernc.org/sqlite"
-	sqlitelib "modernc.org/sqlite/lib"
 
 	"github.com/Rodriamarog/instant_appoint/internal/isotime"
+	"github.com/Rodriamarog/instant_appoint/internal/pbstore"
 	"github.com/Rodriamarog/instant_appoint/internal/reminders"
 	"github.com/Rodriamarog/instant_appoint/internal/whatsapp"
 	"github.com/Rodriamarog/instant_appoint/migrations"
-)
-
-// The two collections this package writes into belong to ticket #6, which
-// created them in its own migration. They are named here rather than imported
-// from migrations so that the two tickets do not have to land in step.
-const (
-	messagesCollection      = "whatsapp_messages"
-	conversationsCollection = "conversations"
 )
 
 // calendarEventsCollection is the appointments table. The migration that
@@ -42,18 +31,21 @@ const (
 	statusFailed    = "failed"
 )
 
-// activeConversation is the status an open conversation carries, and part of
-// its unique key.
-const activeConversation = "active"
-
 // Store is the PocketBase implementation of reminders.Store.
 type Store struct {
 	app core.App
+
+	// conversations is the webhook's store, reused for its find-or-create.
+	// A reminder and an inbound message open the same customer's thread the
+	// same way, and both have to survive losing the race to the other: that
+	// is one piece of reasoning, settled by one unique index, and it should
+	// not exist twice.
+	conversations *pbstore.WebhookStore
 }
 
 // NewStore returns a store backed by app.
 func NewStore(app core.App) *Store {
-	return &Store{app: app}
+	return &Store{app: app, conversations: pbstore.NewWebhookStore(app)}
 }
 
 // ActiveSettings returns the reminder configuration of everybody who has
@@ -178,7 +170,7 @@ func (s *Store) ReminderAttempts(_ context.Context, appointmentIDs []string) (ma
 	// appointment into the query text every minute.
 	err := s.app.DB().
 		Select("event_id", "status", "sent_at").
-		From(messagesCollection).
+		From(migrations.WhatsAppMessagesCollection).
 		Where(dbx.HashExp{"message_type": reminderMessage}).
 		AndWhere(dbx.In("event_id", ids...)).
 		All(&rows)
@@ -213,8 +205,8 @@ func (s *Store) ReminderAttempts(_ context.Context, appointmentIDs []string) (ma
 // that a reservation: a second run writing the same row is refused by the
 // database, which is the only place the race is visible. Nothing in Go could
 // have seen the other run.
-func (s *Store) Claim(_ context.Context, claim reminders.Claim) (string, error) {
-	collection, err := s.app.FindCollectionByNameOrId(messagesCollection)
+func (s *Store) Claim(ctx context.Context, claim reminders.Claim) (string, error) {
+	collection, err := s.app.FindCollectionByNameOrId(migrations.WhatsAppMessagesCollection)
 	if err != nil {
 		return "", err
 	}
@@ -224,7 +216,8 @@ func (s *Store) Claim(_ context.Context, claim reminders.Claim) (string, error) 
 	// Resolved before the claim, so the row is written complete. A claim that
 	// is then refused leaves the conversation behind, which costs nothing: it
 	// is the conversation the winning run is using, and it is keyed uniquely.
-	conversationID, err := s.conversation(claim, at)
+	conversationID, err := s.conversations.UpsertConversation(
+		ctx, claim.UserID, claim.ToNumber, claim.PhoneNumberID, at)
 	if err != nil {
 		return "", fmt.Errorf("resolve the customer's conversation: %w", err)
 	}
@@ -244,7 +237,7 @@ func (s *Store) Claim(_ context.Context, claim reminders.Claim) (string, error) 
 	record.Set("whatsapp_account_id", claim.AccountID)
 
 	if err := s.app.Save(record); err != nil {
-		if IsUniqueViolation(err) {
+		if pbstore.IsUniqueViolation(err) {
 			return "", reminders.ErrAlreadyClaimed
 		}
 
@@ -256,7 +249,7 @@ func (s *Store) Claim(_ context.Context, claim reminders.Claim) (string, error) 
 
 // MarkSent records the WhatsApp message id against a claim.
 func (s *Store) MarkSent(_ context.Context, claimID, messageID string) error {
-	record, err := s.app.FindRecordById(messagesCollection, claimID)
+	record, err := s.app.FindRecordById(migrations.WhatsAppMessagesCollection, claimID)
 	if err != nil {
 		return err
 	}
@@ -264,7 +257,7 @@ func (s *Store) MarkSent(_ context.Context, claimID, messageID string) error {
 	record.Set("message_id", messageID)
 
 	if err := s.app.Save(record); err != nil {
-		if IsUniqueViolation(err) {
+		if pbstore.IsUniqueViolation(err) {
 			// message_id is unique where it is non-empty, so this means Meta
 			// handed back an id this app has already stored. The reminder
 			// did go out; losing the id is better than failing the run and
@@ -287,7 +280,7 @@ func (s *Store) MarkSent(_ context.Context, claimID, messageID string) error {
 // the reservation and lets a later run try again — and the row it leaves is
 // what counts the attempt, so the retry is bounded rather than endless.
 func (s *Store) MarkFailed(_ context.Context, claimID string) error {
-	record, err := s.app.FindRecordById(messagesCollection, claimID)
+	record, err := s.app.FindRecordById(migrations.WhatsAppMessagesCollection, claimID)
 	if err != nil {
 		return err
 	}
@@ -295,135 +288,4 @@ func (s *Store) MarkFailed(_ context.Context, claimID string) error {
 	record.Set("status", statusFailed)
 
 	return s.app.Save(record)
-}
-
-// conversation returns the id of the customer's active conversation,
-// creating it when there is none.
-func (s *Store) conversation(claim reminders.Claim, at string) (string, error) {
-	record, err := s.findConversation(claim.UserID, claim.ToNumber)
-	switch {
-	case err != nil && !errors.Is(err, sql.ErrNoRows):
-		return "", err
-
-	case err == nil:
-		return s.touch(record, claim.PhoneNumberID, at)
-	}
-
-	collection, err := s.app.FindCollectionByNameOrId(conversationsCollection)
-	if err != nil {
-		return "", err
-	}
-
-	created := core.NewRecord(collection)
-	created.Set("user_id", claim.UserID)
-	created.Set("customer_phone", claim.ToNumber)
-	created.Set("status", activeConversation)
-	created.Set("last_message_at", at)
-	created.Set("phone_number_id", claim.PhoneNumberID)
-
-	err = s.app.Save(created)
-	switch {
-	case err == nil:
-		return created.Id, nil
-
-	case !IsUniqueViolation(err):
-		return "", err
-	}
-
-	// Another writer — an inbound message, or a concurrent run — opened the
-	// conversation between the lookup and this write. The right answer is the
-	// one that won.
-	record, err = s.findConversation(claim.UserID, claim.ToNumber)
-	if err != nil {
-		return "", fmt.Errorf("the conversation was created by something else but could not be read back: %w", err)
-	}
-
-	return s.touch(record, claim.PhoneNumberID, at)
-}
-
-// touch records the reminder as the conversation's latest activity and the
-// number it went out from, so a human replying from the dashboard replies
-// from the same number.
-func (s *Store) touch(record *core.Record, phoneNumberID, at string) (string, error) {
-	record.Set("last_message_at", at)
-	record.Set("phone_number_id", phoneNumberID)
-
-	if err := s.app.Save(record); err != nil {
-		return "", err
-	}
-
-	return record.Id, nil
-}
-
-func (s *Store) findConversation(userID, customerPhone string) (*core.Record, error) {
-	return s.app.FindFirstRecordByFilter(
-		conversationsCollection,
-		"user_id = {:userID} && customer_phone = {:customerPhone} && status = {:status}",
-		dbx.Params{"userID": userID, "customerPhone": customerPhone, "status": activeConversation},
-	)
-}
-
-// IsUniqueViolation reports whether err is a unique or primary-key constraint
-// failure.
-//
-// It has to cover two shapes, and the one the production path produces is not
-// the obvious one:
-//
-//  1. app.Save(record) — PocketBase passes the driver error through
-//     validators.NormalizeUniqueIndexError, which builds a fresh ozzo
-//     validation error with code "validation_not_unique" and discards the
-//     original. errors.As against the SQLite type is therefore false, and a
-//     detector written only that way would never fire on this path at all.
-//     Its silent failure mode is the worst one available: a reminder another
-//     run already claimed would surface as a hard error rather than a skip.
-//
-//  2. raw app.DB() writes — a real *sqlite.Error, code 2067 (unique) or 1555
-//     (primary key).
-//
-// The string check last is defensive: NormalizeUniqueIndexError only rewrites
-// an error when it can match a field name in SQLite's message, so an index
-// over something that is not a collection field falls through as the raw
-// driver message.
-func IsUniqueViolation(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	var driverError *sqlite.Error
-	if errors.As(err, &driverError) {
-		switch driverError.Code() {
-		case sqlitelib.SQLITE_CONSTRAINT_UNIQUE, sqlitelib.SQLITE_CONSTRAINT_PRIMARYKEY:
-			return true
-		}
-	}
-
-	if isNotUniqueValidation(err) {
-		return true
-	}
-
-	message := strings.ToLower(err.Error())
-
-	return strings.Contains(message, "unique constraint failed") ||
-		strings.Contains(message, "value must be unique")
-}
-
-// isNotUniqueValidation walks an ozzo validation error, which is a map of one
-// error per offending field.
-func isNotUniqueValidation(err error) bool {
-	switch typed := err.(type) {
-	case validation.Errors:
-		for _, inner := range typed {
-			if isNotUniqueValidation(inner) {
-				return true
-			}
-		}
-
-	case validation.ErrorObject:
-		return typed.Code() == "validation_not_unique"
-
-	case validation.Error:
-		return typed.Code() == "validation_not_unique"
-	}
-
-	return false
 }

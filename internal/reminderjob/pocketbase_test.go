@@ -6,7 +6,6 @@ import (
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/tools/types"
 
 	"github.com/Rodriamarog/instant_appoint/internal/isotime"
 	_ "github.com/Rodriamarog/instant_appoint/migrations"
@@ -39,68 +38,7 @@ func newApp(t *testing.T) core.App {
 		t.Fatalf("RunAllMigrations: %v", err)
 	}
 
-	ensureMessageCollections(t, app)
-
 	return app
-}
-
-// ensureMessageCollections creates conversations and whatsapp_messages when
-// the migrations have not.
-//
-// They belong to ticket #6, which is being built in parallel, and declaring
-// them in a migration here would be a guaranteed collision on the schema. So
-// this stands them up in the test instead, with the fields and — crucially —
-// the indexes this package depends on. Once #6 has landed the migration makes
-// them and this is a no-op.
-func ensureMessageCollections(t *testing.T, app core.App) {
-	t.Helper()
-
-	if _, err := app.FindCollectionByNameOrId("conversations"); err != nil {
-		conversations := core.NewBaseCollection("conversations", "pbc_conversations")
-		conversations.Fields.Add(
-			&core.TextField{Name: "user_id", Required: true, Max: 255},
-			&core.TextField{Name: "customer_phone", Required: true, Max: 50},
-			&core.TextField{Name: "status", Max: 50},
-			&core.TextField{Name: "last_message_at", Max: 50},
-			&core.TextField{Name: "phone_number_id", Max: 255},
-			&core.AutodateField{Name: "created", OnCreate: true},
-			&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true},
-		)
-		conversations.Indexes = types.JSONArray[string]{
-			"CREATE UNIQUE INDEX `idx_conversations_customer` ON `conversations` (`user_id`, `customer_phone`, `status`)",
-		}
-		if err := app.Save(conversations); err != nil {
-			t.Fatalf("stand up conversations: %v", err)
-		}
-	}
-
-	if _, err := app.FindCollectionByNameOrId("whatsapp_messages"); err != nil {
-		messages := core.NewBaseCollection("whatsapp_messages", "pbc_whatsapp_messages")
-		messages.Fields.Add(
-			&core.TextField{Name: "user_id", Required: true, Max: 255},
-			&core.TextField{Name: "to_number", Required: true, Max: 50},
-			&core.TextField{Name: "message_content", Max: 65535},
-			&core.TextField{Name: "message_type", Max: 50},
-			&core.TextField{Name: "direction", Max: 20},
-			&core.TextField{Name: "conversation_id", Max: 255},
-			&core.TextField{Name: "message_id", Max: 255},
-			&core.TextField{Name: "event_id", Max: 255},
-			&core.TextField{Name: "status", Max: 50},
-			&core.TextField{Name: "sent_at", Max: 50},
-			&core.TextField{Name: "whatsapp_account_id", Max: 255},
-			&core.AutodateField{Name: "created", OnCreate: true},
-			&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true},
-		)
-		messages.Indexes = types.JSONArray[string]{
-			"CREATE UNIQUE INDEX `idx_whatsapp_messages_message_id` ON `whatsapp_messages` (`message_id`) " +
-				"WHERE `message_id` != ''",
-			"CREATE UNIQUE INDEX `idx_whatsapp_messages_reminder_sent` ON `whatsapp_messages` (`event_id`) " +
-				"WHERE `message_type` = 'reminder' AND `status` = 'sent'",
-		}
-		if err := app.Save(messages); err != nil {
-			t.Fatalf("stand up whatsapp_messages: %v", err)
-		}
-	}
 }
 
 // save writes one record of a collection and returns its id.

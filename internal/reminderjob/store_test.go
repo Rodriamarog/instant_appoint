@@ -10,6 +10,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	sqlite "modernc.org/sqlite"
 
+	"github.com/Rodriamarog/instant_appoint/internal/pbstore"
 	"github.com/Rodriamarog/instant_appoint/internal/reminderjob"
 	"github.com/Rodriamarog/instant_appoint/internal/reminders"
 )
@@ -435,7 +436,7 @@ func TestIsUniqueViolationRecognisesWhatAppSaveActuallyReturns(t *testing.T) {
 		t.Fatal("the second insert succeeded; the partial unique index is not in force")
 	}
 
-	if !reminderjob.IsUniqueViolation(err) {
+	if !pbstore.IsUniqueViolation(err) {
 		t.Errorf("IsUniqueViolation(%#v) = false, want true", err)
 	}
 
@@ -452,7 +453,7 @@ func TestIsUniqueViolationRecognisesWhatAppSaveActuallyReturns(t *testing.T) {
 	}
 
 	for _, notAViolation := range []error{nil, errors.New("the database went away"), context.Canceled} {
-		if reminderjob.IsUniqueViolation(notAViolation) {
+		if pbstore.IsUniqueViolation(notAViolation) {
 			t.Errorf("IsUniqueViolation(%v) = true, want false", notAViolation)
 		}
 	}
