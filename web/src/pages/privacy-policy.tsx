@@ -1,4 +1,11 @@
-export default function PrivacyPolicy() {
+/**
+ * The public privacy policy, served at /politica-de-privacidad.
+ *
+ * Meta's app review requires a reachable privacy-policy URL for the
+ * WhatsApp Business product, and this path is the one registered with it, so
+ * the route has to keep answering with the page rather than the SPA's 404.
+ */
+export function PrivacyPolicyPage() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-16">
       <h1 className="text-3xl font-bold mb-2">Privacy Policy</h1>
