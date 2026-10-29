@@ -7,6 +7,7 @@ import { HomePage } from '@/pages/home'
 import { LoginPage } from '@/pages/login'
 import { NotFoundPage } from '@/pages/not-found'
 import { RegisterPage } from '@/pages/register'
+import { WhatsAppPage } from '@/pages/whatsapp'
 
 /**
  * The route table. Tickets #3-#8 replace the placeholder pages and add the
@@ -24,6 +25,7 @@ export function App() {
       <Route element={<RequireAuth />}>
         <Route element={<Shell />}>
           <Route path="calendar" element={<CalendarPage />} />
+          <Route path="whatsapp" element={<WhatsAppPage />} />
         </Route>
       </Route>
 

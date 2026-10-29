@@ -2,8 +2,11 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 
 import { signOut } from '@/lib/auth'
 
-/** Later tickets add Reminders, WhatsApp Setup, Templates and Chat here. */
-const links = [{ to: '/calendar', label: 'Calendar' }]
+/** Later tickets add Reminders, Templates and Chat here. */
+const links = [
+  { to: '/calendar', label: 'Calendar' },
+  { to: '/whatsapp', label: 'WhatsApp' },
+]
 
 /**
  * The layout every signed-in page renders inside. It assumes a session: the
