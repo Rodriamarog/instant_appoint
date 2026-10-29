@@ -1,4 +1,10 @@
-export default function TermsOfService() {
+/**
+ * The public terms of service, served at /terminos-de-servicio.
+ *
+ * Registered with Meta's app review alongside the privacy policy; see
+ * privacy-policy.tsx.
+ */
+export function TermsOfServicePage() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-16">
       <h1 className="text-3xl font-bold mb-2">Terms of Service</h1>

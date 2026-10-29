@@ -65,7 +65,7 @@ beforeEach(() => {
         getFullList: () => Promise.resolve(appointments),
       },
       whatsapp_messages: {
-        getList: () => Promise.reject(notFound()),
+        getList: () => Promise.resolve({ items: [] }),
       },
       whatsapp_accounts: {
         getFullList: () => Promise.resolve(connectedAccount ? [connectedAccount] : []),
