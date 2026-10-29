@@ -10,6 +10,90 @@ Appointment scheduling and WhatsApp reminder tool for small service businesses. 
 
 Built for solo operators and small businesses where WhatsApp is the primary way to communicate with clients.
 
+## Go server (migration in progress)
+
+The app is being migrated from Next.js + a PocketBase server + a Node sidecar to a **single Go
+binary** that embeds PocketBase as a library and serves the React SPA out of `//go:embed`. The
+sections below the migration notice still describe the old stack until the port lands.
+
+| | |
+|---|---|
+| PocketBase | **v0.40.6**, pinned in `go.mod` (embedded as a library, not run as a separate server) |
+| Go | **1.27 or newer** — required by PocketBase v0.40.6 |
+| SQLite driver | `modernc.org/sqlite`, pure Go — the binary builds with `CGO_ENABLED=0` and needs no C compiler |
+
+### Go 1.27 is a hard requirement
+
+PocketBase v0.40.6 declares `go 1.27`, and so does our `go.mod`. On a machine with an older Go
+the build still works only because the default `GOTOOLCHAIN=auto` downloads Go 1.27 from the
+module proxy on demand. `GOTOOLCHAIN=local` with Go 1.26 fails outright:
+
+```
+go: go.mod requires go >= 1.27 (running go 1.26.0; GOTOOLCHAIN=local)
+```
+
+CI images and Dockerfiles must therefore use `golang:1.27` or newer — a pinned older image only
+builds if it can reach `proxy.golang.org`, and an air-gapped or `GOTOOLCHAIN=local` build breaks.
+
+### Build
+
+```bash
+cd web && npm install && npm run build   # produces web/dist, which is embedded
+cd ..
+CGO_ENABLED=0 go build -o instantappoint ./cmd/server
+```
+
+The UI is compiled into the binary: `instantappoint` can be copied anywhere on its own and still
+serves the app. Changing anything under `web/` needs a `npm run build` **and** a `go build`.
+
+`web/dist` is gitignored apart from a committed `.gitkeep`, because `//go:embed all:dist` is a
+compile error when the directory is missing — a fresh clone must be able to `go build` before
+Vite has ever run. A binary built that way serves a placeholder page explaining how to build the
+UI; the admin UI is unaffected. (The `all:` prefix is required: Vite emits `_`-prefixed paths
+that a plain `//go:embed` skips.)
+
+### Run
+
+```bash
+./instantappoint serve                                  # http://127.0.0.1:8090
+./instantappoint superuser upsert you@example.com <pw>   # first boot only
+./instantappoint migrate up                              # apply migrations without serving
+```
+
+`serve` applies pending migrations on boot. Schema lives in `migrations/` as Go code;
+`Automigrate` is off, so edits made in the admin UI are never written back as migration files.
+
+Data lives in `pb_data/` next to the binary (`--dir` to move it). It is gitignored; never commit it.
+
+| Path | Serves |
+|---|---|
+| `/` and any other extensionless path | the SPA shell, so client-side deep links survive a refresh |
+| `/assets/...` | the embedded build output; a missing file is a real 404, never the HTML shell |
+| `/api/...` | PocketBase's REST API; an unknown API path is a JSON 404, never the HTML shell |
+| `/_/` | the PocketBase admin UI |
+
+### Dev loop
+
+Two terminals:
+
+```bash
+go run ./cmd/server serve      # :8090 — API, admin UI, migrations
+```
+
+```bash
+cd web && npm run dev          # :5173 — SPA with HMR, proxies /api and /_/ to :8090
+```
+
+Work against **http://localhost:5173**. The Go server does not need rebuilding for frontend
+changes in this mode, because Vite serves `web/src` directly rather than the embedded bundle.
+
+### Tests
+
+```bash
+go test ./...                  # Go
+cd web && npm run build        # type-check + production build
+```
+
 ## Tech stack
 
 - **Next.js** — frontend and API routes
