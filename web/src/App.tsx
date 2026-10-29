@@ -7,6 +7,7 @@ import { HomePage } from '@/pages/home'
 import { LoginPage } from '@/pages/login'
 import { NotFoundPage } from '@/pages/not-found'
 import { RegisterPage } from '@/pages/register'
+import { RemindersPage } from '@/pages/reminders'
 import { WhatsAppPage } from '@/pages/whatsapp'
 
 /**
@@ -26,6 +27,7 @@ export function App() {
         <Route element={<Shell />}>
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="whatsapp" element={<WhatsAppPage />} />
+          <Route path="reminders" element={<RemindersPage />} />
         </Route>
       </Route>
 
