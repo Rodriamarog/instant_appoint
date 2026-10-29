@@ -64,10 +64,22 @@ func main() {
 		if appID == "" || appSecret == "" {
 			se.App.Logger().Warn("META_APP_ID or META_APP_SECRET is unset; connecting a WhatsApp number will fail until both are.")
 		}
-		metaClient := meta.New(appID, appSecret)
-		whatsapp.Register(se.Router, metaClient)
+		client := meta.New(appID, appSecret)
 
-		pbstore.RegisterWebhook(se.Router, inboundWebhook(se.App, metaClient))
+		// Every Graph call this binary makes is a real request to Meta, which
+		// makes the template and signup paths unexercisable without a live
+		// business account. Pointing the host elsewhere is the one seam that
+		// lets an automated check drive them end to end; it is loud because
+		// an environment that sets it by accident is talking to something
+		// that is not Meta.
+		if base := os.Getenv("META_GRAPH_BASE_URL"); base != "" {
+			se.App.Logger().Warn("META_GRAPH_BASE_URL is set: Graph calls go to a stand-in, not to Meta.", "base_url", base)
+			client.BaseURL = base
+		}
+
+		whatsapp.Register(se.Router, client)
+
+		pbstore.RegisterWebhook(se.Router, inboundWebhook(se.App, client))
 
 		// Route patterns are matched by specificity, not registration
 		// order, so later tickets can add their own /api routes from their
@@ -106,6 +118,16 @@ func inboundWebhook(app core.App, client *meta.Client) http.Handler {
 		app.Logger().Warn("GEMINI_API_KEY is unset; messages will still be stored but no automatic reply will be sent.")
 	}
 	ai := gemini.New(geminiKey)
+
+	// The same seam META_GRAPH_BASE_URL opens for Meta, for the same reason:
+	// without it a check of the inbound path can prove that a message is
+	// stored but not that a reply is written and sent, which is half the
+	// behaviour. Loud, because an environment that sets it by accident is
+	// sending customer messages to something that is not Google.
+	if base := os.Getenv("GEMINI_BASE_URL"); base != "" {
+		app.Logger().Warn("GEMINI_BASE_URL is set: replies are written by a stand-in, not by Gemini.", "base_url", base)
+		ai.BaseURL = base
+	}
 
 	return webhook.New(webhook.Deps{
 		Secret: secret,
