@@ -18,6 +18,7 @@ import (
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 
 	"github.com/Rodriamarog/instant_appoint/internal/meta"
+	"github.com/Rodriamarog/instant_appoint/internal/reminderjob"
 	"github.com/Rodriamarog/instant_appoint/internal/seed"
 	"github.com/Rodriamarog/instant_appoint/internal/server"
 	"github.com/Rodriamarog/instant_appoint/internal/whatsapp"
@@ -72,6 +73,11 @@ func main() {
 		}
 
 		whatsapp.Register(se.Router, client)
+
+		// Appointment reminders. PocketBase starts its cron from an OnServe
+		// hook, so this is scheduled only under `serve` — never under
+		// `migrate` or `seed`, which would otherwise start sending.
+		reminderjob.Register(se.App, client)
 
 		// Route patterns are matched by specificity, not registration
 		// order, so later tickets can add their own /api routes from their
