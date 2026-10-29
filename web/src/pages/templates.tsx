@@ -12,7 +12,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { pb } from '@/lib/pocketbase'
 import {
   CATEGORIES,
   LANGUAGES,
@@ -25,6 +24,7 @@ import {
   templateBody,
   validateDraft,
 } from '@/lib/templates'
+import { listConnectedAccounts } from '@/lib/whatsapp-accounts'
 
 const emptyDraft: TemplateDraft = {
   name: '',
@@ -53,18 +53,10 @@ export function TemplatesPage() {
 
   const load = useCallback(async () => {
     try {
-      // Which account, and whether there is one at all, is the collection's
-      // answer; the template endpoints resolve it again from the session.
-      // Asking here only decides whether to show the page or the pointer to
-      // the setup page.
-      const accounts = await pb
-        .collection('whatsapp_accounts')
-        .getFullList({
-          filter: pb.filter(
-            'user_id = {:userId} && account_type = "business_api" && is_active = true',
-            { userId: pb.authStore.record?.id ?? '' },
-          ),
-        })
+      // Whether there is an account at all is the collection's answer; the
+      // template endpoints resolve which one again from the session. Asking
+      // here only decides whether to show the page or point at the setup one.
+      const accounts = await listConnectedAccounts()
 
       setHasAccount(accounts.length > 0)
       if (accounts.length === 0) {
