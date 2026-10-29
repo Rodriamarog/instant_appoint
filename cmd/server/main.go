@@ -58,7 +58,20 @@ func main() {
 		if appID == "" || appSecret == "" {
 			se.App.Logger().Warn("META_APP_ID or META_APP_SECRET is unset; connecting a WhatsApp number will fail until both are.")
 		}
-		whatsapp.Register(se.Router, meta.New(appID, appSecret))
+		client := meta.New(appID, appSecret)
+
+		// Every Graph call this binary makes is a real request to Meta, which
+		// makes the template and signup paths unexercisable without a live
+		// business account. Pointing the host elsewhere is the one seam that
+		// lets an automated check drive them end to end; it is loud because
+		// an environment that sets it by accident is talking to something
+		// that is not Meta.
+		if base := os.Getenv("META_GRAPH_BASE_URL"); base != "" {
+			se.App.Logger().Warn("META_GRAPH_BASE_URL is set: Graph calls go to a stand-in, not to Meta.", "base_url", base)
+			client.BaseURL = base
+		}
+
+		whatsapp.Register(se.Router, client)
 
 		// Route patterns are matched by specificity, not registration
 		// order, so later tickets can add their own /api routes from their
