@@ -24,7 +24,7 @@ import {
   type SentReminder,
   type UpcomingReminder,
 } from '@/lib/reminders'
-import { isWhatsAppConnected } from '@/lib/whatsapp-connection'
+import { listConnectedAccounts } from '@/lib/whatsapp-accounts'
 
 /** A stored instant, in the viewer's own zone and words. */
 function formatDateTime(instant: Date) {
@@ -105,8 +105,12 @@ export function RemindersPage() {
   }, [])
 
   useEffect(() => {
-    isWhatsAppConnected()
-      .then(setConnected)
+    // This replaces GET /api/whatsapp/status, which the old page read a
+    // `status` key off that the route never returned — so the amber banner
+    // below was shown to everybody, permanently, connected or not. Asking the
+    // collection removes the shape mismatch rather than papering over it.
+    listConnectedAccounts()
+      .then((accounts) => setConnected(accounts.length > 0))
       .catch(() => setConnected(false))
   }, [])
 

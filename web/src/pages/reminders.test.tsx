@@ -68,8 +68,7 @@ beforeEach(() => {
         getList: () => Promise.reject(notFound()),
       },
       whatsapp_accounts: {
-        getFirstListItem: () =>
-          connectedAccount ? Promise.resolve(connectedAccount) : Promise.reject(notFound()),
+        getFullList: () => Promise.resolve(connectedAccount ? [connectedAccount] : []),
       },
       reminder_settings: {
         getFirstListItem: () =>

@@ -29,6 +29,12 @@ func Register(r *router.Router[*core.RequestEvent], client *meta.Client) {
 	}
 
 	r.POST(ExchangeTokenPath, exchangeToken(client)).Bind(apis.RequireAuth("users"))
+
+	// The template routes. Every one of them spends an account access token,
+	// so all three require a session and resolve the account from it.
+	r.GET(TemplatesPath, listTemplates(client)).Bind(apis.RequireAuth("users"))
+	r.POST(CreateTemplatePath, createTemplate(client)).Bind(apis.RequireAuth("users"))
+	r.POST(SendTemplatePath, sendTemplate(client)).Bind(apis.RequireAuth("users"))
 }
 
 // exchangeToken completes the signup for the person making the request.

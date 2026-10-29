@@ -2,11 +2,12 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 
 import { signOut } from '@/lib/auth'
 
-/** Later tickets add Templates and Chat here. */
+/** Later tickets add Chat here. */
 const links = [
   { to: '/calendar', label: 'Calendar' },
   { to: '/whatsapp', label: 'WhatsApp' },
   { to: '/reminders', label: 'Reminders' },
+  { to: '/templates', label: 'Templates' },
 ]
 
 /**
