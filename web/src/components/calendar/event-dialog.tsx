@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { errorMessage } from '@/lib/errors'
 import {
   createAppointment,
   deleteAppointment,
@@ -229,7 +230,7 @@ export function EventDialog({
       }
       onSaved()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error saving appointment')
+      setError(errorMessage(err, 'Error saving appointment'))
     } finally {
       setSaving(false)
     }
@@ -245,7 +246,7 @@ export function EventDialog({
       await deleteAppointment(event.id)
       onSaved()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error deleting appointment')
+      setError(errorMessage(err, 'Error deleting appointment'))
     } finally {
       setDeleting(false)
     }

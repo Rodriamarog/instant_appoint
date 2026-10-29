@@ -83,11 +83,47 @@ type Attempt struct {
 	// Sent is true once a reminder for this appointment has gone out.
 	Sent bool
 
+	// Incomplete says that sent row carries no WhatsApp message id, so the
+	// claim was written but never finished. See Abandoned.
+	Incomplete bool
+
+	// ClaimedAt is when that unfinished claim was written.
+	ClaimedAt time.Time
+
 	// Failures is how many sends have been tried and failed.
 	Failures int
 
 	// LastFailureAt is when the most recent of them was tried.
 	LastFailureAt time.Time
+}
+
+// ReclaimAfter is how long an unfinished claim may sit before another run is
+// allowed to take it over.
+//
+// A claim is written with status='sent' *before* Meta is called, which is what
+// makes the unique index a reservation. If the process dies in between, the
+// row is left saying "sent" with no message id and no send having happened —
+// and because the index refuses any second status='sent' row, nothing could
+// ever claim that appointment again. The reminder would be lost silently and
+// permanently, with no audit trail.
+//
+// The window has to be far longer than a healthy send can take. The Graph
+// client's own timeout is 10s and a whole run is abandoned after 50s, so
+// fifteen minutes is some twenty times the longest a live claim can
+// legitimately stay open: nothing merely slow is ever mistaken for something
+// dead.
+const ReclaimAfter = 15 * time.Minute
+
+// Abandoned reports a claim that was written and never finished, long enough
+// ago that whatever was holding it cannot still be alive.
+//
+// The tradeoff here is deliberate and unavoidable: claim-then-send is
+// at-most-once, send-then-claim is at-least-once, and no ordering is both. A
+// send that did reach Meta but died before its message id was recorded will go
+// out a second time. For an appointment reminder a rare duplicate after a
+// crash is plainly better than silence.
+func (a Attempt) Abandoned(now time.Time) bool {
+	return a.Sent && a.Incomplete && !now.Before(a.ClaimedAt.Add(ReclaimAfter))
 }
 
 // Claim is the row written before Meta is called.
@@ -279,7 +315,12 @@ func Run(ctx context.Context, store Store, sender Sender, now time.Time) (Summar
 		settings := byUser[appointment.UserID]
 		attempt := attempts[appointment.ID]
 
-		if appointment.ClientPhone == "" || attempt.Sent || now.Before(appointment.StartTime.Add(-settings.LeadTime)) {
+		// An abandoned claim reads as sent and is not: it is a crash caught
+		// mid-send, and letting it through here is what stops one dead
+		// process from suppressing a reminder forever.
+		alreadySent := attempt.Sent && !attempt.Abandoned(now)
+
+		if appointment.ClientPhone == "" || alreadySent || now.Before(appointment.StartTime.Add(-settings.LeadTime)) {
 			summary.Skipped++
 			continue
 		}

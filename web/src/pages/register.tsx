@@ -11,11 +11,8 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { pb } from '@/lib/pocketbase'
-
-function messageOf(err: unknown, fallback: string) {
-  return err instanceof Error && err.message ? err.message : fallback
-}
+import { register } from '@/lib/auth'
+import { errorMessage } from '@/lib/errors'
 
 export function RegisterPage() {
   const [email, setEmail] = useState('')
@@ -43,24 +40,12 @@ export function RegisterPage() {
     }
 
     try {
-      await pb.collection('users').create({
+      const { verificationSent } = await register({
         email,
         password,
-        passwordConfirm: confirmPassword,
         name,
-        business_name: businessName,
-        emailVisibility: true,
+        businessName,
       })
-
-      // The account exists at this point. Asking for the verification email is
-      // a separate, best-effort step: without configured mail delivery it
-      // fails, and a failure here must not read as a failed signup.
-      let verificationSent = true
-      try {
-        await pb.collection('users').requestVerification(email)
-      } catch {
-        verificationSent = false
-      }
 
       setSuccess(
         verificationSent
@@ -75,7 +60,7 @@ export function RegisterPage() {
       setName('')
       setBusinessName('')
     } catch (err) {
-      setError(messageOf(err, 'Failed to create account'))
+      setError(errorMessage(err, 'Failed to create account'))
     } finally {
       setIsLoading(false)
     }

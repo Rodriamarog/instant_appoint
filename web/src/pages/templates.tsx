@@ -12,6 +12,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { errorMessage } from '@/lib/errors'
 import {
   CATEGORIES,
   LANGUAGES,
@@ -67,7 +68,7 @@ export function TemplatesPage() {
       setListError('')
     } catch (error) {
       setListError(
-        error instanceof Error ? error.message : 'Could not load your templates.',
+        errorMessage(error, 'Could not load your templates.'),
       )
     } finally {
       setIsLoading(false)
@@ -162,11 +163,7 @@ function CreateTemplateForm({ onCreated }: { onCreated: () => Promise<void> }) {
       setIsOpen(false)
       await onCreated()
     } catch (error) {
-      setFailure(
-        error instanceof Error
-          ? error.message
-          : 'Submitting the template failed.',
-      )
+      setFailure(errorMessage(error, 'Submitting the template failed.'))
     } finally {
       setIsSubmitting(false)
     }
@@ -323,7 +320,7 @@ function TemplateRow({ template }: { template: MessageTemplate }) {
     } catch (error) {
       setFeedback({
         ok: false,
-        text: error instanceof Error ? error.message : 'Sending failed.',
+        text: errorMessage(error, 'Sending failed.'),
       })
     } finally {
       setIsSending(false)

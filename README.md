@@ -132,6 +132,37 @@ NEUROCROW_ROUTER_SECRET=... \
 ./instantappoint serve
 ```
 
+### Two build-time settings for the browser bundle
+
+The SPA has to name the same Meta app the server does, because the Embedded
+Signup popup is opened by the browser and the code it returns is then spent by
+the server with that app's secret — Meta refuses a code issued by a different
+app. The browser's half is therefore baked into the bundle at build time, not
+read at boot.
+
+| Variable | Default | Must match |
+|---|---|---|
+| `VITE_META_APP_ID` | `1195277397801905` | the server's `META_APP_ID` |
+| `VITE_META_CONFIG_ID` | `986479390379975` | the Embedded Signup configuration inside that app |
+
+Both are **public identifiers** of a Facebook app, not secrets — which is why
+they can ship in code the browser downloads. The app secret never leaves the
+server.
+
+Defaults are the app this was built against, so an owner using that app needs
+to set neither. **An owner using a different Meta app must set both**, at build
+time:
+
+```bash
+cd web && VITE_META_APP_ID=... VITE_META_CONFIG_ID=... npm run build
+cd .. && CGO_ENABLED=0 go build -o instantappoint ./cmd/server
+```
+
+Setting them in the server's process environment does nothing: the bundle is
+already built and embedded by then. Getting them wrong does not break the
+running app — only Connect on the WhatsApp page fails, with Facebook's own
+error.
+
 ### Two test-only seams, which are not requirements
 
 Neither of these belongs in a deployment. They exist so an automated check can

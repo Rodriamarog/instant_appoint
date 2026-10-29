@@ -51,6 +51,9 @@ function message(
     message_type: 'text',
     message_id: 'wamid.' + id,
     sent_at: sentAt,
+    to_number: '5215512345678',
+    event_id: '',
+    status: 'sent',
   }
 }
 

@@ -1,17 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { parseSignupMessage } from '@/lib/embedded-signup'
-import { pb } from '@/lib/pocketbase'
-
-/**
- * The Meta app this signup runs against, and the Embedded Signup
- * configuration inside it. Both identify a public Facebook app rather than a
- * secret, which is why they can live in code the browser downloads; the app
- * secret never leaves the server.
- */
-const FB_APP_ID = '1195277397801905'
-const CONFIG_ID = '986479390379975'
+import { call } from '@/lib/api'
+import { CONFIG_ID, FB_APP_ID, parseSignupMessage } from '@/lib/embedded-signup'
+import { errorMessage } from '@/lib/errors'
 
 /** Meta only posts signup results from this origin. */
 const FB_ORIGIN = 'https://www.facebook.com'
@@ -49,7 +41,7 @@ type Status = 'idle' | 'loading' | 'success' | 'error'
 export function WhatsAppEmbeddedSignup({ onConnected }: Props) {
   const [sdkReady, setSdkReady] = useState(false)
   const [status, setStatus] = useState<Status>('idle')
-  const [errorMessage, setErrorMessage] = useState('')
+  const [failure, setFailure] = useState('')
 
   // A ref rather than state: the FB.login callback closes over its first
   // render, so a state value read there would be the one from before the
@@ -78,7 +70,7 @@ export function WhatsAppEmbeddedSignup({ onConnected }: Props) {
       script.defer = true
       script.onerror = () => {
         setStatus('error')
-        setErrorMessage('Could not load the Facebook SDK. An ad blocker usually causes this.')
+        setFailure('Could not load the Facebook SDK. An ad blocker usually causes this.')
       }
       document.body.appendChild(script)
     }
@@ -97,7 +89,7 @@ export function WhatsAppEmbeddedSignup({ onConnected }: Props) {
         setStatus('idle')
       } else {
         setStatus('error')
-        setErrorMessage(result.message)
+        setFailure(result.message)
       }
     }
 
@@ -110,49 +102,44 @@ export function WhatsAppEmbeddedSignup({ onConnected }: Props) {
     const finished = signup.current
     if (!finished) {
       setStatus('error')
-      setErrorMessage('Facebook did not say which WhatsApp Business account was connected.')
+      setFailure('Facebook did not say which WhatsApp Business account was connected.')
       return
     }
 
     try {
-      const res = await fetch('/api/whatsapp/exchange-token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${pb.authStore.token}`,
+      await call(
+        '/api/whatsapp/exchange-token',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            code,
+            waba_id: finished.wabaId,
+            // Absent for a business staying on the WhatsApp Business app; the
+            // server looks the number up from the account instead.
+            phone_number_id: finished.phoneNumberId,
+          }),
         },
-        body: JSON.stringify({
-          code,
-          waba_id: finished.wabaId,
-          // Absent for a business staying on the WhatsApp Business app; the
-          // server looks the number up from the account instead.
-          phone_number_id: finished.phoneNumberId,
-        }),
-      })
-
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { message?: string }
-        throw new Error(body.message || 'Connecting the account failed.')
-      }
+        'Connecting the account failed.',
+      )
 
       signup.current = null
       setStatus('success')
       onConnected()
     } catch (err) {
       setStatus('error')
-      setErrorMessage(err instanceof Error ? err.message : 'Connecting the account failed.')
+      setFailure(errorMessage(err, 'Connecting the account failed.'))
     }
   }
 
   const launch = () => {
     if (!window.FB) {
       setStatus('error')
-      setErrorMessage('The Facebook SDK is still loading. Try again in a moment.')
+      setFailure('The Facebook SDK is still loading. Try again in a moment.')
       return
     }
 
     setStatus('loading')
-    setErrorMessage('')
+    setFailure('')
     signup.current = null
 
     window.FB.login(
@@ -192,8 +179,8 @@ export function WhatsAppEmbeddedSignup({ onConnected }: Props) {
         {sdkReady && (status === 'idle' || status === 'error') && 'Connect WhatsApp Business'}
       </Button>
 
-      {status === 'error' && errorMessage && (
-        <p className="text-sm text-destructive">{errorMessage}</p>
+      {status === 'error' && failure && (
+        <p className="text-sm text-destructive">{failure}</p>
       )}
     </div>
   )

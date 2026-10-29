@@ -9,6 +9,8 @@ import {
   listAppointmentsBetween,
   type CalendarEvent,
 } from '@/lib/calendar-events'
+import { errorMessage } from '@/lib/errors'
+import { isoMillis } from '@/lib/iso-time'
 
 const localizer = momentLocalizer(moment)
 
@@ -66,7 +68,7 @@ export function CalendarPage() {
       setError(null)
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : 'Could not load your appointments.',
+        errorMessage(err, 'Could not load your appointments.'),
       )
     }
   }, [monthKey])
@@ -103,8 +105,12 @@ export function CalendarPage() {
               id: '',
               user_id: '',
               title: '',
-              start_time: slot.start.toISOString(),
-              end_time: slot.end.toISOString(),
+              // Through isoMillis like every other writer, not
+              // toISOString directly. The two agree today; the point of the
+              // module is that no call site decides that for itself, because
+              // the whole system sorts these as text.
+              start_time: isoMillis(slot.start),
+              end_time: isoMillis(slot.end),
             })
             setDialogMode('create')
             setDialogOpen(true)

@@ -1,15 +1,16 @@
 import { listAppointmentsBetween, type CalendarEvent } from '@/lib/calendar-events'
-import { pb } from '@/lib/pocketbase'
+import { remindedEventIds } from '@/lib/messages'
 
 /**
  * Reminders, as the reminders page talks about them.
  *
  * A reminder is not a stored thing until it has been sent: an upcoming one is
  * derived, on the spot, from an appointment that has somewhere to send to and
- * has not been reminded about yet. This module owns that derivation, and the
- * read of the sent ones.
+ * has not been reminded about yet. This module owns that derivation.
  *
- * The scheduler that actually sends them is #9. Everything here is a view.
+ * The scheduler that actually sends them is the Go cron. Everything here is a
+ * view, and the reads of the message log behind it belong to lib/messages —
+ * this module owns the derivation, not the collection.
  */
 
 /**
@@ -28,16 +29,6 @@ export interface UpcomingReminder {
   reminderAt: Date
   /** True once that moment has passed and the reminder has still not gone. */
   isDue: boolean
-}
-
-/** A reminder that has already been sent. */
-export interface SentReminder {
-  id: string
-  event_id: string
-  to_number: string
-  message_content: string
-  sent_at: string
-  status: string
 }
 
 /**
@@ -75,12 +66,14 @@ export async function listUpcomingReminders(
 ): Promise<UpcomingReminder[]> {
   const { from, to } = upcomingWindow(leadTimeMinutes, now)
 
-  const [appointments, sent] = await Promise.all([
-    listAppointmentsBetween(from, to),
-    listSentReminders(),
-  ])
+  const appointments = await listAppointmentsBetween(from, to)
 
-  const alreadyReminded = new Set(sent.map((message) => message.event_id))
+  // Asked about exactly these appointments, and not read off the page of sent
+  // reminders the page displays. That list is capped at what a person will
+  // look at; this one decides whether a reminder still has to go out, and a
+  // cap on it means the 51st-oldest sent reminder reappears as upcoming and
+  // due for ever after.
+  const alreadyReminded = await remindedEventIds(appointments.map((event) => event.id))
 
   return appointments
     .filter((event) => Boolean(event.client_phone) && !alreadyReminded.has(event.id))
@@ -92,25 +85,4 @@ export async function listUpcomingReminders(
       return { event, reminderAt, isDue: reminderAt <= now }
     })
     .sort((a, b) => a.reminderAt.getTime() - b.reminderAt.getTime())
-}
-
-/**
- * The reminders that have gone out, most recent first.
- *
- * whatsapp_messages is a shared log — chat writes to it too — so the two
- * markers that make a row a *reminder* are part of the query rather than
- * assumed. An empty list means nothing has been sent yet; a failure is a
- * failure and is allowed to surface.
- */
-export async function listSentReminders(): Promise<SentReminder[]> {
-  const owner = pb.authStore.record?.id ?? ''
-
-  const page = await pb.collection('whatsapp_messages').getList<SentReminder>(1, 50, {
-    filter: pb.filter('user_id = {:userId} && message_type = "reminder" && status = "sent"', {
-      userId: owner,
-    }),
-    sort: '-sent_at',
-  })
-
-  return page.items
 }

@@ -2,8 +2,6 @@ package reminderjob
 
 import (
 	"context"
-	"errors"
-	"fmt"
 
 	"github.com/Rodriamarog/instant_appoint/internal/meta"
 	"github.com/Rodriamarog/instant_appoint/internal/reminders"
@@ -29,29 +27,10 @@ func (s *Sender) SendTemplate(ctx context.Context, account reminders.Account, to
 	messageID, err := s.client.SendTemplate(ctx,
 		account.PhoneNumberID, account.AccessToken, to, templateName, languageCode, bodyParameters)
 	if err != nil {
-		return "", sanitise(err)
+		// meta.Sanitise keeps the raw Graph response — which can quote the
+		// app secret — out of the log line this error is on its way to.
+		return "", meta.Sanitise(err)
 	}
 
 	return messageID, nil
-}
-
-// sanitise strips the raw Graph response out of a Meta failure before it
-// travels any further.
-//
-// meta.APIError keeps the whole response body, and its Error() falls back to
-// printing it when Meta sent no message. That body can carry the app secret,
-// and this error is on its way to a log line. Only Meta's own explanation and
-// its codes come out.
-func sanitise(err error) error {
-	var apiErr *meta.APIError
-	if !errors.As(err, &apiErr) {
-		return err
-	}
-
-	message := apiErr.Message
-	if message == "" {
-		message = "Meta refused the send and explained nothing"
-	}
-
-	return fmt.Errorf("meta: %s (http %d, code %d/%d)", message, apiErr.Status, apiErr.Code, apiErr.Subcode)
 }

@@ -6,11 +6,18 @@ import (
 	"github.com/pocketbase/pocketbase/tools/types"
 )
 
-// calendarEventsCollection is the appointments table. The id is pinned to the
+// CalendarEventsCollection is the appointments table. The id is pinned to the
 // one the legacy JS migration used so a database carried over from the Next.js
 // stack keeps working, and so anything that references the collection by id
 // resolves the same way in every environment.
-const calendarEventsCollection = "pbc_2544738948"
+//
+// The name is exported for the same reason as the other four: a collection
+// name spelled a second time somewhere else is a collection name that can be
+// changed in one place and not the other.
+const (
+	CalendarEventsCollection = "calendar_events"
+	calendarEventsID         = "pbc_2544738948"
+)
 
 // The SPA reads and writes calendar_events directly through the PocketBase
 // SDK — there is no hand-written API layer left to check who is asking. These
@@ -30,7 +37,7 @@ const calendarEventsOwner = "user_id = @request.auth.id"
 
 func init() {
 	m.Register(func(app core.App) error {
-		events := core.NewBaseCollection("calendar_events", calendarEventsCollection)
+		events := core.NewBaseCollection(CalendarEventsCollection, calendarEventsID)
 
 		// Every field is text, including the two timestamps. The app stores
 		// ISO-8601 strings and the calendar window filters them with >= / <=,
@@ -65,7 +72,7 @@ func init() {
 
 		return app.Save(events)
 	}, func(app core.App) error {
-		events, err := app.FindCollectionByNameOrId("calendar_events")
+		events, err := app.FindCollectionByNameOrId(CalendarEventsCollection)
 		if err != nil {
 			return nil // already gone
 		}

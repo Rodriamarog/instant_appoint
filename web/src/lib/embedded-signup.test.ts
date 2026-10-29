@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseSignupMessage } from '@/lib/embedded-signup'
+import { CONFIG_ID, FB_APP_ID, parseSignupMessage } from '@/lib/embedded-signup'
 
 const msg = (event: string, data: unknown = {}) =>
   JSON.stringify({ type: 'WA_EMBEDDED_SIGNUP', event, data })
@@ -61,5 +61,18 @@ describe('parseSignupMessage', () => {
       ),
     ).toBeNull()
     expect(parseSignupMessage({ some: 'object' })).toBeNull()
+  })
+})
+
+/**
+ * These were hardcoded in the component. They are public ids, so shipping
+ * them is fine; being unoverridable was not, because the server reads its
+ * half of the same app from META_APP_ID and a mismatch means Embedded Signup
+ * fails until somebody edits the source and rebuilds.
+ */
+describe('the Meta app ids', () => {
+  it('falls back to a real Meta app when the build sets none', () => {
+    expect(FB_APP_ID).toMatch(/^\d+$/)
+    expect(CONFIG_ID).toMatch(/^\d+$/)
   })
 })

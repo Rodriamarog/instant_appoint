@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { errorMessage } from '@/lib/errors'
 import {
   TIMEZONE_OPTIONS,
   TIMING_OPTIONS,
@@ -124,7 +125,7 @@ export function ReminderSettingsDialog({
       await onSave(draft)
       onOpenChange(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save your settings.')
+      setError(errorMessage(err, 'Could not save your settings.'))
     } finally {
       setIsSaving(false)
     }

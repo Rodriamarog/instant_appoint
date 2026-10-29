@@ -238,17 +238,14 @@ func touchConversation(e *core.RequestEvent, conversation *core.Record, at strin
 
 // metaError turns a Graph failure into one readable sentence.
 //
-// Meta's raw body never reaches the browser: a failing call can echo the app
-// secret in the query string it quotes, and the rest is written for a developer
-// reading a log. Only error.message is passed on, because that is the part
-// that says what a person has to change — "Message failed to send because more
-// than 24 hours have passed" is the whole answer to a refused reply.
+// Meta's raw body reaches neither the browser nor the log: a failing call can
+// echo the app secret in the query string it quotes. meta.Explain and
+// meta.Sanitise own that rule; see them for what is left out and why.
 func metaError(e *core.RequestEvent, err error) error {
-	e.App.Logger().Error("sending a chat reply failed", "user_id", e.Auth.Id, "error", err)
+	e.App.Logger().Error("sending a chat reply failed", "user_id", e.Auth.Id, "error", meta.Sanitise(err))
 
-	var apiErr *meta.APIError
-	if errors.As(err, &apiErr) && apiErr.Message != "" {
-		return e.InternalServerError("WhatsApp rejected the message: "+apiErr.Message, err)
+	if explanation, ok := meta.Explain(err); ok {
+		return e.InternalServerError("WhatsApp rejected the message: "+explanation, err)
 	}
 
 	return e.InternalServerError("Sending the message failed. Please try again.", err)

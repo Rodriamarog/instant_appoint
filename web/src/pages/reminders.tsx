@@ -12,18 +12,14 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { ReminderSettingsDialog } from '@/components/reminders/settings-dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { listSentReminders, type Message } from '@/lib/messages'
 import {
   DEFAULT_SETTINGS,
   loadReminderSettings,
   saveReminderSettings,
   type ReminderSettings,
 } from '@/lib/reminder-settings'
-import {
-  listSentReminders,
-  listUpcomingReminders,
-  type SentReminder,
-  type UpcomingReminder,
-} from '@/lib/reminders'
+import { listUpcomingReminders, type UpcomingReminder } from '@/lib/reminders'
 import { listConnectedAccounts } from '@/lib/whatsapp-accounts'
 
 /** A stored instant, in the viewer's own zone and words. */
@@ -84,7 +80,7 @@ function Empty({ icon: Icon, title, hint }: { icon: typeof Bell; title: string; 
 export function RemindersPage() {
   const [settings, setSettings] = useState<ReminderSettings | null>(null)
   const [upcoming, setUpcoming] = useState<UpcomingReminder[] | null>(null)
-  const [sent, setSent] = useState<SentReminder[]>([])
+  const [sent, setSent] = useState<Message[]>([])
   // null while the answer is still unknown: an amber warning shown during a
   // round trip is the bug this page is here to stop repeating.
   const [connected, setConnected] = useState<boolean | null>(null)

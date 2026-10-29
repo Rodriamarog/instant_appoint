@@ -6,7 +6,7 @@
  * token stays there, and the server resolves which WhatsApp Business account
  * the caller owns from their session. Nothing here names an account.
  */
-import { pb } from '@/lib/pocketbase'
+import { call } from '@/lib/api'
 
 /** A template as Meta describes it, passed through by the server verbatim. */
 export interface MessageTemplate {
@@ -90,36 +90,6 @@ export function validateDraft(
   }
 
   return problems
-}
-
-/**
- * Calls one template endpoint and turns a refusal into an Error carrying the
- * server's sentence.
- *
- * The server answers in PocketBase's {message, status, data} shape, and its
- * message is already written for a person — it quotes Meta's own explanation
- * where Meta gave one.
- */
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
-    ...init,
-    cache: 'no-store',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${pb.authStore.token}`,
-    },
-  })
-
-  const body = await response.json().catch(() => null)
-
-  if (!response.ok) {
-    throw new Error(
-      (body as { message?: string } | null)?.message ??
-        'The request failed. Please try again.',
-    )
-  }
-
-  return body as T
 }
 
 export async function listTemplates(): Promise<MessageTemplate[]> {
