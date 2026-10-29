@@ -10,6 +10,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	sqlite "modernc.org/sqlite"
 
+	"github.com/Rodriamarog/instant_appoint/internal/meta"
 	"github.com/Rodriamarog/instant_appoint/internal/pbstore"
 	"github.com/Rodriamarog/instant_appoint/internal/reminderjob"
 	"github.com/Rodriamarog/instant_appoint/internal/reminders"
@@ -523,5 +524,35 @@ func TestMarkSentRecordsTheWhatsAppMessageId(t *testing.T) {
 	}
 	if row.GetString("status") != "sent" {
 		t.Errorf("status = %q, want sent", row.GetString("status"))
+	}
+}
+
+// The job has to actually be on the cron, under an id of this app's own: a
+// typo in the expression would leave reminders silently never running, and
+// PocketBase owns the ids wrapped in double underscores.
+func TestTheRunIsScheduledOnceAMinute(t *testing.T) {
+	app := newApp(t)
+	reminderjob.Register(app, meta.New("", ""))
+
+	var found bool
+	for _, job := range app.Cron().Jobs() {
+		if job.Id() != reminderjob.JobID {
+			continue
+		}
+		found = true
+		if job.Expression() != reminderjob.Schedule {
+			t.Errorf("the reminder job runs on %q, want %q", job.Expression(), reminderjob.Schedule)
+		}
+	}
+
+	if !found {
+		t.Errorf("no cron job is registered as %q", reminderjob.JobID)
+	}
+
+	// PocketBase starts its cron from an OnServe hook, so a bootstrapped app
+	// that is not serving has the job registered and not running — which is
+	// what keeps `migrate` and `seed` from sending anything.
+	if app.Cron().HasStarted() {
+		t.Error("the cron is running outside serve")
 	}
 }
