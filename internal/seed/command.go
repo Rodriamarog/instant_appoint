@@ -39,6 +39,9 @@ func Command(app core.App) *cobra.Command {
 			fmt.Fprintf(out, "SEED_EMAIL=%s\n", result.Email)
 			fmt.Fprintf(out, "SEED_PASSWORD=%s\n", result.Password)
 			fmt.Fprintf(out, "SEED_USER_ID=%s\n", result.UserID)
+			fmt.Fprintf(out, "SEED_WHATSAPP_ACCOUNT_ID=%s\n", result.WhatsAppAccountID)
+			fmt.Fprintf(out, "SEED_WHATSAPP_PHONE_NUMBER_ID=%s\n", result.WhatsAppPhoneNumberID)
+			fmt.Fprintf(out, "SEED_WHATSAPP_WABA_ID=%s\n", result.WhatsAppWABAID)
 
 			// Prose goes to stderr so stdout stays a clean key/value stream.
 			fmt.Fprintln(c.ErrOrStderr(), "seeded a verified test account; sign in with the values above")
