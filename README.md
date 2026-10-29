@@ -110,7 +110,9 @@ spend a secret are handlers of our own:
 
 **Four, all required in production.** Each is read at boot; a missing one logs a
 warning naming what will not work rather than refusing to start, so the rest of
-the app keeps running.
+the app keeps running. Those warnings go to PocketBase's own log — the `_logs`
+collection, readable under **Logs** in the admin UI — not to stdout, so a clean
+terminal is not evidence that all four are set.
 
 | Variable | What breaks without it |
 |---|---|
@@ -134,9 +136,9 @@ NEUROCROW_ROUTER_SECRET=... \
 
 Neither of these belongs in a deployment. They exist so an automated check can
 drive the Meta and Gemini paths end to end without a live business account and a
-real API key, by pointing the host at a stand-in. **Both log a warning when set**,
-because an environment that sets one by accident is talking to something that is
-not Meta, or not Google.
+real API key, by pointing the host at a stand-in. **Both log a warning when set**
+— again in the admin UI's log — because an environment that sets one by accident
+is talking to something that is not Meta, or not Google.
 
 | Variable | Default | Effect when set |
 |---|---|---|
