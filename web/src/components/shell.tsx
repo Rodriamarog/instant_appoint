@@ -6,6 +6,7 @@ import { signOut } from '@/lib/auth'
 const links = [
   { to: '/calendar', label: 'Calendar' },
   { to: '/whatsapp', label: 'WhatsApp' },
+  { to: '/templates', label: 'Templates' },
 ]
 
 /**
