@@ -6,6 +6,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	// A pure-Go binary has no system tzdata to fall back on, so embed the
 	// database; reminder scheduling resolves named zones such as
@@ -16,8 +17,10 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 
+	"github.com/Rodriamarog/instant_appoint/internal/meta"
 	"github.com/Rodriamarog/instant_appoint/internal/seed"
 	"github.com/Rodriamarog/instant_appoint/internal/server"
+	"github.com/Rodriamarog/instant_appoint/internal/whatsapp"
 	_ "github.com/Rodriamarog/instant_appoint/migrations"
 	"github.com/Rodriamarog/instant_appoint/web"
 )
@@ -45,6 +48,17 @@ func main() {
 		if !web.IsBuilt() {
 			se.App.Logger().Warn("no web/dist bundle was embedded; serving the placeholder page. Run `npm run build` in web/ and rebuild.")
 		}
+
+		// The Embedded Signup exchange spends the Meta app secret, so it runs
+		// on the server rather than in the browser. Without the credentials
+		// the rest of the app still works; only connecting a new number
+		// fails, and a warning here is easier to act on than the 500 it would
+		// otherwise produce weeks later.
+		appID, appSecret := os.Getenv("META_APP_ID"), os.Getenv("META_APP_SECRET")
+		if appID == "" || appSecret == "" {
+			se.App.Logger().Warn("META_APP_ID or META_APP_SECRET is unset; connecting a WhatsApp number will fail until both are.")
+		}
+		whatsapp.Register(se.Router, meta.New(appID, appSecret))
 
 		// Route patterns are matched by specificity, not registration
 		// order, so later tickets can add their own /api routes from their

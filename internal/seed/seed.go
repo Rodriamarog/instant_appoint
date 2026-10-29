@@ -28,6 +28,14 @@ type Result struct {
 	Email    string
 	Password string
 	UserID   string
+
+	// The stand-in WhatsApp connection. A real one can only be made by a
+	// human completing Meta's Embedded Signup, so this is the only connected
+	// account anything automated has to work against.
+	WhatsAppAccountID     string
+	WhatsAppPhoneNumberID string
+	WhatsAppWABAID        string
+	WhatsAppVerifiedName  string
 }
 
 // fixture applies one piece of development data and records what it made.
@@ -38,8 +46,11 @@ type Result struct {
 // fixtures below and get their own field on Result.
 type fixture func(core.App, *Result) error
 
+// Order matters only where one fixture needs what another made: the WhatsApp
+// account hangs off the test user's id, so it runs after testUser.
 var fixtures = []fixture{
 	testUser,
+	whatsAppAccount,
 }
 
 // Apply writes every development fixture, creating what is missing and
