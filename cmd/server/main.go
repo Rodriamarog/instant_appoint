@@ -16,6 +16,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 
+	"github.com/Rodriamarog/instant_appoint/internal/seed"
 	"github.com/Rodriamarog/instant_appoint/internal/server"
 	_ "github.com/Rodriamarog/instant_appoint/migrations"
 	"github.com/Rodriamarog/instant_appoint/web"
@@ -32,6 +33,11 @@ func main() {
 		Automigrate:  false,
 		Dir:          "migrations",
 	})
+
+	// Email verification needs mail credentials that only the project owner
+	// has, so a fresh database has no account anyone can log in with. This
+	// writes one, already verified.
+	app.RootCmd.AddCommand(seed.Command(app))
 
 	dist := web.Dist()
 
