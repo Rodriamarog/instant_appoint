@@ -54,6 +54,29 @@ export const TIMING_OPTIONS = [
   { label: '24 hours', minutes: 1440 },
 ]
 
+/**
+ * The zones the dialog offers.
+ *
+ * A reminder names a date and a time, and the appointment behind it is a UTC
+ * instant, so the zone is what decides which hour the customer is told. The
+ * list is short on purpose: the full IANA set is some six hundred names, and
+ * a business sends from one place. A zone already saved that is not on this
+ * list is kept and offered alongside them.
+ */
+export const TIMEZONE_OPTIONS = [
+  'America/Tijuana',
+  'America/Hermosillo',
+  'America/Chihuahua',
+  'America/Mazatlan',
+  'America/Mexico_City',
+  'America/Merida',
+  'America/Cancun',
+  'America/Los_Angeles',
+  'America/Denver',
+  'America/Chicago',
+  'America/New_York',
+]
+
 /** True for the SDK error that means "the query matched nothing". */
 function isNotFound(error: unknown): boolean {
   return (error as { status?: number } | null)?.status === 404
