@@ -1,0 +1,19 @@
+# Keep source files LF in the working tree on every platform.
+#
+# Without this, core.autocrlf=true checks Go files out as CRLF and `gofmt -l`
+# flags every one of them, even though they are correctly formatted. That makes
+# the "gofmt clean" build gate unmeetable on Windows and trains people to ignore
+# a real signal.
+
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.pdf binary
