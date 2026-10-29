@@ -5,8 +5,11 @@
 package main
 
 import (
+	"context"
 	"log"
+	"net/http"
 	"os"
+	"time"
 
 	// A pure-Go binary has no system tzdata to fall back on, so embed the
 	// database; reminder scheduling resolves named zones such as
@@ -17,9 +20,12 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 
+	"github.com/Rodriamarog/instant_appoint/internal/gemini"
 	"github.com/Rodriamarog/instant_appoint/internal/meta"
+	"github.com/Rodriamarog/instant_appoint/internal/pbstore"
 	"github.com/Rodriamarog/instant_appoint/internal/seed"
 	"github.com/Rodriamarog/instant_appoint/internal/server"
+	"github.com/Rodriamarog/instant_appoint/internal/webhook"
 	"github.com/Rodriamarog/instant_appoint/internal/whatsapp"
 	_ "github.com/Rodriamarog/instant_appoint/migrations"
 	"github.com/Rodriamarog/instant_appoint/web"
@@ -58,7 +64,10 @@ func main() {
 		if appID == "" || appSecret == "" {
 			se.App.Logger().Warn("META_APP_ID or META_APP_SECRET is unset; connecting a WhatsApp number will fail until both are.")
 		}
-		whatsapp.Register(se.Router, meta.New(appID, appSecret))
+		metaClient := meta.New(appID, appSecret)
+		whatsapp.Register(se.Router, metaClient)
+
+		pbstore.RegisterWebhook(se.Router, inboundWebhook(se.App, metaClient))
 
 		// Route patterns are matched by specificity, not registration
 		// order, so later tickets can add their own /api routes from their
@@ -71,4 +80,49 @@ func main() {
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// inboundWebhook assembles the handler that turns a WhatsApp delivery into a
+// stored message and an AI reply.
+//
+// The handler itself knows nothing about PocketBase, Gemini or Meta — it is
+// written against a Store interface and two function fields, which is what
+// lets its whole behaviour be tested with no database and no network. This is
+// where the real implementations are substituted for the fakes.
+func inboundWebhook(app core.App, client *meta.Client) http.Handler {
+	// Both secrets are read here rather than at package load, so a deployment
+	// that sets them in the process environment after the binary is built
+	// still picks them up, and so a missing one is reported once at boot
+	// instead of as a puzzle in a log weeks later.
+	secret := os.Getenv("NEUROCROW_ROUTER_SECRET")
+	if secret == "" {
+		// An empty secret rejects every delivery rather than accepting every
+		// delivery, so this is a silent outage unless it is said out loud.
+		app.Logger().Warn("NEUROCROW_ROUTER_SECRET is unset; every webhook delivery will be rejected and no customer message will arrive.")
+	}
+
+	geminiKey := os.Getenv("GEMINI_API_KEY")
+	if geminiKey == "" {
+		app.Logger().Warn("GEMINI_API_KEY is unset; messages will still be stored but no automatic reply will be sent.")
+	}
+	ai := gemini.New(geminiKey)
+
+	return webhook.New(webhook.Deps{
+		Secret: secret,
+		Now:    time.Now,
+		Store:  pbstore.NewWebhookStore(app),
+		GenerateReply: func(ctx context.Context, history []webhook.ConversationMessage, text string) (string, error) {
+			// The two packages spell the roles the same way and neither
+			// imports the other, which is the point: the handler does not
+			// depend on which model answers.
+			turns := make([]gemini.Message, 0, len(history))
+			for _, turn := range history {
+				turns = append(turns, gemini.Message{Role: turn.Role, Content: turn.Content})
+			}
+
+			return ai.GenerateReply(ctx, turns, text)
+		},
+		SendMessage: client.SendText,
+		Logger:      app.Logger(),
+	})
 }
