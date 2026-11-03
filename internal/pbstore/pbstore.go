@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/pocketbase/dbx"
 	validation "github.com/pocketbase/ozzo-validation/v4"
@@ -50,6 +51,15 @@ const conversationMessage = "text"
 // label, and a disagreement between the two spellings would quietly match no
 // tap to anything.
 const reminderMessage = "reminder"
+
+// receiptMessage is the same row for the receipt the webhook sends the
+// moment the assistant writes an appointment. It asks the same question
+// with the same two buttons, so a tap on it is matched the same way.
+//
+// Taken from internal/webhook rather than spelled again, because this
+// package writes that row too — SaveMessage puts the kind in message_type —
+// so there is one spelling and the lookup cannot drift from the write.
+const receiptMessage = string(webhook.KindReceipt)
 
 // WebhookStore persists what the webhook handler receives.
 type WebhookStore struct {
@@ -87,32 +97,46 @@ func (s *WebhookStore) FindAccount(_ context.Context, phoneNumberID string) (*we
 
 	userID := record.GetString("user_id")
 
-	mode, err := s.aiMode(userID)
-	if err != nil {
+	account := &webhook.Account{
+		UserID:      userID,
+		AccessToken: record.GetString("access_token"),
+
+		// What a clinic with no settings row looks like: the assistant off,
+		// no reminders, and the zone every other reader of a missing
+		// setting falls back to. A zone has to be something — a receipt
+		// naming a UTC hour sends somebody in at ten at night — and this is
+		// the same value the migration gives a row it creates.
+		Mode:     webhook.ModeOff,
+		Timezone: migrations.DefaultTimezone,
+	}
+
+	if err := s.readSettings(userID, account); err != nil {
 		return nil, err
 	}
 
-	return &webhook.Account{
-		UserID:      userID,
-		AccessToken: record.GetString("access_token"),
-		Mode:        mode,
-	}, nil
+	return account, nil
 }
 
-// aiMode reads how much the clinic behind userID has allowed the assistant
-// to do. It is a second query rather than a column on the account because
-// the mode belongs to the business, not to the number: a clinic with two
-// connected numbers answers on both or neither.
+// readSettings fills in what the clinic behind userID has configured: how
+// much the assistant may do, and what its reminders do, which is what
+// decides whether a creation receipt is worth sending.
 //
-// No settings row is ModeOff, not an error. A clinic that has connected a
-// number but never opened the settings is the state every newly registered
-// one is in, and the assistant stays quiet for it.
+// It is a second query rather than columns on the account because these
+// belong to the business, not to the number: a clinic with two connected
+// numbers answers on both or neither. One query for all of it, though —
+// they are read together on every inbound message, and the row is already
+// in hand once it has been found.
+//
+// No settings row leaves the defaults the caller set, and is not an error.
+// A clinic that has connected a number but never opened the settings is the
+// state every newly registered one is in, and the assistant stays quiet
+// for it.
 //
 // A real database failure is returned rather than quietly read as off,
 // because the handler turns an error into a 500 and the router redelivers.
 // Reading a fault as off would silence every clinic's assistant for as long
 // as it lasted, with nothing anywhere saying why.
-func (s *WebhookStore) aiMode(userID string) (webhook.Mode, error) {
+func (s *WebhookStore) readSettings(userID string, account *webhook.Account) error {
 	record, err := s.app.FindFirstRecordByFilter(
 		migrations.BusinessSettingsCollection,
 		"user_id = {:userID}",
@@ -120,13 +144,29 @@ func (s *WebhookStore) aiMode(userID string) (webhook.Mode, error) {
 	)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return webhook.ModeOff, nil
+		return nil
 
 	case err != nil:
-		return "", err
+		return err
 	}
 
-	return webhook.Mode(record.GetString(migrations.AIModeField)), nil
+	account.Mode = webhook.Mode(record.GetString(migrations.AIModeField))
+
+	// Both halves, because either one missing means internal/reminders
+	// sends nothing: it skips a clinic that is not active and counts one
+	// with no template as NoTemplate. A receipt held back in favour of a
+	// reminder that is never sent leaves the patient with no message at
+	// all.
+	account.SendsReminders = record.GetBool("is_active") && record.GetString("template_name") != ""
+	account.ReminderLeadTime = time.Duration(record.GetInt("timing_minutes")) * time.Minute
+
+	// An empty zone would make time.LoadLocation return UTC, silently,
+	// which is the one wrong answer that looks like an answer.
+	if zone := record.GetString("timezone"); zone != "" {
+		account.Timezone = zone
+	}
+
+	return nil
 }
 
 // HasMessage reports whether a message with this WhatsApp id is already
@@ -345,10 +385,14 @@ func (s *WebhookStore) HasAppointmentFromConversation(_ context.Context, convers
 // that can see the other one, and the right answer to losing that race is
 // the appointment that won — not a failed delivery, which would have the
 // router redeliver a message that is already stored.
-func (s *WebhookStore) CreateAppointment(_ context.Context, userID string, appointment webhook.Appointment) error {
+//
+// The returned id is empty in exactly that case, and non-empty whenever a
+// row was written. It is what tells the handler whether the appointment it
+// is about to tell the patient about is one it created.
+func (s *WebhookStore) CreateAppointment(_ context.Context, userID string, appointment webhook.Appointment) (string, error) {
 	collection, err := s.app.FindCollectionByNameOrId(migrations.AppointmentsCollection)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	record := core.NewRecord(collection)
@@ -363,39 +407,50 @@ func (s *WebhookStore) CreateAppointment(_ context.Context, userID string, appoi
 	record.Set(migrations.StatusSetByField, string(appointment.StatusSetBy))
 	record.Set(migrations.StatusSetAtField, appointment.StatusSetAt)
 	record.Set("conversation_id", appointment.ConversationID)
+	record.Set(migrations.LanguageField, appointment.Language)
 
 	if err := s.app.Save(record); err != nil {
 		if appointment.ConversationID != "" && IsUniqueViolation(err) {
-			return nil
+			// No id, because no row of this app's was written. The caller
+			// sends the patient a receipt about what it created, and the
+			// appointment that won this race is not its to speak for.
+			return "", nil
 		}
 
-		return err
+		return "", err
 	}
 
-	return nil
+	return record.Id, nil
 }
 
-// AppointmentForReminder returns the appointment a sent reminder was about,
-// given Meta's id for that reminder, or "" when this clinic has no reminder
-// with that id.
+// AppointmentForSentMessage returns the appointment a message this app sent
+// was about, given Meta's id for that message, or "" when this clinic sent
+// no such message.
 //
-// Matched on the reminder's own wamid rather than on the customer's number,
+// Matched on that message's own wamid rather than on the customer's number,
 // because the number does not identify an appointment: a patient with two
-// bookings in one week has two reminders out at once, and the only thing
+// bookings in one week has two of these out at once, and the only thing
 // separating them is which message the tap answers.
 //
-// Scoped to the clinic, and to rows this app wrote as reminders. A tap can
-// answer any message the business ever sent; one answering an ordinary reply
-// finds nothing here, which is the correct answer and not a fault.
-func (s *WebhookStore) AppointmentForReminder(_ context.Context, userID, reminderMessageID string) (string, error) {
-	if reminderMessageID == "" {
+// Scoped to the clinic, and to the two kinds of message that ask a patient
+// about one appointment: the reminder, and the receipt sent the moment the
+// assistant writes one. A tap can answer anything the business ever sent;
+// one answering an ordinary reply finds nothing here, which is the correct
+// answer and not a fault.
+func (s *WebhookStore) AppointmentForSentMessage(_ context.Context, userID, sentMessageID string) (string, error) {
+	if sentMessageID == "" {
 		return "", nil
 	}
 
 	record, err := s.app.FindFirstRecordByFilter(
 		migrations.WhatsAppMessagesCollection,
-		"user_id = {:userID} && message_id = {:messageID} && message_type = {:type}",
-		dbx.Params{"userID": userID, "messageID": reminderMessageID, "type": reminderMessage},
+		"user_id = {:userID} && message_id = {:messageID} && (message_type = {:reminder} || message_type = {:receipt})",
+		dbx.Params{
+			"userID":    userID,
+			"messageID": sentMessageID,
+			"reminder":  reminderMessage,
+			"receipt":   receiptMessage,
+		},
 	)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):

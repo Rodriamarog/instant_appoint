@@ -55,6 +55,19 @@ test('both active positions say that they write appointments', () => {
   }
 })
 
+test('both active positions say the patient is asked to confirm', () => {
+  // Observador promises the assistant does not answer the patient's
+  // messages, and it still does not — but it now sends one message of its
+  // own the moment it writes an appointment, and a clinic reading only the
+  // name of the position would not expect that. The promise a patient
+  // experiences has changed, so the words a clinic chooses by have to.
+  show('off')
+
+  for (const option of AI_MODE_OPTIONS.filter((o) => o.mode !== 'off')) {
+    expect(option.help).toMatch(/confirm/i)
+  }
+})
+
 test('the saved position is the one shown as chosen', () => {
   show('observer')
 

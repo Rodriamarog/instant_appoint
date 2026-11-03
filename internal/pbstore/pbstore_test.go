@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase"
@@ -649,5 +650,105 @@ func TestTheWordsStoredAndTheWordsTheGateReadsAreTheSame(t *testing.T) {
 	if string(webhook.ModeOff) != migrations.DefaultAIMode {
 		t.Errorf("the migration defaults a clinic to %q but the gate spells off as %q",
 			migrations.DefaultAIMode, webhook.ModeOff)
+	}
+}
+
+// setReminderSettings fills in the half of a clinic's settings row the
+// reminder job reads, which is also what decides whether a creation receipt
+// is suppressed in favour of a reminder that is already due.
+func setReminderSettings(t *testing.T, app core.App, userID string, fields map[string]any) {
+	t.Helper()
+
+	record, err := app.FindFirstRecordByFilter(
+		migrations.BusinessSettingsCollection,
+		"user_id = {:userID}",
+		dbx.Params{"userID": userID},
+	)
+	if err != nil {
+		t.Fatalf("the clinic %s has no settings row: %v", userID, err)
+	}
+
+	for name, value := range fields {
+		record.Set(name, value)
+	}
+	if err := app.Save(record); err != nil {
+		t.Fatalf("save the settings for %s: %v", userID, err)
+	}
+}
+
+// The webhook decides whether to send a creation receipt from how soon the
+// appointment's own reminder falls due, and it names the date in the
+// clinic's zone. Both come off the same settings row the mode does, read in
+// the same query — a second lookup per inbound message would be a second
+// round trip for a row already in hand.
+func TestFindAccountCarriesWhatTheClinicsRemindersDo(t *testing.T) {
+	app := newApp(t)
+	userID := connectAccount(t, app, "555000111", nil)
+	setAIMode(t, app, userID, string(webhook.ModeAutopilot))
+	setReminderSettings(t, app, userID, map[string]any{
+		"is_active":      true,
+		"template_name":  "appointment_reminder",
+		"timing_minutes": 90,
+		"timezone":       "America/Tijuana",
+	})
+
+	account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), "555000111")
+	if err != nil {
+		t.Fatalf("FindAccount: %v", err)
+	}
+	if !account.SendsReminders {
+		t.Error("SendsReminders is false for a clinic with reminders on and a template chosen")
+	}
+	if account.ReminderLeadTime != 90*time.Minute {
+		t.Errorf("ReminderLeadTime = %v, want 90m — timing_minutes is minutes", account.ReminderLeadTime)
+	}
+	if account.Timezone != "America/Tijuana" {
+		t.Errorf("Timezone = %q, want the clinic's own", account.Timezone)
+	}
+}
+
+// Either half missing means no reminder is ever sent, so no receipt may be
+// held back in favour of one. A clinic that has switched reminders off, or
+// never chosen a template, would otherwise have its same-day bookings
+// confirmed by nobody at all.
+func TestAClinicWhoseRemindersWouldNeverGoOutSendsNone(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		fields map[string]any
+	}{
+		{"reminders switched off", map[string]any{"is_active": false, "template_name": "appointment_reminder"}},
+		{"no template chosen", map[string]any{"is_active": true, "template_name": ""}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newApp(t)
+			userID := connectAccount(t, app, "555000111", nil)
+			setAIMode(t, app, userID, string(webhook.ModeAutopilot))
+			setReminderSettings(t, app, userID, tc.fields)
+
+			account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), "555000111")
+			if err != nil {
+				t.Fatalf("FindAccount: %v", err)
+			}
+			if account.SendsReminders {
+				t.Errorf("SendsReminders is true although %s", tc.name)
+			}
+		})
+	}
+}
+
+// A clinic that has never opened the settings has no row to read a zone
+// off, and a receipt naming a UTC hour would send somebody in at ten at
+// night. The migration's default is the clinic's own zone, and it is what
+// every other reader of a missing setting falls back to.
+func TestAClinicWithNoSettingsRowStillHasAZone(t *testing.T) {
+	app := newApp(t)
+	connectAccount(t, app, "555000111", nil)
+
+	account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), "555000111")
+	if err != nil {
+		t.Fatalf("FindAccount: %v", err)
+	}
+	if account.Timezone != migrations.DefaultTimezone {
+		t.Errorf("Timezone = %q, want %q", account.Timezone, migrations.DefaultTimezone)
 	}
 }

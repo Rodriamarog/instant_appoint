@@ -64,14 +64,14 @@ func saveAppointment(t *testing.T, app core.App, userID string) string {
 	return record.Id
 }
 
-func TestAppointmentForReminderFindsWhatAReminderWasAbout(t *testing.T) {
+func TestAppointmentForSentMessageFindsWhatAReminderWasAbout(t *testing.T) {
 	app := newApp(t)
 	saveReminder(t, app, "user000000000001", "wamid.reminder", "appointment1")
 
 	got, err := pbstore.NewWebhookStore(app).
-		AppointmentForReminder(context.Background(), "user000000000001", "wamid.reminder")
+		AppointmentForSentMessage(context.Background(), "user000000000001", "wamid.reminder")
 	if err != nil {
-		t.Fatalf("AppointmentForReminder: %v", err)
+		t.Fatalf("AppointmentForSentMessage: %v", err)
 	}
 	if got != "appointment1" {
 		t.Errorf("appointment = %q, want appointment1", got)
@@ -81,7 +81,7 @@ func TestAppointmentForReminderFindsWhatAReminderWasAbout(t *testing.T) {
 // A tap can answer any message the business ever sent. One answering an
 // ordinary reply finds nothing, which is the right answer: acting on it would
 // mean moving whatever appointment happened to be nearby.
-func TestAppointmentForReminderIgnoresEverythingThatIsNotAReminder(t *testing.T) {
+func TestAppointmentForSentMessageIgnoresEverythingThatIsNotAReminder(t *testing.T) {
 	app := newApp(t)
 	store := pbstore.NewWebhookStore(app)
 
@@ -97,9 +97,9 @@ func TestAppointmentForReminderIgnoresEverythingThatIsNotAReminder(t *testing.T)
 		t.Fatalf("SaveMessage: %v", err)
 	}
 
-	got, err := store.AppointmentForReminder(context.Background(), "user000000000001", "wamid.chat")
+	got, err := store.AppointmentForSentMessage(context.Background(), "user000000000001", "wamid.chat")
 	if err != nil {
-		t.Fatalf("AppointmentForReminder: %v", err)
+		t.Fatalf("AppointmentForSentMessage: %v", err)
 	}
 	if got != "" {
 		t.Errorf("appointment = %q, want nothing", got)
@@ -108,27 +108,27 @@ func TestAppointmentForReminderIgnoresEverythingThatIsNotAReminder(t *testing.T)
 
 // A wamid matched across clinics would let one clinic's delivery move
 // another clinic's appointment.
-func TestAppointmentForReminderIsScopedToTheClinic(t *testing.T) {
+func TestAppointmentForSentMessageIsScopedToTheClinic(t *testing.T) {
 	app := newApp(t)
 	saveReminder(t, app, "user000000000002", "wamid.reminder", "appointment1")
 
 	got, err := pbstore.NewWebhookStore(app).
-		AppointmentForReminder(context.Background(), "user000000000001", "wamid.reminder")
+		AppointmentForSentMessage(context.Background(), "user000000000001", "wamid.reminder")
 	if err != nil {
-		t.Fatalf("AppointmentForReminder: %v", err)
+		t.Fatalf("AppointmentForSentMessage: %v", err)
 	}
 	if got != "" {
 		t.Errorf("appointment = %q, want nothing", got)
 	}
 }
 
-func TestAppointmentForReminderIsNothingRatherThanAnErrorForAnUnknownID(t *testing.T) {
+func TestAppointmentForSentMessageIsNothingRatherThanAnErrorForAnUnknownID(t *testing.T) {
 	app := newApp(t)
 
 	got, err := pbstore.NewWebhookStore(app).
-		AppointmentForReminder(context.Background(), "user000000000001", "wamid.never-sent")
+		AppointmentForSentMessage(context.Background(), "user000000000001", "wamid.never-sent")
 	if err != nil {
-		t.Fatalf("AppointmentForReminder: %v", err)
+		t.Fatalf("AppointmentForSentMessage: %v", err)
 	}
 	if got != "" {
 		t.Errorf("appointment = %q, want nothing", got)

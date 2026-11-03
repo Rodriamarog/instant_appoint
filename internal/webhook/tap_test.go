@@ -240,10 +240,10 @@ func TestATypedReplyQuotingAReminderIsStillAnOrdinaryMessage(t *testing.T) {
 	assertEqual(t, "sentTo", h.sentTo(), []string{"521000000001"})
 }
 
-// The other shape a tap can arrive in. This app does not send interactive
-// messages today, so nothing produces it — it is read anyway because if a
-// reminder is ever sent that way, the difference should be that nothing here
-// had to change rather than that every tap went quiet.
+// The other shape a tap can arrive in, and the one a creation receipt's
+// buttons produce — a receipt is a free-form interactive message rather
+// than a template. A reminder still arrives as the "button" shape above,
+// so both have to be read.
 func TestAnInteractiveButtonReplyIsReadAsATapToo(t *testing.T) {
 	h := setup(options{})
 	h.store.sentReminder("user-1", "wamid.reminder-1", "appointment-1")

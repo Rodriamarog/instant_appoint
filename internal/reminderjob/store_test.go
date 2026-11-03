@@ -628,9 +628,9 @@ func TestASentRemindersMessageIdLeadsBackToItsAppointment(t *testing.T) {
 	}
 
 	got, err := pbstore.NewWebhookStore(app).
-		AppointmentForReminder(context.Background(), alice, "wamid.HBgLNTIx")
+		AppointmentForSentMessage(context.Background(), alice, "wamid.HBgLNTIx")
 	if err != nil {
-		t.Fatalf("AppointmentForReminder: %v", err)
+		t.Fatalf("AppointmentForSentMessage: %v", err)
 	}
 	if got != "evt1" {
 		t.Errorf("appointment = %q, want evt1 — the appointment the reminder went out about", got)
@@ -652,9 +652,9 @@ func TestAReminderThatNeverReachedMetaMatchesNoTap(t *testing.T) {
 		t.Fatalf("Claim: %v", err)
 	}
 
-	got, err := pbstore.NewWebhookStore(app).AppointmentForReminder(context.Background(), alice, "")
+	got, err := pbstore.NewWebhookStore(app).AppointmentForSentMessage(context.Background(), alice, "")
 	if err != nil {
-		t.Fatalf("AppointmentForReminder: %v", err)
+		t.Fatalf("AppointmentForSentMessage: %v", err)
 	}
 	if got != "" {
 		t.Errorf("appointment = %q, want nothing", got)

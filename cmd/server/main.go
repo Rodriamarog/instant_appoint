@@ -151,6 +151,18 @@ func inboundWebhook(app core.App, client *meta.Client) http.Handler {
 			return ai.GenerateReply(ctx, turns, text)
 		},
 		SendMessage: client.SendText,
+		SendButtons: func(ctx context.Context, phoneNumberID, accessToken, to, body string, buttons []webhook.Button) (string, error) {
+			// Copied field by field rather than passed through as one
+			// shared type, for the same reason as the roles above: what a
+			// quick reply is stays the handler's decision and the wire
+			// shape stays the Graph client's.
+			out := make([]meta.Button, 0, len(buttons))
+			for _, button := range buttons {
+				out = append(out, meta.Button{ID: button.ID, Title: button.Title})
+			}
+
+			return client.SendButtons(ctx, phoneNumberID, accessToken, to, body, out)
+		},
 		ExtractAppointment: func(ctx context.Context, history []webhook.ConversationMessage) (*webhook.ExtractedAppointment, error) {
 			turns := make([]gemini.Message, 0, len(history))
 			for _, turn := range history {

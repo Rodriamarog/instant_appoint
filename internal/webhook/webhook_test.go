@@ -78,8 +78,13 @@ type fakeStore struct {
 	failHasMessage        error
 	failSetStatus         error
 	failCreateAppointment error
-	failAppointmentLookup error
-	onUpsertConversat     func()
+
+	// refuseCreateAppointment makes the write a no-op with no error, which
+	// is what the duplicate rule's unique index does to the delivery that
+	// lost the race.
+	refuseCreateAppointment bool
+	failAppointmentLookup   error
+	onUpsertConversat       func()
 }
 
 // reminderKey is the pair a reminder is looked up by. The clinic is part of
@@ -105,7 +110,19 @@ func newFakeStore() *fakeStore {
 			// On autopilot, because every case below that is not about the
 			// mode is about what the handler does when it is allowed to
 			// answer. The cases that are about the mode say so with setMode.
-			phoneNumberID: {UserID: "user-1", AccessToken: "token-1", Mode: webhook.ModeAutopilot},
+			phoneNumberID: {
+				UserID:      "user-1",
+				AccessToken: "token-1",
+				Mode:        webhook.ModeAutopilot,
+				Timezone:    "America/Tijuana",
+
+				// A day's lead time, which is the default a clinic's
+				// settings row is born with, and far enough ahead of every
+				// appointment in these tests that the reminder is not yet
+				// due. The cases about the suppression rule move it.
+				SendsReminders:   true,
+				ReminderLeadTime: 24 * time.Hour,
+			},
 		},
 	}
 }
@@ -113,11 +130,17 @@ func newFakeStore() *fakeStore {
 // setMode puts the default connected number's clinic in a mode. It mutates
 // the store the handler already holds, so it may be called after setup.
 func (s *fakeStore) setMode(mode webhook.Mode) {
+	s.setAccount(func(account *webhook.Account) { account.Mode = mode })
+}
+
+// setAccount changes the default connected number's account in place, so it
+// may be called after setup.
+func (s *fakeStore) setAccount(change func(*webhook.Account)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	account := s.accounts[phoneNumberID]
-	account.Mode = mode
+	change(&account)
 	s.accounts[phoneNumberID] = account
 }
 
@@ -208,16 +231,21 @@ func (s *fakeStore) HasAppointmentFromConversation(_ context.Context, conversati
 	return false, nil
 }
 
-func (s *fakeStore) CreateAppointment(_ context.Context, userID string, appointment webhook.Appointment) error {
+func (s *fakeStore) CreateAppointment(_ context.Context, userID string, appointment webhook.Appointment) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.failCreateAppointment != nil {
-		return s.failCreateAppointment
+		return "", s.failCreateAppointment
+	}
+	if s.refuseCreateAppointment {
+		// What the unique index does to a delivery that lost the race: no
+		// row, no id, no error.
+		return "", nil
 	}
 	s.appointments = append(s.appointments, writtenAppointment{Appointment: appointment, userID: userID})
 
-	return nil
+	return fmt.Sprintf("appointment-%d", len(s.appointments)), nil
 }
 
 // written returns the appointments the fake holds, in write order.
@@ -251,11 +279,20 @@ func (s *fakeStore) sentReminder(userID, messageID, appointmentID string) {
 	s.reminders[reminderKey{userID: userID, messageID: messageID}] = appointmentID
 }
 
-func (s *fakeStore) AppointmentForReminder(_ context.Context, userID, reminderMessageID string) (string, error) {
+func (s *fakeStore) AppointmentForSentMessage(_ context.Context, userID, sentMessageID string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return s.reminders[reminderKey{userID: userID, messageID: reminderMessageID}], nil
+	// The real store matches a receipt the same way it matches a reminder,
+	// off the one row holding both the wamid and the appointment — which
+	// here is the row SaveMessage already wrote.
+	for _, m := range s.messages {
+		if m.userID == userID && m.MessageID == sentMessageID && m.Kind == webhook.KindReceipt {
+			return m.AppointmentID, nil
+		}
+	}
+
+	return s.reminders[reminderKey{userID: userID, messageID: sentMessageID}], nil
 }
 
 func (s *fakeStore) SetAppointmentStatus(
@@ -351,6 +388,15 @@ type send struct {
 	text          string
 }
 
+// receipt is one message with quick replies under it that the handler sent,
+// which is a different call from a plain reply and is counted separately.
+type receipt struct {
+	phoneNumberID string
+	to            string
+	body          string
+	buttons       []webhook.Button
+}
+
 type harness struct {
 	handler http.Handler
 	store   *fakeStore
@@ -363,6 +409,10 @@ type harness struct {
 	// appointment in, which is a different call from the one that writes a
 	// reply and is counted separately.
 	read [][]webhook.ConversationMessage
+
+	// checked is one receipt the handler sent about an appointment it had
+	// just written.
+	checked []receipt
 }
 
 type options struct {
@@ -375,6 +425,10 @@ type options struct {
 	// finds no appointment, so only the cases that are about writing one
 	// have to say anything.
 	extract func(context.Context, []webhook.ConversationMessage) (*webhook.ExtractedAppointment, error)
+
+	// sendButtons stands in for the receipt reaching Meta. The default
+	// succeeds, so only the cases about a send that fails say anything.
+	sendButtons func(context.Context, string, string, string, string, []webhook.Button) (string, error)
 }
 
 func setup(opts options) *harness {
@@ -398,6 +452,13 @@ func setup(opts options) *harness {
 			h.sent = append(h.sent, send{phoneNumberID: pid, to: to, text: text})
 
 			return fmt.Sprintf("wamid.reply-%d", len(h.sent)), nil
+		},
+		SendButtons: func(_ context.Context, pid, _, to, body string, buttons []webhook.Button) (string, error) {
+			h.mu.Lock()
+			defer h.mu.Unlock()
+			h.checked = append(h.checked, receipt{phoneNumberID: pid, to: to, body: body, buttons: buttons})
+
+			return fmt.Sprintf("wamid.receipt-%d", len(h.checked)), nil
 		},
 		ExtractAppointment: func(_ context.Context, history []webhook.ConversationMessage) (*webhook.ExtractedAppointment, error) {
 			h.mu.Lock()
@@ -423,6 +484,16 @@ func setup(opts options) *harness {
 	}
 	if opts.sendMessage != nil {
 		deps.SendMessage = opts.sendMessage
+	}
+	if opts.sendButtons != nil {
+		sendButtons := opts.sendButtons
+		deps.SendButtons = func(ctx context.Context, pid, token, to, body string, buttons []webhook.Button) (string, error) {
+			h.mu.Lock()
+			h.checked = append(h.checked, receipt{phoneNumberID: pid, to: to, body: body, buttons: buttons})
+			h.mu.Unlock()
+
+			return sendButtons(ctx, pid, token, to, body, buttons)
+		}
 	}
 	if opts.extract != nil {
 		extract := opts.extract
@@ -453,6 +524,14 @@ func (h *harness) histories() [][]webhook.ConversationMessage {
 	defer h.mu.Unlock()
 
 	return append([][]webhook.ConversationMessage{}, h.history...)
+}
+
+// receipts returns one entry per receipt the handler sent, in send order.
+func (h *harness) receipts() []receipt {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	return append([]receipt{}, h.checked...)
 }
 
 // readings returns one entry per conversation the handler asked the model to

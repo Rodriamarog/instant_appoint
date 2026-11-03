@@ -166,6 +166,9 @@ func newStack(t *testing.T) *stack {
 			return ai.GenerateReply(ctx, turns, text)
 		},
 		SendMessage: whatsApp.SendText,
+		SendButtons: func(ctx context.Context, phoneNumberID, accessToken, to, body string, buttons []webhook.Button) (string, error) {
+			return whatsApp.SendButtons(ctx, phoneNumberID, accessToken, to, body, replyButtons(buttons))
+		},
 		ExtractAppointment: func(ctx context.Context, history []webhook.ConversationMessage) (*webhook.ExtractedAppointment, error) {
 			turns := make([]gemini.Message, 0, len(history))
 			for _, turn := range history {
@@ -562,8 +565,21 @@ func TestObserverWritesTheAppointmentThroughTheWholeStack(t *testing.T) {
 	if s.ai.calls != 0 {
 		t.Errorf("the model was asked for %d replies in observer mode, want none", s.ai.calls)
 	}
-	if s.meta.calls != 0 {
-		t.Errorf("WhatsApp was called %d times in observer mode, want none", s.meta.calls)
+
+	// One call, and it is the creation receipt rather than a reply.
+	//
+	// Observer promises that the assistant does not answer the patient's
+	// messages, and it does not: the clinic is holding that conversation
+	// from its own phone. The receipt is not an answer to anything — it is
+	// the appointment's own message, the same family as the reminder that
+	// goes out a day later whatever mode the clinic is in. An appointment
+	// written out of a conversation nobody at the desk typed is exactly
+	// the one worth checking.
+	if s.meta.calls != 1 {
+		t.Errorf("WhatsApp was called %d times in observer mode, want only the creation receipt", s.meta.calls)
+	}
+	if got, _ := s.meta.last["type"].(string); got != "interactive" {
+		t.Errorf("the one message sent was of type %q, want the interactive receipt", got)
 	}
 
 	records, err := s.app.FindRecordsByFilter("appointments", "1=1", "", 0, 0)
@@ -714,5 +730,104 @@ func TestATapWithNoReplyContextMovesNothingAndIsStillInTheThread(t *testing.T) {
 	}
 	if got := tap.GetString("message_type"); got != "button" {
 		t.Errorf("message_type = %q, want button so the thread can call it out", got)
+	}
+}
+
+// replyButtons copies the handler's buttons into the Graph client's, field
+// by field, for the same reason the roles above are copied: neither package
+// imports the other, so what a quick reply is stays the handler's decision
+// and the wire shape stays the client's. cmd/server does the same.
+func replyButtons(buttons []webhook.Button) []meta.Button {
+	out := make([]meta.Button, 0, len(buttons))
+	for _, button := range buttons {
+		out = append(out, meta.Button{ID: button.ID, Title: button.Title})
+	}
+
+	return out
+}
+
+// receiptTapDeliveryBody is a tap on one of a creation receipt's reply
+// buttons — the interactive shape, carrying the id this app set on the
+// button rather than a template's label.
+func receiptTapDeliveryBody(messageID, from, buttonID, title, repliesTo string, at time.Time) string {
+	payload, _ := json.Marshal(map[string]any{
+		"object": "whatsapp_business_account",
+		"entry": []any{map[string]any{
+			"id": "waba-1",
+			"changes": []any{map[string]any{
+				"field": "messages",
+				"value": map[string]any{
+					"messaging_product": "whatsapp",
+					"metadata":          map[string]any{"phone_number_id": "555000111"},
+					"messages": []any{map[string]any{
+						"id": messageID, "from": from, "type": "interactive",
+						"interactive": map[string]any{
+							"type":         "button_reply",
+							"button_reply": map[string]any{"id": buttonID, "title": title},
+						},
+						"context":   map[string]any{"from": "555000111", "id": repliesTo},
+						"timestamp": strconv.FormatInt(at.Unix(), 10),
+					}},
+				},
+			}},
+		}},
+	})
+
+	return string(payload)
+}
+
+// The whole of this ticket in one pass, and the one thing no unit test can
+// prove: that the row written when the receipt is sent is the row the tap
+// on it is matched through.
+//
+// Both halves are real here — the receipt is stored by this package and
+// read back by this package — so a disagreement about what message_type a
+// receipt carries, or about which types a tap may answer, fails here and
+// nowhere else. Getting it wrong silently is the failure this test exists
+// for: everything looks correct from the outside and every patient's answer
+// lands on nothing.
+func TestAReceiptsOwnTapConfirmsTheAppointmentEndToEnd(t *testing.T) {
+	s := newStack(t)
+	setAIMode(t, s.app, s.userID, "observer")
+	s.recorded = map[string]any{
+		"client_name": "Ana Ruiz",
+		"starts_at":   "2026-10-30T15:00",
+		"certain":     true,
+		"summary":     "Limpieza dental",
+	}
+	now := time.Now()
+
+	status := s.deliver(t, "/api/webhook", deliveryBody("wamid.1", "5215511111111", "el viernes a las 3", now), routerSecret, now)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+
+	// The wamid the Meta stub handed back for the receipt, which is what
+	// Meta puts in the context of a tap on it.
+	receiptID := "wamid.reply-1"
+	receipt, err := s.app.FindFirstRecordByFilter(
+		"whatsapp_messages", "message_id = {:id}", dbx.Params{"id": receiptID},
+	)
+	if err != nil {
+		t.Fatalf("the receipt left no row behind, so no tap on it could ever be matched: %v", err)
+	}
+	if receipt.GetString("event_id") == "" {
+		t.Fatal("the receipt's row names no appointment; a tap on it would arrive matching nothing")
+	}
+
+	body := receiptTapDeliveryBody("wamid.tap-1", "5215511111111", "confirm", "Confirmar", receiptID, time.Now())
+	if status := s.deliver(t, "/api/webhook", body, routerSecret, time.Now()); status != http.StatusOK {
+		t.Fatalf("the tap: status = %d, want 200", status)
+	}
+
+	record, err := s.app.FindRecordById("appointments", receipt.GetString("event_id"))
+	if err != nil {
+		t.Fatalf("read the appointment back: %v", err)
+	}
+	if got := record.GetString("status"); got != "confirmed" {
+		t.Errorf("status = %q, want confirmed", got)
+	}
+	if got := record.GetString("status_set_by"); got != "patient" {
+		t.Errorf("status_set_by = %q, want patient", got)
 	}
 }
