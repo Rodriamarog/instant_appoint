@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import {
   createAppointment,
+  languageForCountryCode,
   setAppointmentStatus,
   updateAppointment,
 } from '@/lib/appointments'
@@ -33,6 +34,7 @@ const draft = {
   start_time: '2026-11-09T17:00:00.000Z',
   end_time: '2026-11-09T18:00:00.000Z',
   location: 'Consultorio 2',
+  language: 'es',
 }
 
 beforeEach(() => {
@@ -107,4 +109,29 @@ test('editing the details of an appointment does not relabel who last set its st
   expect(body.status_set_by).toBeUndefined()
   expect(body.status_set_at).toBeUndefined()
   expect(body).toMatchObject({ client_name: 'Ana Ruiz' })
+})
+
+test('the reminder language is guessed from the dialling prefix', () => {
+  // Mexican numbers read Spanish and US numbers read English, which is the
+  // right guess most of the time on a border clinic's list. It is only a
+  // guess: a Mexican patient who prefers English is unremarkable here, which
+  // is why the dialog lets staff change it.
+  expect(languageForCountryCode('521')).toBe('es')
+  expect(languageForCountryCode('1')).toBe('en_US')
+})
+
+test('a prefix nobody has mapped is reminded in Spanish', () => {
+  // The clinic is in Tijuana and the template every one of them starts with
+  // is the Spanish one. Guessing English for an unknown prefix would write
+  // to a patient in a language the business may not even have approved.
+  expect(languageForCountryCode('49')).toBe('es')
+})
+
+test('an appointment is written with the language its reminder goes out in', async () => {
+  // The reminder job reads this column and nothing else: a create that
+  // dropped it would leave the appointment on the business's own default,
+  // which is the behaviour this replaced.
+  await createAppointment({ ...draft, language: 'en_US' })
+
+  expect(create.mock.calls[0][0]).toMatchObject({ language: 'en_US' })
 })

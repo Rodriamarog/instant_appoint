@@ -16,11 +16,11 @@ const tijuana = "America/Tijuana"
 
 func settingsFor(user string, lead time.Duration) reminders.Settings {
 	return reminders.Settings{
-		UserID:           user,
-		LeadTime:         lead,
-		TemplateName:     "appointment_reminder",
-		TemplateLanguage: "es",
-		Timezone:         tijuana,
+		UserID:          user,
+		LeadTime:        lead,
+		TemplateName:    "appointment_reminder",
+		DefaultLanguage: "es",
+		Timezone:        tijuana,
 	}
 }
 
