@@ -16,13 +16,16 @@ import { errorMessage } from '@/lib/errors'
 import {
   CATEGORIES,
   LANGUAGES,
+  MAX_BUTTON_LABEL,
   type MessageTemplate,
+  QUICK_REPLIES,
   type TemplateDraft,
   createTemplate,
   listTemplates,
   placeholders,
   sendTemplate,
   templateBody,
+  templateButtons,
   validateDraft,
 } from '@/lib/templates'
 import { listConnectedAccounts } from '@/lib/whatsapp-accounts'
@@ -32,6 +35,12 @@ const emptyDraft: TemplateDraft = {
   category: 'UTILITY',
   language: 'es',
   body: '',
+  buttons: [],
+}
+
+/** The Confirm and Cancel pair to offer for a language the form can choose. */
+function suggestedButtons(language: string): string[] {
+  return [...(QUICK_REPLIES[language] ?? QUICK_REPLIES.es)]
 }
 
 /** Meta's approval states, as a colour. Anything unexpected reads as a problem. */
@@ -144,6 +153,26 @@ function CreateTemplateForm({ onCreated }: { onCreated: () => Promise<void> }) {
   const [failure, setFailure] = useState('')
   const [success, setSuccess] = useState('')
 
+  // Changing the language carries the suggested buttons with it, because a
+  // Spanish "Confirmar" sitting under an English template is approved that
+  // way and cannot be reworded per recipient afterwards. Wording the person
+  // typed themselves is theirs, so only labels still equal to the previous
+  // language's suggestion are replaced.
+  const chooseLanguage = (language: string) => {
+    const previous = suggestedButtons(draft.language)
+    const untouched = draft.buttons.every(
+      (label, index) => label === previous[index],
+    )
+
+    setDraft({
+      ...draft,
+      language,
+      buttons: untouched
+        ? suggestedButtons(language).slice(0, draft.buttons.length)
+        : draft.buttons,
+    })
+  }
+
   const submit = async () => {
     const found = validateDraft(draft)
     setProblems(found)
@@ -230,9 +259,7 @@ function CreateTemplateForm({ onCreated }: { onCreated: () => Promise<void> }) {
                   id="template-language"
                   className="h-9 w-full rounded-md border px-2 text-sm"
                   value={draft.language}
-                  onChange={(event) =>
-                    setDraft({ ...draft, language: event.target.value })
-                  }
+                  onChange={(event) => chooseLanguage(event.target.value)}
                 >
                   {LANGUAGES.map((language) => (
                     <option key={language.code} value={language.code}>
@@ -261,6 +288,57 @@ function CreateTemplateForm({ onCreated }: { onCreated: () => Promise<void> }) {
               <FieldProblem problem={problems.body} />
             </div>
 
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  className="size-4"
+                  checked={draft.buttons.length > 0}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      buttons: event.target.checked
+                        ? suggestedButtons(draft.language)
+                        : [],
+                    })
+                  }
+                />
+                Botones de respuesta rápida
+              </label>
+              <p className="text-xs text-muted-foreground">
+                El paciente responde con un toque en vez de escribir. Los
+                botones se aprueban junto con la plantilla: no se pueden
+                añadir ni cambiar después.
+              </p>
+
+              {draft.buttons.length > 0 && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {draft.buttons.map((label, index) => (
+                    <div key={index} className="space-y-1">
+                      <Label htmlFor={`template-button-${index + 1}`}>
+                        {`Botón ${index + 1}`}
+                      </Label>
+                      <Input
+                        id={`template-button-${index + 1}`}
+                        value={label}
+                        maxLength={MAX_BUTTON_LABEL}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            buttons: draft.buttons.map((existing, at) =>
+                              at === index ? event.target.value : existing,
+                            ),
+                          })
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <FieldProblem problem={problems.buttons} />
+            </div>
+
             <Button type="button" onClick={submit} disabled={isSubmitting}>
               {isSubmitting ? 'Submitting…' : 'Submit for approval'}
             </Button>
@@ -283,6 +361,7 @@ function FieldProblem({ problem }: { problem?: string }) {
 function TemplateRow({ template }: { template: MessageTemplate }) {
   const body = templateBody(template)
   const slots = placeholders(body)
+  const buttons = templateButtons(template)
 
   const [isSending, setIsSending] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
@@ -362,6 +441,25 @@ function TemplateRow({ template }: { template: MessageTemplate }) {
 
       {body && (
         <p className="rounded bg-gray-50 p-2 text-xs text-gray-600">{body}</p>
+      )}
+
+      {/*
+        Shown as the patient will see them. Approval is what freezes the
+        buttons, so between submitting and the status turning APPROVED this
+        is the last chance to notice they are wrong — after that, fixing them
+        means a differently named template and another review.
+      */}
+      {buttons.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {buttons.map((label, index) => (
+            <span
+              key={`${index}:${label}`}
+              className="rounded border px-2 py-0.5 text-xs text-gray-600"
+            >
+              {label}
+            </span>
+          ))}
+        </div>
       )}
 
       {isOpen && (
