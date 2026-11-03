@@ -60,11 +60,11 @@ func (s *Store) ActiveSettings(context.Context) ([]reminders.Settings, error) {
 	settings := make([]reminders.Settings, 0, len(records))
 	for _, record := range records {
 		settings = append(settings, reminders.Settings{
-			UserID:           record.GetString("user_id"),
-			LeadTime:         time.Duration(record.GetInt("timing_minutes")) * time.Minute,
-			TemplateName:     record.GetString("template_name"),
-			TemplateLanguage: record.GetString("template_language"),
-			Timezone:         record.GetString("timezone"),
+			UserID:          record.GetString("user_id"),
+			LeadTime:        time.Duration(record.GetInt("timing_minutes")) * time.Minute,
+			TemplateName:    record.GetString("template_name"),
+			DefaultLanguage: record.GetString("template_language"),
+			Timezone:        record.GetString("timezone"),
 		})
 	}
 
@@ -111,6 +111,11 @@ func (s *Store) AppointmentsStartingBetween(_ context.Context, from, to time.Tim
 			ClientName:  record.GetString("client_name"),
 			ClientPhone: record.GetString("client_phone"),
 			StartTime:   start,
+			// Exactly as stored, and the fallback for an empty one lives in
+			// internal/reminders: it is the same decision as the fallback
+			// for an unrecognised language, and both belong where the
+			// message is assembled.
+			Language: record.GetString("language"),
 			// Passed through exactly as stored. A value this app does not
 			// recognise is one no reminder goes out for, which is the side
 			// of that question a patient can forgive.

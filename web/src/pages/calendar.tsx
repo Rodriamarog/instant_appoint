@@ -6,6 +6,7 @@ import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { EventDialog } from '@/components/calendar/event-dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
+  DEFAULT_REMINDER_LANGUAGE,
   listAppointmentsBetween,
   statusLabel,
   type Appointment,
@@ -231,6 +232,10 @@ export function CalendarPage() {
               // What saving it will produce. Nothing is stored yet, so the
               // dialog shows no status for it either.
               status: 'pending',
+              // Likewise a placeholder and not a decision: the dialog
+              // re-guesses it from the dialling prefix until somebody
+              // chooses one.
+              language: DEFAULT_REMINDER_LANGUAGE,
               // Through isoMillis like every other writer, not
               // toISOString directly. The two agree today; the point of the
               // module is that no call site decides that for itself, because

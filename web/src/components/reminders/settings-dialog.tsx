@@ -255,6 +255,22 @@ export function ReminderSettingsDialog({
               </p>
             )}
 
+            {/*
+              The variant picked here is no longer the language every
+              reminder goes out in — each appointment carries its own. Said
+              plainly because the consequence is not guessable from the
+              control: a clinic that writes to patients in English needs the
+              same template approved in en_US too, and the first sign that
+              it is not would otherwise be a reminder Meta refused.
+            */}
+            {chosen && (
+              <p className="text-xs text-muted-foreground">
+                Es la variante por defecto. Cada cita lleva su propio idioma,
+                así que necesitas esta plantilla aprobada en cada idioma al
+                que le escribas.
+              </p>
+            )}
+
             {draft.template_name === '' && (
               <p className="text-xs text-muted-foreground">
                 No se enviará ningún recordatorio hasta que elijas una plantilla.
