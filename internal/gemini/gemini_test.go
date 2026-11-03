@@ -85,15 +85,23 @@ func TestSendsTheRequestTheSDKSends(t *testing.T) {
 	}
 }
 
-// Verbatim from lib/ai-conversation.ts, including the blank third line and the
-// em dash. The date is the Tijuana wall clock, which is the only thing the
-// model is told about when "today" is.
+// The prompt as it goes on the wire, including the blank third line and the em
+// dash, both inherited from lib/ai-conversation.ts. The date is the Tijuana
+// wall clock, which is the only thing the model is told about when "today" is.
+//
+// Pinning it whole is how a prompt change stays a deliberate act rather than
+// something that reaches customers unreviewed. What the lines have to mean is
+// pinned separately below, because this constant can be updated to match
+// whatever the code now sends.
 const wantPrompt = `You are a friendly appointment booking assistant for a business.
 Today is 10/28/2026, 12:36:00 PM.
 
-Your job is to help customers book appointments through natural conversation.
+Your job is to help customers arrange appointments through natural conversation.
 Keep responses concise and conversational — this is WhatsApp, not email.
-When the customer and business agree on a specific date and time, confirm the appointment clearly.
+You cannot create, change or cancel appointments, and nothing you say books one.
+Find out what the customer needs, their name, and the day and time that suits them.
+Once that is settled, repeat it back and tell them a member of staff will be in touch to confirm it.
+Never say or imply that the customer already has an appointment.
 Reply in the same language the customer uses.`
 
 func TestSendsTheSystemPromptVerbatim(t *testing.T) {
@@ -121,6 +129,72 @@ func TestSendsTheSystemPromptVerbatim(t *testing.T) {
 	}
 	if text, _ := parts[0].(map[string]any)["text"].(string); text != wantPrompt {
 		t.Errorf("the system prompt differs from the one in production:\n got %q\nwant %q", text, wantPrompt)
+	}
+}
+
+// sentInstruction is the system instruction the client actually put on the
+// wire, which is the only place a prompt change can be observed from outside
+// the package.
+func sentInstruction(t *testing.T) string {
+	t.Helper()
+
+	client, got := stub(t, http.StatusOK, oneCandidate)
+	if _, err := client.GenerateReply(context.Background(), nil, "hola"); err != nil {
+		t.Fatalf("GenerateReply: %v", err)
+	}
+
+	instruction, _ := got.body["systemInstruction"].(map[string]any)
+	parts, _ := instruction["parts"].([]any)
+	if len(parts) != 1 {
+		t.Fatalf("systemInstruction.parts = %#v, want one part", instruction["parts"])
+	}
+	text, _ := parts[0].(map[string]any)["text"].(string)
+
+	return text
+}
+
+// Nothing this package sends can book anything: the request carries no tools,
+// the response reader looks only at text, and the only code that ever writes
+// to calendar_events is the dialog a member of staff fills in. So an
+// instruction telling the model to confirm or book leaves a customer holding
+// a promise that no row anywhere backs — which is what the prompt ported from
+// the TypeScript did.
+//
+// The list below is the behaviour under test rather than a copy of the
+// prompt, so it keeps biting as the wording is reworked. The prompt may still
+// say "confirm": the forbidden thing is the model doing the confirming.
+func TestNeverTellsTheModelToConfirmAnAppointmentItself(t *testing.T) {
+	prompt := strings.ToLower(sentInstruction(t))
+
+	for _, claim := range []string{
+		"confirm the appointment",
+		"confirm the booking",
+		"book the appointment",
+		"schedule the appointment",
+		"the appointment is confirmed",
+		"the appointment is booked",
+		"your appointment is confirmed",
+	} {
+		if strings.Contains(prompt, claim) {
+			t.Errorf("the prompt tells the model to %q, but nothing here can create an appointment:\n%s", claim, prompt)
+		}
+	}
+}
+
+// The other half of the same fix. Dropping the booking claim without putting
+// anything in its place would leave a model that happily agrees to a time and
+// then says nothing about who turns it into an appointment, which reads to a
+// customer exactly like being booked.
+func TestTellsTheCustomerThatAPersonWillConfirm(t *testing.T) {
+	prompt := strings.ToLower(sentInstruction(t))
+
+	for _, required := range []string{
+		"cannot create",
+		"member of staff will be in touch to confirm",
+	} {
+		if !strings.Contains(prompt, required) {
+			t.Errorf("the prompt never says %q, so the model is free to imply it booked the appointment itself:\n%s", required, prompt)
+		}
 	}
 }
 
