@@ -1,6 +1,5 @@
 import { spellTime } from '@/lib/dates'
 import { isoMillis } from '@/lib/iso-time'
-import { liveFeed, pollingFeed, type Feed } from '@/lib/feed'
 import { pb } from '@/lib/pocketbase'
 
 /**
@@ -183,38 +182,6 @@ export async function listMessages(conversationId: string): Promise<Message[]> {
     filter: pb.filter('conversation_id = {:conversationId}', { conversationId }),
     sort: 'sent_at',
   })
-}
-
-/**
- * How the page is kept up to date with one thread.
- *
- * A feed is opened per conversation, so this is a factory rather than a feed.
- * Either implementation satisfies it, which is the seam: the page is handed
- * one of these and never learns which.
- */
-export type MessageFeed = (conversationId: string) => Feed<Message>
-
-/** The open thread, kept current over the live connection. */
-export const liveMessages: MessageFeed = (conversationId) =>
-  liveFeed({
-    collection: COLLECTION,
-    load: () => listMessages(conversationId),
-    // Every message this person can see arrives on the connection, including
-    // ones in threads nobody is looking at. Only the open one is worth a
-    // reload.
-    concerns: (record) => record.conversation_id === conversationId,
-  })
-
-/**
- * The same thread, asked for again every few seconds.
- *
- * The page polled at three seconds before. Kept for the same reason as the
- * conversation list's: the live path is proven locally and not through a
- * tunnel, and this is what the page falls back to without being rewritten.
- */
-export function polledMessages(everyMs = 3000): MessageFeed {
-  return (conversationId) =>
-    pollingFeed({ load: () => listMessages(conversationId), everyMs })
 }
 
 /**

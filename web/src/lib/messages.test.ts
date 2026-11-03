@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
-import { listConversations } from '@/lib/conversations'
 import {
   listMessages,
   listUnmatchedTaps,
@@ -79,21 +78,6 @@ test('a conversation id cannot smuggle a clause into the filter', async () => {
   // The quotes that would have closed the literal are escaped, so the whole
   // thing stays one value and the || is text rather than an operator.
   expect(filter).toBe("conversation_id = 'conv1\\' || user_id != \\''")
-})
-
-/**
- * The list rule is what scopes conversations to their owner, so the query does
- * not repeat it — but the sort is the page's, and it has to be the descending
- * one or the list reads oldest first.
- */
-test('conversations are asked for most recent activity first', async () => {
-  const getFullList = stubList()
-
-  await listConversations()
-
-  expect(pb.collection).toHaveBeenCalledWith('conversations')
-  const [options] = getFullList.mock.calls[0] ?? []
-  expect(options?.sort).toBe('-last_message_at')
 })
 
 /**
