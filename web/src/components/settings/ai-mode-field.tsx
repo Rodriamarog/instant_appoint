@@ -4,11 +4,11 @@ import { AI_MODE_OPTIONS, type AIMode } from '@/lib/business-settings'
  * The switch that decides whether a clinic's patients are answered by the
  * assistant, and how much it is allowed to do when they are.
  *
- * It is a component of its own, and not part of the reminder settings dialog
- * it currently appears in, because it does not belong there: #21 builds the
- * Configuración page the issue names, and this is meant to be moved into it
- * by deleting one line from that dialog and writing the same line there. It
- * owns no state and saves nothing, so the move carries no behaviour with it.
+ * It owns no state and saves nothing: the Configuración page it sits on —
+ * pages/assistant.tsx — holds the settings and does the saving. That is what
+ * let it move there out of the reminder settings dialog it was first written
+ * in, as one line deleted and the same line written elsewhere, with no
+ * behaviour travelling with it.
  *
  * Radio buttons rather than a select, because the three positions are not
  * interchangeable settings of one kind: each one is a different promise to a
