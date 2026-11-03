@@ -19,8 +19,8 @@ const (
 	fieldEchoes = "smb_message_echoes"
 )
 
-// incomingText is one text message pulled out of a delivery.
-type incomingText struct {
+// incomingMessage is one message pulled out of a delivery.
+type incomingMessage struct {
 	PhoneNumberID string
 
 	// CustomerPhone is the customer either way: the sender of an inbound
@@ -31,6 +31,24 @@ type incomingText struct {
 	MessageID string
 	Direction Direction
 
+	// Kind says whether this is something the patient typed or a tap on a
+	// button under a message the business sent.
+	Kind MessageKind
+
+	// TapChoices are the strings the delivery used to name the tapped
+	// button, empty for anything that is not a tap. See resolveTap.
+	TapChoices []string
+
+	// RepliesTo is Meta's id for the message this one answers, empty when the
+	// delivery named none.
+	//
+	// It is the only thing that can tie a tap to an appointment: the button
+	// carries nothing per-appointment — the template holding it is one object
+	// shared by every send — so the reminder that was tapped is the
+	// identifier, and the row recording that send is what knows which
+	// appointment it was about.
+	RepliesTo string
+
 	// Timestamp is when Meta says the message was sent, and HasTimestamp says
 	// whether it was usable. A missing or nonsensical one is not defaulted to
 	// now: the age decides whether a customer gets an automatic reply, and
@@ -40,15 +58,16 @@ type incomingText struct {
 	HasTimestamp bool
 }
 
-// extractTexts pulls every text message and echo out of a delivery.
+// extractMessages pulls every message and echo this app can store out of a
+// delivery.
 //
 // The payload is untrusted input decoded into plain maps and slices, so every
 // step below asks what a value is before using it, and anything that does not
 // answer is skipped rather than rejected. A delivery this app cannot read
 // still has to be acknowledged: a non-2xx would have the router redeliver it
 // for as long as it keeps failing.
-func extractTexts(payload any) []incomingText {
-	var out []incomingText
+func extractMessages(payload any) []incomingMessage {
+	var out []incomingMessage
 
 	for _, entry := range slice(field(payload, "entry")) {
 		for _, raw := range slice(field(entry, "changes")) {
@@ -75,7 +94,7 @@ func extractTexts(payload any) []incomingText {
 			}
 
 			for _, item := range items {
-				message, ok := readText(item, direction, phoneNumberID)
+				message, ok := readMessage(item, direction, phoneNumberID)
 				if !ok {
 					continue
 				}
@@ -87,22 +106,15 @@ func extractTexts(payload any) []incomingText {
 	return out
 }
 
-// readText reads one message, reporting false for anything this app does not
-// store: a non-text message, one with no id, or one with nobody to attribute
-// it to.
-func readText(item any, direction Direction, phoneNumberID string) (incomingText, bool) {
+// readMessage reads one message, reporting false for anything this app does
+// not store: a kind it cannot render as a conversation turn, one with no id,
+// or one with nobody to attribute it to.
+func readMessage(item any, direction Direction, phoneNumberID string) (incomingMessage, bool) {
 	message := asMap(item)
 
-	// Images, audio, documents, reactions, location pins and interactive
-	// replies all arrive here. None of them is something the AI can read or
-	// this app can store as a conversation turn.
-	if kind, _ := text(field(message, "type")); kind != "text" {
-		return incomingText{}, false
-	}
-
-	body, ok := text(field(field(message, "text"), "body"))
+	extracted, ok := readBody(message)
 	if !ok {
-		return incomingText{}, false
+		return incomingMessage{}, false
 	}
 
 	// The id is the deduplication key. A message without one cannot be
@@ -110,7 +122,7 @@ func readText(item any, direction Direction, phoneNumberID string) (incomingText
 	// every retry.
 	id, _ := text(field(message, "id"))
 	if id == "" {
-		return incomingText{}, false
+		return incomingMessage{}, false
 	}
 
 	// An inbound message names the customer as its sender; an echo names them
@@ -121,21 +133,97 @@ func readText(item any, direction Direction, phoneNumberID string) (incomingText
 	}
 	customerPhone, _ := text(field(message, phoneField))
 	if customerPhone == "" {
-		return incomingText{}, false
+		return incomingMessage{}, false
 	}
 
-	extracted := incomingText{
-		PhoneNumberID: phoneNumberID,
-		CustomerPhone: customerPhone,
-		Content:       body,
-		MessageID:     id,
-		Direction:     direction,
-	}
+	extracted.PhoneNumberID = phoneNumberID
+	extracted.CustomerPhone = customerPhone
+	extracted.MessageID = id
+	extracted.Direction = direction
+
+	// Read for every kind, not only a tap: it costs nothing, and a reply
+	// context absent from a shape that was expected to carry one is a fact
+	// worth having at the one place that looks for it.
+	extracted.RepliesTo, _ = text(field(field(message, "context"), "id"))
+
 	if seconds, ok := unixSeconds(field(message, "timestamp")); ok {
 		extracted.Timestamp, extracted.HasTimestamp = time.Unix(seconds, 0).UTC(), true
 	}
 
 	return extracted, true
+}
+
+// readBody fills in what the message says and how it said it, leaving the
+// fields that are the same for every kind to the caller.
+//
+// Images, audio, documents, reactions and location pins still fall through to
+// false here. None of them is something the AI can read or this app can store
+// as a conversation turn, and nothing in the app acts on one.
+func readBody(message map[string]any) (incomingMessage, bool) {
+	switch kind, _ := text(field(message, "type")); kind {
+	case "text":
+		body, ok := text(field(field(message, "text"), "body"))
+		if !ok {
+			return incomingMessage{}, false
+		}
+
+		return incomingMessage{Kind: KindText, Content: body}, true
+
+	case "button":
+		// A tap on a quick reply under a template. Meta reports it as the
+		// label the patient saw, in two fields: payload is what the send
+		// attached to the button and text is the label itself, and a send
+		// that attached nothing — which is every send this app makes — is
+		// documented to repeat the label in both.
+		button := field(message, "button")
+		label, _ := text(field(button, "text"))
+		payload, _ := text(field(button, "payload"))
+
+		return readTap(label, payload)
+
+	case "interactive":
+		// A tap on an interactive message's buttons, which this app does not
+		// send today. It is read anyway because it is the other shape a tap
+		// can arrive in and the two are indistinguishable to a patient: if a
+		// reminder is ever sent this way, the difference should be that
+		// nothing here had to change, not that every tap went quiet.
+		interactive := field(message, "interactive")
+		if replyKind, _ := text(field(interactive, "type")); replyKind != "button_reply" {
+			return incomingMessage{}, false
+		}
+
+		reply := field(interactive, "button_reply")
+		title, _ := text(field(reply, "title"))
+		id, _ := text(field(reply, "id"))
+
+		return readTap(title, id)
+	}
+
+	return incomingMessage{}, false
+}
+
+// readTap builds a tap out of the label it showed and the identifier the
+// delivery gave it, rejecting one that named itself with neither.
+//
+// The label is what the message reads as in the thread, because that is what
+// the patient saw themselves tap. The identifier is kept beside it rather
+// than shown: it is a second chance at recognising the button, not a second
+// thing to display.
+func readTap(label, identifier string) (incomingMessage, bool) {
+	if label == "" && identifier == "" {
+		return incomingMessage{}, false
+	}
+
+	content := label
+	if content == "" {
+		content = identifier
+	}
+
+	return incomingMessage{
+		Kind:       KindTap,
+		Content:    content,
+		TapChoices: []string{label, identifier},
+	}, true
 }
 
 // unixSeconds reads Meta's timestamp, which arrives as a decimal string of

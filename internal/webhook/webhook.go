@@ -35,6 +35,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Rodriamarog/instant_appoint/internal/appointments"
 	"github.com/Rodriamarog/instant_appoint/internal/isotime"
 	"github.com/Rodriamarog/instant_appoint/internal/routersig"
 )
@@ -75,11 +76,39 @@ const (
 	RoleModel = "model"
 )
 
+// MessageKind is how a message was produced, which is the difference between
+// a patient typing "Confirmar" and a patient tapping a button that says it.
+// The two read the same in a thread and are not the same thing: only the
+// second is one this app acted on, and only the second can fail to find the
+// appointment it was about.
+type MessageKind string
+
+const (
+	// KindText is a message somebody typed. It is the zero value, so a caller
+	// written before taps existed keeps storing exactly what it stored before.
+	KindText MessageKind = ""
+
+	// KindTap is a tap on a quick-reply button.
+	KindTap MessageKind = "button"
+)
+
 // StoredMessage is one row of the conversation.
 type StoredMessage struct {
 	// MessageID is WhatsApp's own id for the message, which is what makes a
 	// redelivery recognisable.
 	MessageID string
+
+	// Kind is how the message was produced.
+	Kind MessageKind
+
+	// AppointmentID is the appointment a tap was matched to and moved, empty
+	// on everything else — including a tap nothing could be matched to.
+	//
+	// Empty on a tap is therefore not missing information: it is the record
+	// that this tap changed nothing, and it is what the thread reads to say
+	// so. Written only once the status change has gone through, so a row
+	// naming an appointment is a row that moved it.
+	AppointmentID string
 
 	ConversationID string
 
@@ -145,20 +174,51 @@ type Store interface {
 	// first.
 	ConversationHistory(ctx context.Context, conversationID string) ([]StoredMessage, error)
 
+	AppointmentWriter
+
+	// AppointmentForReminder returns the appointment a sent reminder was
+	// about, given Meta's id for that reminder, or "" when this clinic has no
+	// reminder with that id.
+	//
+	// Not found is not an error: a tap can answer any message the business
+	// ever sent, and most of them are not reminders. The clinic is a
+	// parameter and not a convenience — a wamid matched across clinics would
+	// let one clinic's delivery move another clinic's appointment.
+	AppointmentForReminder(ctx context.Context, userID, reminderMessageID string) (string, error)
+
+	// SetAppointmentStatus moves an appointment and records who moved it and
+	// when, in the vocabulary of internal/appointments.
+	//
+	// It is called before the tap that caused it is stored, so that a failure
+	// here leaves the delivery retryable: once the tap is stored the handler
+	// treats a redelivery as a duplicate, and the status change would have
+	// nothing left to re-attempt it.
+	SetAppointmentStatus(ctx context.Context, appointmentID string, status appointments.Status, by appointments.Actor, at string) error
+}
+
+// AppointmentWriter is everything the assistant may do to an appointment.
+//
+// It is an interface of its own, and the step that reads conversations is
+// handed this rather than the whole Store, so the asymmetry the feature
+// turns on is the compiler's business and not a promise. The assistant may
+// create an appointment and may never move or delete one: a phantom
+// appointment is visible, odd and recoverable, while a real appointment
+// deleted because a patient wrote "I might not make it" is gone along with
+// the time, the number and the reason, and nobody ever learns it was there.
+//
+// Store also carries SetAppointmentStatus, and that is not a hole in this.
+// That path belongs to a patient pressing Confirmar or Cancelar on a
+// reminder this app sent - a deliberate answer, matched to one appointment
+// by the id Meta gave that reminder, and recorded as the patient's own
+// doing. What must never happen is the model reading a cancellation out of
+// free text and acting on it, and the step that reads free text cannot
+// reach that method from here.
+type AppointmentWriter interface {
 	// HasAppointmentFromConversation reports whether an appointment already
 	// records this conversation as where it came from.
 	HasAppointmentFromConversation(ctx context.Context, conversationID string) (bool, error)
 
 	// CreateAppointment writes a new appointment for a clinic.
-	//
-	// Creating one is the only thing this interface lets the assistant do to
-	// an appointment, and that is the design rather than an omission. A
-	// phantom appointment is visible, odd and recoverable; a real
-	// appointment deleted because somebody wrote "I might not make it" takes
-	// the time, the phone number and the reason with it, and nobody ever
-	// learns it was there. A rule written into a prompt is a rule the model
-	// can misread, and a method that is not on this interface is one the
-	// handler cannot call however the conversation goes.
 	CreateAppointment(ctx context.Context, userID string, appointment Appointment) error
 }
 
@@ -254,7 +314,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for _, message := range extractTexts(payload) {
+	for _, message := range extractMessages(payload) {
 		if !h.claim(message.MessageID) {
 			continue
 		}
@@ -319,7 +379,7 @@ func (h *handler) release(messageID string) {
 // A returned error means the message was not stored and the delivery should be
 // retried. Everything else — an unknown number, a duplicate, a failed AI step
 // — returns nil, because retrying would not help.
-func (h *handler) process(ctx context.Context, message incomingText) error {
+func (h *handler) process(ctx context.Context, message incomingMessage) error {
 	store := h.deps.Store
 
 	stored, err := store.HasMessage(ctx, message.MessageID)
@@ -356,8 +416,28 @@ func (h *handler) process(ctx context.Context, message incomingText) error {
 		return fmt.Errorf("upsert the conversation for %s: %w", message.CustomerPhone, err)
 	}
 
+	// Acted on before it is stored, deliberately. The tap is the trigger and
+	// the row is the record of it, and once the row exists a redelivery is a
+	// duplicate the handler skips — so a status change attempted after the
+	// write and failing there would never be attempted again, leaving a
+	// patient who cancelled still booked and nothing anywhere saying so.
+	// This way a failure is a 500, the router redelivers, and setting the
+	// same status twice costs a restamped status_set_at.
+	//
+	// Only an inbound tap: an echo is the business's own message coming back,
+	// and a button in it was not pressed by the patient.
+	appointmentID := ""
+	if message.Kind == KindTap && message.Direction == Inbound {
+		appointmentID, err = h.applyTap(ctx, account.UserID, message, now)
+		if err != nil {
+			return err
+		}
+	}
+
 	err = store.SaveMessage(ctx, account.UserID, StoredMessage{
 		MessageID:      message.MessageID,
+		Kind:           message.Kind,
+		AppointmentID:  appointmentID,
 		ConversationID: conversationID,
 		CustomerPhone:  message.CustomerPhone,
 		Content:        message.Content,
@@ -375,7 +455,7 @@ func (h *handler) process(ctx context.Context, message incomingText) error {
 
 	// An echo is the business's own message, captured so the dashboard shows
 	// the whole conversation. Replying would mean the bot answering the
-	// business — but reading it is a different matter, which is why the
+	// business - but reading it is a different matter, which is why the
 	// extraction below is not inside this branch.
 	if message.Direction == Inbound {
 		if reason := h.notAnswerable(*account, message); reason != "" {
@@ -388,10 +468,14 @@ func (h *handler) process(ctx context.Context, message incomingText) error {
 
 	// After the reply and not before it. On autopilot the assistant's own
 	// answer is often the half that settles the appointment, and it is
-	// stored by the step above — so reading the conversation first would
-	// read it a turn short and find nothing to write.
-	if account.Mode.RecordsAppointments() {
-		if err := h.recordAppointment(ctx, *account, conversationID); err != nil {
+	// stored by the step above - so reading the conversation first would read
+	// it a turn short and find nothing to write.
+	//
+	// A tap is left out for the same reason it gets no reply: it is an
+	// answer to a question this app asked, it has already been acted on
+	// above, and there is no agreement in it to read.
+	if message.Kind != KindTap && account.Mode.RecordsAppointments() {
+		if err := h.recordAppointment(ctx, h.deps.Store, *account, conversationID); err != nil {
 			h.deps.Logger.Error("reading the conversation for an appointment failed; the message is stored and the delivery is acknowledged",
 				"conversation_id", conversationID, "error", err)
 		}
@@ -403,14 +487,23 @@ func (h *handler) process(ctx context.Context, message incomingText) error {
 // notAnswerable says why this message gets no automatic reply, or "" when it
 // gets one.
 //
-// Neither of the two age checks guards the extraction as well, deliberately.
-// They exist so the bot does not speak into a conversation that has moved on
-// — answering a question a human already answered hours ago. Writing down an
-// agreement that was reached hours ago is not the same act and is still worth
-// doing: the clinic wants the appointment either way, and the duplicate rule
-// bounds a replayed backlog to one appointment per conversation.
-func (h *handler) notAnswerable(account Account, message incomingText) string {
+// Neither age check guards the extraction as well, deliberately. They exist
+// so the bot does not speak into a conversation that has moved on -
+// answering a question a human already answered hours ago. Writing down an
+// agreement reached hours ago is not the same act and is still worth doing:
+// the clinic wants the appointment either way, and the duplicate rule bounds
+// a replayed backlog to one appointment per conversation.
+func (h *handler) notAnswerable(account Account, message incomingMessage) string {
 	switch {
+	case message.Kind == KindTap:
+		// A tap is an answer, not a question. The patient has already been
+		// told what the reminder said and has pressed one of the two buttons
+		// under it; an assistant replying to that is a second conversation
+		// nobody asked for, and one that would have to describe a
+		// cancellation it did not make. The row is stored, so the model sees
+		// the tap in the history next time the patient does write.
+		return "a tap is an answer, not a question"
+
 	case !account.Mode.RepliesAutomatically():
 		return "the assistant is not on autopilot for this clinic"
 
@@ -426,9 +519,67 @@ func (h *handler) notAnswerable(account Account, message incomingText) string {
 	return ""
 }
 
+// applyTap moves the appointment a tap was about and returns its id, or ""
+// when the tap moved nothing.
+//
+// Returning "" is an outcome, not a failure. Three things have to line up —
+// the delivery has to say which message the tap answers, that message has to
+// be a reminder this clinic sent, and the button has to be one this app can
+// name — and none of them is something this app controls. Every way they can
+// fail to line up is logged here and leaves the tap stored with no
+// appointment against it, which is what puts it in front of somebody in the
+// thread. The alternative, guessing at the appointment, is a cancellation
+// applied to the wrong patient.
+//
+// Only a real storage failure is returned, because only that is worth
+// redelivering.
+func (h *handler) applyTap(ctx context.Context, userID string, message incomingMessage, now string) (string, error) {
+	if message.RepliesTo == "" {
+		h.deps.Logger.Warn("a tap arrived naming no message it answers; no appointment was changed",
+			"message_id", message.MessageID, "content", message.Content)
+
+		return "", nil
+	}
+
+	appointmentID, err := h.deps.Store.AppointmentForReminder(ctx, userID, message.RepliesTo)
+	if err != nil {
+		return "", fmt.Errorf("look up the reminder %s a tap answers: %w", message.RepliesTo, err)
+	}
+	if appointmentID == "" {
+		h.deps.Logger.Warn("a tap answers a message that is not a reminder this clinic sent; no appointment was changed",
+			"message_id", message.MessageID, "replies_to", message.RepliesTo)
+
+		return "", nil
+	}
+
+	action, ok := resolveTap(message.TapChoices)
+	if !ok {
+		h.deps.Logger.Warn("a tap named a button this app does not offer; no appointment was changed",
+			"message_id", message.MessageID, "appointment_id", appointmentID, "content", message.Content)
+
+		return "", nil
+	}
+
+	err = h.deps.Store.SetAppointmentStatus(ctx, appointmentID, action.Status(), appointments.Patient, now)
+	if err != nil {
+		return "", fmt.Errorf("record the patient's tap against appointment %s: %w", appointmentID, err)
+	}
+
+	h.deps.Logger.Info("a patient's tap moved an appointment",
+		"message_id", message.MessageID, "appointment_id", appointmentID, "status", string(action.Status()))
+
+	return appointmentID, nil
+}
+
 // recordAppointment reads the conversation and writes the appointment it
 // agreed on, if it agreed one and has not already produced one.
-func (h *handler) recordAppointment(ctx context.Context, account Account, conversationID string) error {
+//
+// The writer is a parameter, narrowed to AppointmentWriter, rather than the
+// Store the handler already holds. That is the whole of the guarantee that
+// the assistant never moves or deletes an appointment: this function is
+// handed no method that could, so no reading of any conversation can reach
+// one.
+func (h *handler) recordAppointment(ctx context.Context, writer AppointmentWriter, account Account, conversationID string) error {
 	// The duplicate rule, and the first thing in the path rather than the
 	// last.
 	//
@@ -445,7 +596,7 @@ func (h *handler) recordAppointment(ctx context.Context, account Account, conver
 	// before the model because the model is the expensive half, and a thread
 	// that runs for fifty messages after an agreement must not be read fifty
 	// times.
-	already, err := h.deps.Store.HasAppointmentFromConversation(ctx, conversationID)
+	already, err := writer.HasAppointmentFromConversation(ctx, conversationID)
 	if err != nil {
 		return fmt.Errorf("look for an appointment already written from this conversation: %w", err)
 	}
@@ -490,7 +641,7 @@ func (h *handler) recordAppointment(ctx context.Context, account Account, conver
 	}
 
 	appointment := extracted.Appointment(customerPhone, conversationID, h.deps.Now())
-	if err := h.deps.Store.CreateAppointment(ctx, account.UserID, appointment); err != nil {
+	if err := writer.CreateAppointment(ctx, account.UserID, appointment); err != nil {
 		return fmt.Errorf("write the appointment: %w", err)
 	}
 
@@ -501,7 +652,7 @@ func (h *handler) recordAppointment(ctx context.Context, account Account, conver
 }
 
 // reply generates, sends and stores the answer to one inbound message.
-func (h *handler) reply(ctx context.Context, account Account, conversationID string, message incomingText) error {
+func (h *handler) reply(ctx context.Context, account Account, conversationID string, message incomingMessage) error {
 	stored, err := h.deps.Store.ConversationHistory(ctx, conversationID)
 	if err != nil {
 		return fmt.Errorf("read the conversation history: %w", err)

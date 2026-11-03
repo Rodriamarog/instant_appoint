@@ -4,16 +4,27 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import { isoMillis } from '@/lib/iso-time'
 import { pb } from '@/lib/pocketbase'
-import { CalendarPage } from '@/pages/calendar'
+import { CalendarPage, VIEW_STORAGE_KEY } from '@/pages/calendar'
 
 /**
  * The seam is the PocketBase SDK. Above it: which appointments the page asks
  * for as you navigate, what it renders, and what clicking does.
+ *
+ * Three zones are in play below and all three are different on purpose.
+ * The process runs in Madrid, so an hour the browser would have printed is
+ * seven out. The clinic is in Mexico City, which is deliberately *not*
+ * DEFAULT_SETTINGS.timezone — a page that never read the settings row at
+ * all would otherwise pass every expectation here by coincidence.
  */
+process.env.TZ = 'Europe/Madrid'
+
+const CLINIC_TZ = 'America/Mexico_City'
+
 const getFullList = vi.fn()
+const getFirstListItem = vi.fn()
 
 /** Mid-November 2026, so the month window has a whole month either side. */
-const today = new Date(2026, 10, 15, 12, 0, 0)
+const today = new Date('2026-11-15T20:00:00.000Z')
 
 function appointment(overrides: Record<string, unknown> = {}) {
   return {
@@ -22,8 +33,9 @@ function appointment(overrides: Record<string, unknown> = {}) {
     client_name: 'Ana Ruiz',
     client_phone: '5215512345678',
     notes: 'See you at the back entrance, Ana.',
-    start_time: isoMillis(new Date(2026, 10, 12, 10, 0)),
-    end_time: isoMillis(new Date(2026, 10, 12, 11, 0)),
+    // 12:00 on 15 November in Mexico City.
+    start_time: '2026-11-15T18:00:00.000Z',
+    end_time: '2026-11-15T19:00:00.000Z',
     location: 'Suite 2',
     status: 'pending',
     ...overrides,
@@ -35,12 +47,24 @@ beforeEach(() => {
   // pointer on every mousedown; jsdom has no layout and no such method.
   document.elementFromPoint = () => null
 
+  localStorage.removeItem(VIEW_STORAGE_KEY)
+
   vi.useFakeTimers({ shouldAdvanceTime: true })
   vi.setSystemTime(today)
 
   getFullList.mockReset().mockResolvedValue([appointment()])
+  getFirstListItem.mockReset().mockResolvedValue({
+    id: 'settings1',
+    timing_minutes: 1440,
+    is_active: true,
+    template_name: '',
+    template_language: 'es',
+    timezone: CLINIC_TZ,
+    ai_mode: 'off',
+  })
   vi.spyOn(pb, 'collection').mockReturnValue({
     getFullList,
+    getFirstListItem,
   } as unknown as ReturnType<typeof pb.collection>)
 
   pb.authStore.save('not-a-real-token', {
@@ -68,8 +92,85 @@ function filterOfCall(index: number): string {
   return String(getFullList.mock.calls[index][0].filter)
 }
 
-test('the appointments in view are rendered', async () => {
+/** Renders the page already on one of the two grid views. */
+function renderOnGrid(view: 'week' | 'month' = 'month') {
+  localStorage.setItem(VIEW_STORAGE_KEY, view)
+  return render(<CalendarPage />)
+}
+
+test('Inicio opens on the day’s list', async () => {
+  // The morning screen. Somebody arriving at it has not asked for a month.
   render(<CalendarPage />)
+
+  expect(await screen.findByRole('listitem')).toBeDefined()
+  expect(screen.getByRole('button', { name: 'Hoy' }).getAttribute('aria-pressed')).toBe(
+    'true',
+  )
+})
+
+test('the day the list shows is the clinic’s, not the browser’s', async () => {
+  // 23:00 on the 15th in Mexico City, already 06:00 on the 16th in Madrid.
+  // The clinic has not gone to bed yet, so it must still be looking at the
+  // 15th.
+  vi.setSystemTime(new Date('2026-11-16T05:00:00.000Z'))
+
+  render(<CalendarPage />)
+
+  expect(await screen.findByText('domingo 15 de noviembre de 2026')).toBeDefined()
+  expect(await screen.findByText('Ana Ruiz')).toBeDefined()
+})
+
+test('the clock on a row is the one the clinic configured', async () => {
+  // 18:00 UTC is 12:00 in Mexico City, 19:00 in Madrid, and 10:00 in the
+  // default zone. Only the first of the three comes from the settings row,
+  // which is the wiring this pins.
+  render(<CalendarPage />)
+
+  expect(await screen.findByText('12:00')).toBeDefined()
+})
+
+test('a day with no appointments says so', async () => {
+  getFullList.mockResolvedValue([])
+
+  render(<CalendarPage />)
+
+  expect(await screen.findByText(/no hay citas/i)).toBeDefined()
+})
+
+test('the chosen view survives a refresh', async () => {
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+  render(<CalendarPage />)
+
+  await user.click(screen.getByRole('button', { name: 'Semana' }))
+  await waitFor(() => expect(toolbarLabel()).not.toBe(''))
+
+  // A refresh is a fresh mount against the same storage.
+  cleanup()
+  render(<CalendarPage />)
+
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Semana' }).getAttribute('aria-pressed'),
+    ).toBe('true'),
+  )
+  expect(toolbarLabel()).not.toBe('')
+})
+
+test('Semana and Mes each show the grid', async () => {
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+  render(<CalendarPage />)
+
+  await user.click(screen.getByRole('button', { name: 'Mes' }))
+  expect(screen.getByText('noviembre 2026')).toBeDefined()
+
+  await user.click(screen.getByRole('button', { name: 'Semana' }))
+  // The week view's label names days, not the bare month.
+  await waitFor(() => expect(toolbarLabel()).not.toBe('noviembre 2026'))
+  expect(document.querySelector('.rbc-time-view')).not.toBeNull()
+})
+
+test('the appointments in view are rendered on the grid', async () => {
+  renderOnGrid()
 
   expect(await screen.findByText('Ana Ruiz')).toBeDefined()
 })
@@ -80,7 +181,7 @@ test('an appointment the assistant only proposed is marked as such on the grid',
   // appointment nobody ever agreed to.
   getFullList.mockResolvedValue([appointment({ status: 'proposed' })])
 
-  render(<CalendarPage />)
+  renderOnGrid()
 
   expect(await screen.findByText('Ana Ruiz')).toBeDefined()
   expect(screen.getByText('Propuesta')).toBeDefined()
@@ -91,15 +192,15 @@ test('a cancelled appointment is marked as such on the grid', async () => {
   // the slot stays on the calendar and has to say that nobody is coming.
   getFullList.mockResolvedValue([appointment({ status: 'cancelled' })])
 
-  render(<CalendarPage />)
+  renderOnGrid()
 
   expect(await screen.findByText('Cancelada')).toBeDefined()
 })
 
-test('an ordinary booking carries no label at all', async () => {
+test('an ordinary booking carries no label at all on the grid', async () => {
   // Pending is what nearly every appointment is. Labelling it would make
   // the two labels that matter invisible among the noise.
-  render(<CalendarPage />)
+  renderOnGrid()
 
   await screen.findByText('Ana Ruiz')
   expect(screen.queryByText('Pendiente')).toBeNull()
@@ -140,7 +241,7 @@ test('the appointments are asked for oldest first', async () => {
 
 test('moving to the next month asks for that month instead', async () => {
   const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-  render(<CalendarPage />)
+  renderOnGrid()
 
   await waitFor(() => expect(getFullList).toHaveBeenCalledTimes(1))
 
@@ -150,33 +251,9 @@ test('moving to the next month asks for that month instead', async () => {
   expect(filterOfCall(1)).toContain(isoMillis(new Date(2026, 10, 24, 0, 0, 0, 0)))
 })
 
-test('month, week and day views each render and can be navigated', async () => {
+test('clicking an appointment on the grid opens it for editing', async () => {
   const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-  render(<CalendarPage />)
-
-  await waitFor(() => expect(getFullList).toHaveBeenCalled())
-  expect(screen.getByText('noviembre 2026')).toBeDefined()
-
-  await user.click(screen.getByRole('button', { name: 'Semana' }))
-  expect(screen.getByRole('button', { name: 'Semana' }).className).toContain('rbc-active')
-
-  await user.click(screen.getByRole('button', { name: 'Día' }))
-  expect(screen.getByRole('button', { name: 'Día' }).className).toContain('rbc-active')
-
-  // Day view navigates a day at a time. The month window already covers the
-  // next day, so nothing is refetched — but the day on show has to move.
-  const shown = toolbarLabel()
-  await user.click(screen.getByRole('button', { name: 'Siguiente' }))
-  await waitFor(() => expect(toolbarLabel()).not.toBe(shown))
-
-  await user.click(screen.getByRole('button', { name: 'Mes' }))
-  expect(screen.getByRole('button', { name: 'Mes' }).className).toContain('rbc-active')
-  expect(screen.getByText('noviembre 2026')).toBeDefined()
-})
-
-test('clicking an appointment opens it for editing', async () => {
-  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-  render(<CalendarPage />)
+  renderOnGrid()
 
   await user.click(await screen.findByText('Ana Ruiz'))
 
@@ -192,9 +269,20 @@ test('clicking an appointment opens it for editing', async () => {
   ).toBe('See you at the back entrance, Ana.')
 })
 
-test('saving from the dialog reloads the appointments', async () => {
+test('clicking a row of the day’s list opens the same dialog', async () => {
+  // The list is where the day is worked through, so confirming somebody
+  // from it has to be one click away — the same click the grid takes.
   const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
   render(<CalendarPage />)
+
+  await user.click(await screen.findByRole('button', { name: /Ana Ruiz/ }))
+
+  expect(within(await screen.findByRole('dialog')).getByText('Editar cita')).toBeDefined()
+})
+
+test('saving from the dialog reloads the appointments', async () => {
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+  renderOnGrid()
 
   await user.click(await screen.findByText('Ana Ruiz'))
   await screen.findByRole('dialog')
@@ -203,6 +291,7 @@ test('saving from the dialog reloads the appointments', async () => {
   const update = vi.fn().mockResolvedValue(appointment())
   vi.spyOn(pb, 'collection').mockReturnValue({
     getFullList,
+    getFirstListItem,
     update,
   } as unknown as ReturnType<typeof pb.collection>)
 
@@ -218,6 +307,16 @@ test('a failed load is reported rather than leaving an empty calendar', async ()
   render(<CalendarPage />)
 
   expect((await screen.findByRole('alert')).textContent).toMatch(/something went wrong/i)
+})
+
+test('settings that cannot be read leave the day on screen rather than blanking it', async () => {
+  // The day's list is the point of the screen. Losing the settings row is a
+  // reason to show a clinic the default zone, not to show it nothing.
+  getFirstListItem.mockRejectedValue(new Error('nope'))
+
+  render(<CalendarPage />)
+
+  expect(await screen.findByText('Ana Ruiz')).toBeDefined()
 })
 
 // Selecting a slot by dragging is not covered here: react-big-calendar's

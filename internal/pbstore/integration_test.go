@@ -599,3 +599,120 @@ func TestObserverWritesTheAppointmentThroughTheWholeStack(t *testing.T) {
 			records[0].GetString("conversation_id"))
 	}
 }
+
+// tapDeliveryBody is a tap on a quick reply, as Meta sends it: a message of
+// type "button" naming the label, and a context pointing at the reminder the
+// button hung under.
+func tapDeliveryBody(messageID, from, label, repliesTo string, at time.Time) string {
+	payload, _ := json.Marshal(map[string]any{
+		"object": "whatsapp_business_account",
+		"entry": []any{map[string]any{
+			"id": "waba-1",
+			"changes": []any{map[string]any{
+				"field": "messages",
+				"value": map[string]any{
+					"messaging_product": "whatsapp",
+					"metadata":          map[string]any{"phone_number_id": "555000111"},
+					"messages": []any{map[string]any{
+						"id": messageID, "from": from, "type": "button",
+						"button":    map[string]any{"payload": label, "text": label},
+						"context":   map[string]any{"from": "555000111", "id": repliesTo},
+						"timestamp": strconv.FormatInt(at.Unix(), 10),
+					}},
+				},
+			}},
+		}},
+	})
+
+	return string(payload)
+}
+
+// The whole of this ticket in one pass: a reminder went out about a real
+// appointment, the patient taps Cancel, and the booking on the clinic's
+// screen is cancelled by the patient — over real HTTP, through the real route
+// registration, into a real database.
+//
+// It also pins the half the unit tests cannot: that nothing on the way asks
+// the assistant to answer a tap.
+func TestATapOnCancelCancelsTheAppointmentEndToEnd(t *testing.T) {
+	s := newStack(t)
+
+	appointmentID := saveAppointment(t, s.app, s.userID)
+	saveReminder(t, s.app, s.userID, "wamid.reminder-1", appointmentID)
+
+	body := tapDeliveryBody("wamid.tap-1", "5215511111111", "Cancelar", "wamid.reminder-1", time.Now())
+	if status := s.deliver(t, "/api/webhook", body, routerSecret, time.Now()); status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+
+	record, err := s.app.FindRecordById("appointments", appointmentID)
+	if err != nil {
+		t.Fatalf("read the appointment back: %v", err)
+	}
+	if got := record.GetString("status"); got != "cancelled" {
+		t.Errorf("status = %q, want cancelled", got)
+	}
+	if got := record.GetString("status_set_by"); got != "patient" {
+		t.Errorf("status_set_by = %q, want patient", got)
+	}
+	if record.GetString("status_set_at") == "" {
+		t.Error("status_set_at is empty; nothing says when the patient cancelled")
+	}
+
+	if s.ai.calls != 0 {
+		t.Errorf("the assistant was asked to answer a tap %d times", s.ai.calls)
+	}
+	if s.meta.calls != 0 {
+		t.Errorf("%d messages were sent in reply to a tap", s.meta.calls)
+	}
+
+	tap, err := s.app.FindFirstRecordByFilter(
+		"whatsapp_messages", "message_id = {:id}", dbx.Params{"id": "wamid.tap-1"},
+	)
+	if err != nil {
+		t.Fatalf("the tap is not in the conversation: %v", err)
+	}
+	if got := tap.GetString("message_content"); got != "Cancelar" {
+		t.Errorf("message_content = %q, want the label the patient saw", got)
+	}
+	if got := tap.GetString("event_id"); got != appointmentID {
+		t.Errorf("event_id = %q, want the appointment the tap moved", got)
+	}
+}
+
+// The premise this ticket could not verify, failing: Meta turns out not to
+// carry the reminder's id back on a tap. Nothing may be guessed at — no
+// appointment moves — and the tap has to end up somewhere a person can see
+// it, which is the thread, carrying no appointment.
+func TestATapWithNoReplyContextMovesNothingAndIsStillInTheThread(t *testing.T) {
+	s := newStack(t)
+
+	appointmentID := saveAppointment(t, s.app, s.userID)
+	saveReminder(t, s.app, s.userID, "wamid.reminder-1", appointmentID)
+
+	body := tapDeliveryBody("wamid.tap-1", "5215511111111", "Cancelar", "", time.Now())
+	if status := s.deliver(t, "/api/webhook", body, routerSecret, time.Now()); status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+
+	record, err := s.app.FindRecordById("appointments", appointmentID)
+	if err != nil {
+		t.Fatalf("read the appointment back: %v", err)
+	}
+	if got := record.GetString("status"); got != "pending" {
+		t.Errorf("status = %q, want the pending it started as", got)
+	}
+
+	tap, err := s.app.FindFirstRecordByFilter(
+		"whatsapp_messages", "message_id = {:id}", dbx.Params{"id": "wamid.tap-1"},
+	)
+	if err != nil {
+		t.Fatalf("an unmatched tap was dropped instead of stored: %v", err)
+	}
+	if got := tap.GetString("event_id"); got != "" {
+		t.Errorf("event_id = %q, want nothing — this tap matched nothing", got)
+	}
+	if got := tap.GetString("message_type"); got != "button" {
+		t.Errorf("message_type = %q, want button so the thread can call it out", got)
+	}
+}

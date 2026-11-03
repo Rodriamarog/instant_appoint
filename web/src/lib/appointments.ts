@@ -179,6 +179,26 @@ export function statusLabel(status: AppointmentStatus): string {
   return STATUS_LABELS[status] ?? status
 }
 
+/**
+ * How a status is drawn down, for the two that are not somebody the clinic
+ * is expecting: a proposal the assistant is unsure about, and an
+ * appointment that is not happening.
+ *
+ * Here rather than inside either view because the grid and the day's list
+ * show the same appointments, and two separate switches drift — a slot
+ * dimmed on one screen and ordinary on the other reads as two bookings.
+ */
+export function statusTone(status: AppointmentStatus): string {
+  switch (status) {
+    case 'proposed':
+      return 'opacity-70'
+    case 'cancelled':
+      return 'opacity-50 line-through'
+    default:
+      return ''
+  }
+}
+
 /** Who did it, as the sentence "… por el paciente" needs them. */
 const ACTOR_LABELS: Record<Actor, string> = {
   staff: 'el personal',

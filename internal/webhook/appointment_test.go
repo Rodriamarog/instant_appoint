@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -229,27 +228,37 @@ func TestAConversationThatAgreedNothingWritesNothing(t *testing.T) {
 
 // The asymmetry, made structural rather than promised.
 //
-// The handler can only do what the Store it holds offers, so the guarantee
-// that the assistant never moves or deletes an appointment is enforceable by
-// not giving it a method that can. A later ticket that needs the assistant
-// to change one has to add a method here, which is a line in a diff somebody
-// reads — unlike a line of prose in a prompt, which is not.
-func TestTheStoreOffersTheAssistantNoWayToChangeOrRemoveAnAppointment(t *testing.T) {
-	store := reflect.TypeOf((*webhook.Store)(nil)).Elem()
+// The step that reads conversations is handed an AppointmentWriter and not
+// the whole Store, so what it is able to do to an appointment is decided by
+// the compiler. Creating one is on this interface. Moving or deleting one is
+// not, and must never be: a phantom appointment is visible, odd and
+// recoverable, while a real appointment deleted because a patient wrote "I
+// might not make it" is gone with the time, the number and the reason, and
+// nobody ever learns it was there.
+//
+// Store does carry SetAppointmentStatus, and that is not a hole in this. It
+// belongs to a patient pressing Confirmar or Cancelar on a reminder this app
+// sent — a deliberate answer, matched to one appointment by the id Meta gave
+// that reminder, recorded as the patient's doing. The thing that must never
+// happen is the model reading a cancellation out of free text and acting on
+// it, and the step that reads free text cannot reach that method.
+func TestTheExtractionStepIsHandedNoWayToChangeOrRemoveAnAppointment(t *testing.T) {
+	writer := reflect.TypeOf((*webhook.AppointmentWriter)(nil)).Elem()
 
-	// The only two appointment methods there may be: one asks whether this
-	// conversation already produced one, the other writes one.
-	allowed := map[string]bool{
-		"HasAppointmentFromConversation": true,
-		"CreateAppointment":              true,
+	got := make([]string, 0, writer.NumMethod())
+	for i := range writer.NumMethod() {
+		got = append(got, writer.Method(i).Name)
 	}
 
-	for i := range store.NumMethod() {
-		name := store.Method(i).Name
-		if !strings.Contains(name, "Appointment") || allowed[name] {
-			continue
-		}
-
-		t.Errorf("webhook.Store offers %s; the assistant must have no way to alter or remove an appointment", name)
+	// Named in full rather than filtered for forbidden words: a method this
+	// list does not expect is one somebody has to justify here, whatever it
+	// is called.
+	want := []string{"CreateAppointment", "HasAppointmentFromConversation"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("webhook.AppointmentWriter offers %v, want exactly %v", got, want)
 	}
 }
+
+// And the whole Store satisfies it, so narrowing the parameter costs the
+// wiring nothing.
+var _ webhook.AppointmentWriter = (webhook.Store)(nil)

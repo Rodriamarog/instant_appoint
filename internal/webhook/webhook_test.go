@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Rodriamarog/instant_appoint/internal/appointments"
 	"github.com/Rodriamarog/instant_appoint/internal/routersig"
 	"github.com/Rodriamarog/instant_appoint/internal/webhook"
 )
@@ -32,6 +33,10 @@ const (
 )
 
 var frozen = time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC)
+
+// errAlways is the storage failure the retry cases are about. What it says
+// never reaches anybody: the handler logs it and answers a bare 500.
+var errAlways = errors.New("PocketBase down")
 
 // --- the in-memory store -------------------------------------------------
 
@@ -58,17 +63,44 @@ type fakeStore struct {
 	conversations []conversation
 	appointments  []writtenAppointment
 
+	// reminders maps a sent reminder to the appointment it was about, which
+	// is the join a tap on its buttons is matched through.
+	reminders map[reminderKey]string
+
+	// appointmentStatus is what the handler recorded against an appointment.
+	// An appointment missing from it is one the handler left alone, which
+	// several cases are entirely about.
+	appointmentStatus map[string]statusChange
+
 	// Hooks for the failure cases. Each runs before the real behaviour and a
 	// non-nil error is returned instead of it.
 	failSave              error
 	failHasMessage        error
+	failSetStatus         error
 	failCreateAppointment error
 	failAppointmentLookup error
 	onUpsertConversat     func()
 }
 
+// reminderKey is the pair a reminder is looked up by. The clinic is part of
+// it because a wamid matched across clinics would let one clinic's delivery
+// move another clinic's appointment.
+type reminderKey struct {
+	userID    string
+	messageID string
+}
+
+// statusChange is one call to SetAppointmentStatus.
+type statusChange struct {
+	status appointments.Status
+	by     appointments.Actor
+	at     string
+}
+
 func newFakeStore() *fakeStore {
 	return &fakeStore{
+		reminders:         map[reminderKey]string{},
+		appointmentStatus: map[string]statusChange{},
 		accounts: map[string]webhook.Account{
 			// On autopilot, because every case below that is not about the
 			// mode is about what the handler does when it is allowed to
@@ -208,6 +240,64 @@ func (s *fakeStore) ConversationHistory(_ context.Context, conversationID string
 	}
 
 	return out, nil
+}
+
+// sentReminder records that a reminder with this wamid went out about this
+// appointment, which is the row internal/reminderjob writes when it sends.
+func (s *fakeStore) sentReminder(userID, messageID, appointmentID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.reminders[reminderKey{userID: userID, messageID: messageID}] = appointmentID
+}
+
+func (s *fakeStore) AppointmentForReminder(_ context.Context, userID, reminderMessageID string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.reminders[reminderKey{userID: userID, messageID: reminderMessageID}], nil
+}
+
+func (s *fakeStore) SetAppointmentStatus(
+	_ context.Context,
+	appointmentID string,
+	status appointments.Status,
+	by appointments.Actor,
+	at string,
+) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.failSetStatus != nil {
+		return s.failSetStatus
+	}
+	s.appointmentStatus[appointmentID] = statusChange{status: status, by: by, at: at}
+
+	return nil
+}
+
+// message returns the stored row with this WhatsApp id, or the zero value
+// when the store holds none.
+func (s *fakeStore) message(messageID string) webhook.StoredMessage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, m := range s.messages {
+		if m.MessageID == messageID {
+			return m.StoredMessage
+		}
+	}
+
+	return webhook.StoredMessage{}
+}
+
+// appointment returns what the handler recorded against an appointment, or
+// the zero value when it recorded nothing.
+func (s *fakeStore) appointment(appointmentID string) statusChange {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.appointmentStatus[appointmentID]
 }
 
 // ids returns the message ids the store holds, in write order.
