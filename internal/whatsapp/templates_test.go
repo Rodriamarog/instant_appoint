@@ -303,6 +303,129 @@ func TestListTemplatesSurfacesMetasMessageWithoutItsBody(t *testing.T) {
 	}
 }
 
+// A reminder a patient answers with one tap is a template carrying two
+// quick-reply buttons, and the whole of that is decided at submission time:
+// Meta will not add buttons to a template that is already approved, so
+// getting this request wrong costs another review cycle, not a redeploy.
+//
+// The body is asserted whole rather than by substring because every part of
+// it is load-bearing and silently rejected when wrong: BUTTONS must follow
+// BODY, both component types are uppercase here and lowercase on a send, and
+// a BUTTONS component carries no text key of its own.
+func TestCreateTemplateSubmitsQuickReplyButtonsAlongsideTheBody(t *testing.T) {
+	app := newApp(t)
+	user := newUser(t, app, "owner@example.test")
+	connectedAccount(t, app, user.Id, "999000111222333", "200000000000002")
+	graph := newTemplateGraph(t)
+	mux := newMux(t, app, graph.client(), user)
+
+	rec := send(t, mux, http.MethodPost, "/api/whatsapp/templates/create",
+		`{"name":"appointment_reminder","category":"UTILITY","language":"es",`+
+			`"body":"Hola {{1}}, tu cita es {{2}}.","buttons":["Confirmar","Cancelar"]}`)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body: %s)", rec.Code, rec.Body)
+	}
+
+	if len(graph.requests) != 1 {
+		t.Fatalf("made %d Graph calls, want 1: %v", len(graph.requests), graph.requests)
+	}
+
+	want := `{"name":"appointment_reminder","category":"UTILITY","language":"es",` +
+		`"components":[{"type":"BODY","text":"Hola {{1}}, tu cita es {{2}}."},` +
+		`{"type":"BUTTONS","buttons":[{"type":"QUICK_REPLY","text":"Confirmar"},` +
+		`{"type":"QUICK_REPLY","text":"Cancelar"}]}]}`
+	if got := graph.requests[0].body; got != want {
+		t.Errorf("request body =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// The second language variant is the same request with the words changed.
+// A template name does not identify a template at Meta — the same name
+// exists once per language — so each variant is submitted separately and
+// each has to carry its own buttons, labelled in its own language.
+func TestCreateTemplateSubmitsButtonsForTheOtherLanguageVariantToo(t *testing.T) {
+	app := newApp(t)
+	user := newUser(t, app, "owner@example.test")
+	connectedAccount(t, app, user.Id, "999000111222333", "200000000000002")
+	graph := newTemplateGraph(t)
+	mux := newMux(t, app, graph.client(), user)
+
+	rec := send(t, mux, http.MethodPost, "/api/whatsapp/templates/create",
+		`{"name":"appointment_reminder","category":"UTILITY","language":"en_US",`+
+			`"body":"Hi {{1}}, your appointment is {{2}}.","buttons":["Confirm","Cancel"]}`)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body: %s)", rec.Code, rec.Body)
+	}
+
+	want := `{"name":"appointment_reminder","category":"UTILITY","language":"en_US",` +
+		`"components":[{"type":"BODY","text":"Hi {{1}}, your appointment is {{2}}."},` +
+		`{"type":"BUTTONS","buttons":[{"type":"QUICK_REPLY","text":"Confirm"},` +
+		`{"type":"QUICK_REPLY","text":"Cancel"}]}]}`
+	if got := graph.requests[0].body; got != want {
+		t.Errorf("request body =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// A draft without buttons must not grow an empty BUTTONS component: Meta
+// rejects one, and every template this app could already create still goes
+// out through here.
+func TestCreateTemplateOmitsTheButtonsComponentWhenThereAreNone(t *testing.T) {
+	app := newApp(t)
+	user := newUser(t, app, "owner@example.test")
+	connectedAccount(t, app, user.Id, "999000111222333", "200000000000002")
+	graph := newTemplateGraph(t)
+	mux := newMux(t, app, graph.client(), user)
+
+	rec := send(t, mux, http.MethodPost, "/api/whatsapp/templates/create",
+		`{"name":"welcome","category":"MARKETING","language":"es","body":"Hola."}`)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body: %s)", rec.Code, rec.Body)
+	}
+
+	want := `{"name":"welcome","category":"MARKETING","language":"es",` +
+		`"components":[{"type":"BODY","text":"Hola."}]}`
+	if got := graph.requests[0].body; got != want {
+		t.Errorf("request body =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// Meta answers a blank or over-long button label with an opaque rejection a
+// round trip later, and caps quick replies at three. Catching it here leaves
+// the person's own wording in front of them instead of replacing the form
+// with a Graph error.
+func TestCreateTemplateRejectsButtonsMetaWouldRefuse(t *testing.T) {
+	app := newApp(t)
+	user := newUser(t, app, "owner@example.test")
+	connectedAccount(t, app, user.Id, "999000111222333", "200000000000002")
+
+	draft := func(buttons string) string {
+		return `{"name":"n","category":"UTILITY","language":"es","body":"b","buttons":` + buttons + `}`
+	}
+
+	for name, payload := range map[string]string{
+		"a blank label":         draft(`["Confirmar","   "]`),
+		"a label over 25":       draft(`["Confirmar","Cancelar esta cita de inmediato"]`),
+		"more than Meta allows": draft(`["Confirmar","Cancelar","Reagendar","Llamar"]`),
+	} {
+		t.Run(name, func(t *testing.T) {
+			graph := newTemplateGraph(t)
+			mux := newMux(t, app, graph.client(), user)
+
+			rec := send(t, mux, http.MethodPost, "/api/whatsapp/templates/create", payload)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want 400 (body: %s)", rec.Code, rec.Body)
+			}
+			if len(graph.requests) != 0 {
+				t.Errorf("an unsubmittable draft reached Meta: %v", graph.requests)
+			}
+		})
+	}
+}
+
 // A submitted template reaches Meta as the one-component BODY draft the
 // create endpoint accepts, against the caller's own WABA.
 func TestCreateTemplateSubmitsTheDraftToTheCallersWABA(t *testing.T) {

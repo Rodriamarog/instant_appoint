@@ -538,8 +538,8 @@ func (c *Client) ListTemplates(ctx context.Context, wabaID, accessToken string) 
 
 // TemplateDraft is a template submitted for Meta's approval.
 //
-// Only a body is supported, matching what the UI can create: no header,
-// footer, buttons or example values.
+// A body, and optionally a row of quick-reply buttons. No header, footer,
+// URL or phone buttons, or example values — matching what the UI can create.
 type TemplateDraft struct {
 	// Name is lowercase with underscores; Meta rejects anything else.
 	Name string
@@ -554,17 +554,40 @@ type TemplateDraft struct {
 	// Body may contain {{1}}-style placeholders, filled in by the
 	// bodyParameters passed to SendTemplate.
 	Body string
+
+	// Buttons are quick-reply labels, in the order they appear under the
+	// message. Meta allows at most three and does not let a template gain
+	// buttons after approval, so a template submitted without them has to be
+	// submitted again under a new name to get them.
+	//
+	// A quick-reply button carries no payload at this point: the label is the
+	// whole of it. What a tap reports back is decided per send, by the button
+	// parameters SendTemplate would have to carry, not here.
+	Buttons []string
 }
 
 // CreateTemplate submits a template for approval and returns Meta's response
 // unparsed; a newly created template is PENDING, not usable yet.
 func (c *Client) CreateTemplate(ctx context.Context, wabaID, accessToken string, draft TemplateDraft) (json.RawMessage, error) {
+	// Uppercase "BODY" on create, lowercase "body" on send.
+	components := []createComponent{{Type: "BODY", Text: draft.Body}}
+
+	// Meta refuses a BUTTONS component with an empty button list, so a draft
+	// without buttons must omit the component rather than send an empty one.
+	// The component order is also part of the contract: BUTTONS after BODY.
+	if len(draft.Buttons) > 0 {
+		buttons := make([]createButton, 0, len(draft.Buttons))
+		for _, label := range draft.Buttons {
+			buttons = append(buttons, createButton{Type: "QUICK_REPLY", Text: label})
+		}
+		components = append(components, createComponent{Type: "BUTTONS", Buttons: buttons})
+	}
+
 	body, err := c.post(ctx, "v21.0", wabaID+"/message_templates", createTemplateRequest{
-		Name:     draft.Name,
-		Category: draft.Category,
-		Language: draft.Language,
-		// Uppercase "BODY" on create, lowercase "body" on send.
-		Components: []createComponent{{Type: "BODY", Text: draft.Body}},
+		Name:       draft.Name,
+		Category:   draft.Category,
+		Language:   draft.Language,
+		Components: components,
 	}, accessToken)
 	if err != nil {
 		return nil, err
@@ -580,7 +603,16 @@ type createTemplateRequest struct {
 	Components []createComponent `json:"components"`
 }
 
+// A component is one of two shapes, and sending the keys of one on the other
+// is rejected: a BODY has text and no buttons, a BUTTONS has buttons and no
+// text key at all. omitempty is what keeps each shape to itself.
 type createComponent struct {
+	Type    string         `json:"type"`
+	Text    string         `json:"text,omitempty"`
+	Buttons []createButton `json:"buttons,omitempty"`
+}
+
+type createButton struct {
 	Type string `json:"type"`
 	Text string `json:"text"`
 }
