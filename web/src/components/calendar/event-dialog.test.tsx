@@ -100,14 +100,44 @@ const newSlot: CalendarEvent = {
   end_time: '2026-11-09T18:00:00.000Z',
 }
 
-test('a saved reminder message survives opening the appointment and pressing Save', async () => {
-  // The whole bug: the generator used to run on mount for an existing event,
-  // so just looking at an appointment and saving rewrote what its owner had
-  // written.
+test('the dialog offers no reminder message to write', () => {
+  // Reminders go out well outside Meta's 24-hour window, where only an
+  // approved template is accepted, so prose written per appointment was
+  // undeliverable and nothing ever read it. The control's only effect was to
+  // teach staff that typing here changed what the client received.
+  renderDialog({ mode: 'create', event: newSlot })
+
+  expect(screen.queryByLabelText(/reminder message/i)).toBeNull()
+})
+
+test('a note is the staff member’s own words, never copy written for them', async () => {
+  // The control this replaces filled itself in from the client name and the
+  // business name, and rewrote itself on every keystroke in the name field.
+  const user = userEvent.setup()
+  renderDialog({ mode: 'create', event: newSlot })
+
+  await user.type(screen.getByLabelText(/client name/i), 'Ana')
+
+  expect(value(/notes/i)).toBe('')
+
+  await user.type(screen.getByLabelText(/notes/i), 'Bring your x-rays.')
+
+  expect(value(/notes/i)).toBe('Bring your x-rays.')
+
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+
+  await waitFor(() => expect(create).toHaveBeenCalled())
+  expect(create.mock.calls[0][0]).toMatchObject({ notes: 'Bring your x-rays.' })
+})
+
+test('text written when the field was a reminder message is still shown and still kept', async () => {
+  // Only the control went; the column stayed. A row written under the old
+  // label has to come back verbatim and survive a save, or removing the
+  // control would quietly erase what people had typed.
   const user = userEvent.setup()
   renderDialog()
 
-  expect(value(/reminder message/i)).toBe('See you at the back entrance, Ana.')
+  expect(value(/notes/i)).toBe('See you at the back entrance, Ana.')
 
   await user.click(screen.getByRole('button', { name: 'Save' }))
 
@@ -117,34 +147,26 @@ test('a saved reminder message survives opening the appointment and pressing Sav
   })
 })
 
-test('a hand-edited reminder message survives a change to the client name', async () => {
+test('a note changes nothing about what a reminder is built from', async () => {
+  // A reminder is an approved template filled with the client's name, the
+  // date and the time, read off title, client_phone and start_time. Those
+  // three are the whole of an appointment's contribution to one, so they are
+  // what has to be unmoved by dropping the message control.
   const user = userEvent.setup()
   renderDialog({ mode: 'create', event: newSlot })
 
-  const reminder = screen.getByLabelText(/reminder message/i)
-  await user.clear(reminder)
-  await user.type(reminder, 'Bring your x-rays.')
-
-  await user.type(screen.getByLabelText(/client name/i), 'Ana')
-
-  expect(value(/reminder message/i)).toBe('Bring your x-rays.')
-
+  await user.type(screen.getByLabelText(/client name/i), 'Ana Ruiz')
+  await user.selectOptions(screen.getByLabelText(/country code/i), '521')
+  await user.type(screen.getByLabelText(/phone number/i), '5512345678')
+  await user.type(screen.getByLabelText(/notes/i), 'Allergic to latex.')
   await user.click(screen.getByRole('button', { name: 'Save' }))
 
   await waitFor(() => expect(create).toHaveBeenCalled())
-  expect(create.mock.calls[0][0]).toMatchObject({ notes: 'Bring your x-rays.' })
-})
 
-test('an untouched reminder message still follows the client name', async () => {
-  // The generator is the feature; only overwriting someone's words was the
-  // bug. On a fresh appointment nobody has typed into, it still fills in.
-  const user = userEvent.setup()
-  renderDialog({ mode: 'create', event: newSlot })
-
-  await user.type(screen.getByLabelText(/client name/i), 'Ana')
-
-  expect(value(/reminder message/i)).toContain('Ana')
-  expect(value(/reminder message/i)).toContain('Dev Clinic')
+  const body = create.mock.calls[0][0]
+  expect(body.title).toBe('Ana Ruiz')
+  expect(body.client_phone).toBe('5215512345678')
+  expect(body.start_time).toBe(newSlot.start_time)
 })
 
 test('a new appointment is created for the signed-in person', async () => {
