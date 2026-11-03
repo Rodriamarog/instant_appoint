@@ -182,6 +182,59 @@ func TestAReminderWhoseMomentPassedStillGoesOutWhileTheAppointmentIsAhead(t *tes
 	}
 }
 
+// The clinic this app was written for sits on the border, so one reminder
+// list holds patients who read a date day-first and patients who read it
+// month-first. 3 November is the case that proves it: as digits it is
+// "03/11/2026", which the second group reads as 11 March — four months late,
+// an empty chair and a slot nobody else could book. The month has to be a
+// word.
+func TestADateWhoseDayAndMonthCouldBeSwappedNamesItsMonth(t *testing.T) {
+	store := newStore()
+	store.settings = []reminders.Settings{settingsFor("alice", 30*time.Minute)}
+	// 16:30 UTC is 08:30 on 3 November in Tijuana (PST, UTC-8).
+	store.appointments = []reminders.Appointment{
+		appointment("evt1", "alice", "Ana Lopez", "5216641234567", at(t, "2026-11-03T16:30:00Z")),
+	}
+	store.accounts["alice"] = connected("alice")
+
+	sender := &fakeSender{}
+	if _, err := reminders.Run(context.Background(), store, sender, at(t, "2026-11-03T16:05:00Z")); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if len(sender.sends) != 1 {
+		t.Fatalf("sends = %d, want 1", len(sender.sends))
+	}
+	if got, want := sender.sends[0].parameters[1], "3 de noviembre de 2026"; got != want {
+		t.Errorf("date = %q, want %q: digits alone cannot say which number is the month", got, want)
+	}
+}
+
+// The other half of a date nobody can misread: twelve hours. A bare "3:30"
+// inside the business's own template wording is half a day from the
+// appointment, and unlike a month there is no word to resolve it.
+func TestAnAfternoonAppointmentKeepsThe24HourClock(t *testing.T) {
+	store := newStore()
+	store.settings = []reminders.Settings{settingsFor("alice", 30*time.Minute)}
+	// 23:30 UTC is 15:30 in Tijuana (PST, UTC-8).
+	store.appointments = []reminders.Appointment{
+		appointment("evt1", "alice", "Ana Lopez", "5216641234567", at(t, "2026-11-03T23:30:00Z")),
+	}
+	store.accounts["alice"] = connected("alice")
+
+	sender := &fakeSender{}
+	if _, err := reminders.Run(context.Background(), store, sender, at(t, "2026-11-03T23:05:00Z")); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if len(sender.sends) != 1 {
+		t.Fatalf("sends = %d, want 1", len(sender.sends))
+	}
+	if got, want := sender.sends[0].parameters[2], "15:30"; got != want {
+		t.Errorf("time = %q, want %q: an afternoon appointment must not read as a morning one", got, want)
+	}
+}
+
 // The date and the time are spelled in the owner's zone, which is the whole
 // reason the zone is stored. Tijuana is UTC-7 in July and UTC-8 in November,
 // so the same offset cannot be right for both.
@@ -199,7 +252,7 @@ func TestTheDateAndTimeFollowTheOwnersZoneAcrossDaylightSaving(t *testing.T) {
 			name:       "summer, Tijuana is UTC-7",
 			now:        "2026-07-15T14:00:00Z",
 			start:      "2026-07-15T14:30:00Z",
-			wantDate:   "15/07/2026",
+			wantDate:   "15 de julio de 2026",
 			wantTime:   "07:30",
 			timezone:   tijuana,
 			leadMinute: 30 * time.Minute,
@@ -208,7 +261,7 @@ func TestTheDateAndTimeFollowTheOwnersZoneAcrossDaylightSaving(t *testing.T) {
 			name:       "winter, Tijuana is UTC-8",
 			now:        "2026-11-15T14:00:00Z",
 			start:      "2026-11-15T14:30:00Z",
-			wantDate:   "15/11/2026",
+			wantDate:   "15 de noviembre de 2026",
 			wantTime:   "06:30",
 			timezone:   tijuana,
 			leadMinute: 30 * time.Minute,
@@ -218,7 +271,7 @@ func TestTheDateAndTimeFollowTheOwnersZoneAcrossDaylightSaving(t *testing.T) {
 			// 23:30 UTC on the 3rd is 08:30 on the 4th in Tokyo.
 			now:        "2026-11-03T23:00:00Z",
 			start:      "2026-11-03T23:30:00Z",
-			wantDate:   "04/11/2026",
+			wantDate:   "4 de noviembre de 2026",
 			wantTime:   "08:30",
 			timezone:   "Asia/Tokyo",
 			leadMinute: 30 * time.Minute,
@@ -268,7 +321,7 @@ func TestTheStoredRowRecordsTheTemplateAndItsParameters(t *testing.T) {
 	}
 
 	claim := store.claims[0]
-	const want = "appointment_reminder (es): Ana Lopez | 03/11/2026 | 08:30"
+	const want = "appointment_reminder (es): Ana Lopez | 3 de noviembre de 2026 | 08:30"
 	if claim.Content != want {
 		t.Errorf("content = %q, want %q", claim.Content, want)
 	}

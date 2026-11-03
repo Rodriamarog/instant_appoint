@@ -211,17 +211,71 @@ type Summary struct {
 	Skipped int
 }
 
-// The date and the time as a reminder spells them.
+// The time as a reminder spells it.
 //
-// Day-first and 24-hour, which is unambiguous and matches the Spanish-speaking
-// default this app ships with. Deliberately not locale-aware: month names in
-// the recipient's language would mean carrying golang.org/x/text and a locale
-// setting nobody has asked for, and the template's own words around these two
-// values are already written by the business in its own language.
+// 24-hour, which is what lets one rendering serve every reader: 15:30 has no
+// second meaning, where "3:30" is twelve hours wide. Digits alone could not do
+// the same for the date — see spellings.
+const timeLayout = "15:04"
+
+// language is which of the two languages a reminder's date is spelled in.
+//
+// Spanish is the zero value because it is what every reminder this app has
+// sent was spelled in, and nothing yet picks the other: choosing per
+// appointment is a separate change, and this type exists so that change is a
+// caller passing english rather than a rewrite of how a date is written.
+type language int
+
 const (
-	dateLayout = "02/01/2006"
-	timeLayout = "15:04"
+	spanish language = iota
+	english
 )
+
+// spelling is one language's worth of calendar vocabulary.
+type spelling struct {
+	months [12]string
+
+	// date is a layout for fmt.Sprintf taking the day, the month's name and
+	// the year — in that order as arguments, in any order in the output,
+	// which is the point of the indexes.
+	date string
+}
+
+// How a date is written, per language.
+//
+// The reminder used to interpolate "02/01/2006". A patient in Tijuana reads
+// "03/11/2026" as 3 November and one from San Diego reads it as 11 March, and
+// a border clinic has both on one list — same digits, four months apart, in
+// the one message whose entire job is to put somebody in a chair on the right
+// day. Naming the month is the only form of the date that cannot be read two
+// ways, so the month has to be a word, and a word is in some language.
+//
+// Twenty-four of them, though. That is a table, not a reason to carry
+// golang.org/x/text and a locale setting nobody has asked for — the constraint
+// that chose the digits in the first place still holds, and this satisfies it.
+var spellings = [...]spelling{
+	spanish: {
+		months: [12]string{
+			"enero", "febrero", "marzo", "abril", "mayo", "junio",
+			"julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+		},
+		date: "%[1]d de %[2]s de %[3]d",
+	},
+	english: {
+		months: [12]string{
+			"January", "February", "March", "April", "May", "June",
+			"July", "August", "September", "October", "November", "December",
+		},
+		date: "%[2]s %[1]d, %[3]d",
+	},
+}
+
+// spellDate writes out the date a reminder names, with the month as a word.
+func spellDate(local time.Time, lang language) string {
+	chosen := spellings[lang]
+
+	return fmt.Sprintf(chosen.date, local.Day(), chosen.months[local.Month()-1], local.Year())
+}
 
 // How a failing send is bounded.
 //
@@ -358,7 +412,11 @@ func Run(ctx context.Context, store Store, sender Sender, now time.Time) (Summar
 			continue
 		}
 
-		parameters := bodyParameters(appointment, location)
+		// Spanish for everybody, which is no worse than the digits it
+		// replaces: those were day-first, so a Spanish reader was the one
+		// they already suited. Reading the language off the appointment is
+		// the next change, not this one.
+		parameters := bodyParameters(appointment, location, spanish)
 
 		claimID, err := store.Claim(ctx, Claim{
 			AppointmentID: appointment.ID,
@@ -398,10 +456,10 @@ func Run(ctx context.Context, store Store, sender Sender, now time.Time) (Summar
 }
 
 // bodyParameters are the template's {{1}}, {{2}} and {{3}}, in order.
-func bodyParameters(appointment Appointment, location *time.Location) []string {
+func bodyParameters(appointment Appointment, location *time.Location, lang language) []string {
 	local := appointment.StartTime.In(location)
 
-	return []string{appointment.Title, local.Format(dateLayout), local.Format(timeLayout)}
+	return []string{appointment.Title, spellDate(local, lang), local.Format(timeLayout)}
 }
 
 // content renders what was sent, for the stored row and the reminders page.

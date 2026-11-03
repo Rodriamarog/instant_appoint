@@ -26,7 +26,6 @@ import {
   localInputsToIso,
   localTimeInput,
 } from '@/lib/iso-time'
-import { pb } from '@/lib/pocketbase'
 
 interface EventDialogProps {
   open: boolean
@@ -58,61 +57,6 @@ function splitPhone(stored: string): { countryCode: string; digits: string } {
   return { countryCode: DEFAULT_COUNTRY_CODE, digits: stored }
 }
 
-/**
- * The reminder text this appointment would send if nobody edited it.
- *
- * It is a suggestion, not a derived value — see the reminderIsAuto flag
- * below, which is what keeps it from overwriting words someone typed.
- */
-function generateReminderMessage(
-  clientName: string,
-  startDate: string,
-  startTime: string,
-  countryCode: string,
-): string {
-  const businessName =
-    (pb.authStore.record?.business_name as string | undefined) || 'our clinic'
-
-  if (startDate && startTime) {
-    const appointment = new Date(`${startDate}T${startTime}`)
-
-    if (!Number.isNaN(appointment.getTime())) {
-      const locale = countryCode === '521' ? 'es-MX' : 'en-US'
-      const timeStr = appointment.toLocaleTimeString(locale, {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      })
-
-      if (countryCode === '521') {
-        const dateStr = appointment.toLocaleDateString(locale, {
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long',
-        })
-
-        return clientName
-          ? `Hola ${clientName}, solo un recordatorio sobre su cita de mañana ${dateStr} a las ${timeStr} en ${businessName}.`
-          : `Hola, solo un recordatorio sobre su cita de mañana ${dateStr} a las ${timeStr} en ${businessName}.`
-      }
-
-      const dateStr = appointment.toLocaleDateString(locale, {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric',
-      })
-
-      return clientName
-        ? `Hello ${clientName}, just a reminder about your appointment tomorrow ${dateStr} at ${timeStr} at ${businessName}.`
-        : `Hello, just a reminder about your appointment tomorrow ${dateStr} at ${timeStr} at ${businessName}.`
-    }
-  }
-
-  return countryCode === '521'
-    ? `Hola, solo un recordatorio sobre su cita de mañana en ${businessName}.`
-    : `Hello, just a reminder about your appointment tomorrow at ${businessName}.`
-}
-
 export function EventDialog({
   open,
   mode,
@@ -124,12 +68,7 @@ export function EventDialog({
   const [countryCode, setCountryCode] = useState(DEFAULT_COUNTRY_CODE)
   const [phoneNumber, setPhoneNumber] = useState('')
   const [location, setLocation] = useState('')
-  const [reminderMessage, setReminderMessage] = useState('')
-  // Whether the reminder text is still the generated suggestion. Once it is
-  // someone's own words it is never regenerated — not on a keystroke in the
-  // client-name field, and not on opening a saved appointment, which is what
-  // used to rewrite the stored message the moment anyone pressed Save.
-  const [reminderIsAuto, setReminderIsAuto] = useState(true)
+  const [notes, setNotes] = useState('')
   const [startDate, setStartDate] = useState('')
   const [startTime, setStartTime] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -152,8 +91,7 @@ export function EventDialog({
       setStartTime(localTimeInput(now))
       setEndDate(localDateInput(later))
       setEndTime(localTimeInput(later))
-      setReminderMessage('')
-      setReminderIsAuto(true)
+      setNotes('')
 
       return
     }
@@ -174,18 +112,8 @@ export function EventDialog({
     setEndDate(localDateInput(end))
     setEndTime(localTimeInput(end))
 
-    setReminderMessage(event.notes || '')
-    setReminderIsAuto(!event.notes)
+    setNotes(event.notes || '')
   }, [event, open])
-
-  useEffect(() => {
-    if (!reminderIsAuto) return
-    if (!startDate || !startTime) return
-
-    setReminderMessage(
-      generateReminderMessage(clientName, startDate, startTime, countryCode),
-    )
-  }, [reminderIsAuto, clientName, startDate, startTime, countryCode])
 
   const handleSave = async () => {
     setError(null)
@@ -215,7 +143,7 @@ export function EventDialog({
       client_phone: phoneNumber.trim()
         ? `${countryCode}${phoneNumber.replace(/\D/g, '')}`
         : '',
-      notes: reminderMessage,
+      notes,
       location,
       start_time,
       end_time,
@@ -365,18 +293,26 @@ export function EventDialog({
             />
           </div>
 
+          {/*
+            This used to be offered as the reminder the client would receive.
+            It never was one: a reminder leaves well outside Meta's 24-hour
+            window, where only an approved template is accepted, so the words
+            typed here could not be delivered and the reminder path never read
+            them. Saying plainly who reads it is what stops someone writing a
+            message to a client in it again.
+          */}
           <div className="space-y-2">
-            <Label htmlFor="reminder-message">Reminder Message</Label>
+            <Label htmlFor="notes">Notes</Label>
             <Textarea
-              id="reminder-message"
-              value={reminderMessage}
-              onChange={(e) => {
-                setReminderIsAuto(false)
-                setReminderMessage(e.target.value)
-              }}
-              placeholder="e.g. Hello, just a reminder about your appointment tomorrow!"
+              id="notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Allergic to latex"
               rows={3}
             />
+            <p className="text-xs text-muted-foreground">
+              For your team only. The client never sees this.
+            </p>
           </div>
         </div>
 
