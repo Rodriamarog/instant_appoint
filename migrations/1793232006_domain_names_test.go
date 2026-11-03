@@ -28,6 +28,19 @@ const theRenameMigration = "1793232006_domain_names.go"
 func newAppBeforeTheRename(t *testing.T) core.App {
 	t.Helper()
 
+	return newAppBefore(t, theRenameMigration)
+}
+
+// newAppBefore returns a bootstrapped app with every migration applied except
+// the one named and everything after it, so a test can write the rows a real
+// database would already be holding and only then let that migration run.
+//
+// The cut is made on the filename because that is the ordering the migration
+// runner itself applies: deriving "before" any other way would let the test
+// and the runner disagree about what it means.
+func newAppBefore(t *testing.T, migrationFile string) core.App {
+	t.Helper()
+
 	app := pocketbase.NewWithConfig(pocketbase.Config{
 		DefaultDataDir:  t.TempDir(),
 		HideStartBanner: true,
@@ -45,14 +58,14 @@ func newAppBeforeTheRename(t *testing.T) core.App {
 	earlier := core.MigrationsList{}
 	earlier.Copy(core.SystemMigrations)
 	for _, migration := range core.AppMigrations.Items() {
-		if migration.File >= theRenameMigration {
+		if migration.File >= migrationFile {
 			continue
 		}
 		earlier.Register(migration.Up, migration.Down, migration.File)
 	}
 
 	if _, err := core.NewMigrationsRunner(app, earlier).Up(); err != nil {
-		t.Fatalf("apply the migrations before the rename: %v", err)
+		t.Fatalf("apply the migrations before %s: %v", migrationFile, err)
 	}
 
 	return app
@@ -272,7 +285,21 @@ func TestRollingTheRenameBackRestoresTheOldNamesAndTheirRows(t *testing.T) {
 	full := core.MigrationsList{}
 	full.Copy(core.SystemMigrations)
 	full.Copy(core.AppMigrations)
-	if _, err := core.NewMigrationsRunner(app, full).Down(1); err != nil {
+
+	// Down takes a count of migrations, not a ticket, so the count is
+	// derived rather than written down: every migration added after the
+	// rename would otherwise silently turn "revert the rename" into
+	// "revert the newest thing and assert against the rename anyway", which
+	// passes for as long as the newest thing happens not to touch these
+	// collections.
+	since := 0
+	for _, migration := range core.AppMigrations.Items() {
+		if migration.File >= theRenameMigration {
+			since++
+		}
+	}
+
+	if _, err := core.NewMigrationsRunner(app, full).Down(since); err != nil {
 		t.Fatalf("revert the rename: %v", err)
 	}
 

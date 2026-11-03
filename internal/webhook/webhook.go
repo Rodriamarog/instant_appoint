@@ -95,10 +95,21 @@ type StoredMessage struct {
 	SentAt string
 }
 
-// Account is the connected WhatsApp number a delivery belongs to.
+// Account is the connected WhatsApp number a delivery belongs to, together
+// with what the clinic behind it has allowed the assistant to do.
 type Account struct {
 	UserID      string
 	AccessToken string
+
+	// Mode is the clinic's ai_mode setting. It rides along with the account
+	// rather than arriving through a Store method of its own because the
+	// handler wants both for the same message and the account lookup has
+	// already resolved the clinic by the time the mode is needed.
+	//
+	// A clinic that has never saved any settings has no row to read it off,
+	// and the zero value is what that looks like here — which is not
+	// ModeAutopilot, so nothing is sent.
+	Mode Mode
 }
 
 // ConversationMessage is one turn of the history handed to the AI.
@@ -336,6 +347,17 @@ func (h *handler) process(ctx context.Context, message incomingText) error {
 	// the whole conversation. Replying would mean the bot answering the
 	// business.
 	if message.Direction != Inbound {
+		return nil
+	}
+
+	// Checked before the age and before the model, so that a clinic which has
+	// not switched the assistant on costs nothing and says nothing. The
+	// message above is already stored, which is the half that happens in
+	// every mode.
+	if !account.Mode.RepliesAutomatically() {
+		h.deps.Logger.Info("no auto-reply: the assistant is not on autopilot for this clinic",
+			"message_id", message.MessageID, "mode", string(account.Mode))
+
 		return nil
 	}
 

@@ -73,10 +73,48 @@ func (s *WebhookStore) FindAccount(_ context.Context, phoneNumberID string) (*we
 		return nil, err
 	}
 
+	userID := record.GetString("user_id")
+
+	mode, err := s.aiMode(userID)
+	if err != nil {
+		return nil, err
+	}
+
 	return &webhook.Account{
-		UserID:      record.GetString("user_id"),
+		UserID:      userID,
 		AccessToken: record.GetString("access_token"),
+		Mode:        mode,
 	}, nil
+}
+
+// aiMode reads how much the clinic behind userID has allowed the assistant
+// to do. It is a second query rather than a column on the account because
+// the mode belongs to the business, not to the number: a clinic with two
+// connected numbers answers on both or neither.
+//
+// No settings row is ModeOff, not an error. A clinic that has connected a
+// number but never opened the settings is the state every newly registered
+// one is in, and the assistant stays quiet for it.
+//
+// A real database failure is returned rather than quietly read as off,
+// because the handler turns an error into a 500 and the router redelivers.
+// Reading a fault as off would silence every clinic's assistant for as long
+// as it lasted, with nothing anywhere saying why.
+func (s *WebhookStore) aiMode(userID string) (webhook.Mode, error) {
+	record, err := s.app.FindFirstRecordByFilter(
+		migrations.BusinessSettingsCollection,
+		"user_id = {:userID}",
+		dbx.Params{"userID": userID},
+	)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return webhook.ModeOff, nil
+
+	case err != nil:
+		return "", err
+	}
+
+	return webhook.Mode(record.GetString(migrations.AIModeField)), nil
 }
 
 // HasMessage reports whether a message with this WhatsApp id is already
