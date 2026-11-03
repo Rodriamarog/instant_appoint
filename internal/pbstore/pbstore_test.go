@@ -13,7 +13,7 @@ import (
 
 	"github.com/Rodriamarog/instant_appoint/internal/pbstore"
 	"github.com/Rodriamarog/instant_appoint/internal/webhook"
-	_ "github.com/Rodriamarog/instant_appoint/migrations"
+	"github.com/Rodriamarog/instant_appoint/migrations"
 )
 
 // newApp returns a bootstrapped app with every migration applied, backed by a
@@ -538,3 +538,116 @@ func TestIsUniqueViolationSeesThroughWrapping(t *testing.T) {
 // The store satisfies the interface the handler is written against, which is
 // the whole reason the handler can be tested with no database.
 var _ webhook.Store = (*pbstore.WebhookStore)(nil)
+
+// --- the AI mode switch (#26) --------------------------------------------
+
+// setAIMode puts a clinic in a mode, creating its settings row if it has
+// none. It edits an existing row rather than adding a second, because the
+// collection has one row per clinic and the unique index would refuse it.
+func setAIMode(t *testing.T, app core.App, userID, mode string) {
+	t.Helper()
+
+	record, err := app.FindFirstRecordByFilter(
+		migrations.BusinessSettingsCollection,
+		"user_id = {:userID}",
+		dbx.Params{"userID": userID},
+	)
+	if err != nil {
+		collection, err := app.FindCollectionByNameOrId(migrations.BusinessSettingsCollection)
+		if err != nil {
+			t.Fatalf("FindCollectionByNameOrId: %v", err)
+		}
+
+		record = core.NewRecord(collection)
+		record.Set("user_id", userID)
+		record.Set("timing_minutes", 1440)
+		record.Set("is_active", true)
+	}
+
+	record.Set(migrations.AIModeField, mode)
+
+	if err := app.Save(record); err != nil {
+		t.Fatalf("save the settings for %s: %v", userID, err)
+	}
+}
+
+func TestFindAccountCarriesTheClinicsAIMode(t *testing.T) {
+	for _, mode := range []webhook.Mode{webhook.ModeOff, webhook.ModeObserver, webhook.ModeAutopilot} {
+		app := newApp(t)
+		userID := connectAccount(t, app, "555000111", nil)
+		setAIMode(t, app, userID, string(mode))
+
+		account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), "555000111")
+		if err != nil {
+			t.Fatalf("FindAccount: %v", err)
+		}
+		if account == nil {
+			t.Fatal("no account was found for a connected number")
+		}
+		if account.Mode != mode {
+			t.Errorf("Mode = %q, want %q", account.Mode, mode)
+		}
+	}
+}
+
+// A clinic can connect a WhatsApp number without ever opening the settings,
+// and that is the state a newly registered one is in. It has to read as off
+// rather than as "no answer", because the only caller turns the answer
+// straight into "does a patient hear from a bot".
+func TestAClinicWithNoSettingsRowAtAllIsOff(t *testing.T) {
+	app := newApp(t)
+	connectAccount(t, app, "555000111", nil)
+
+	account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), "555000111")
+	if err != nil {
+		t.Fatalf("FindAccount: %v", err)
+	}
+	if account == nil {
+		t.Fatal("a connected number with no settings row was not found at all")
+	}
+	if account.Mode.RepliesAutomatically() {
+		t.Errorf("Mode = %q and it replies; a clinic that never opened the settings would be answering patients", account.Mode)
+	}
+}
+
+// One clinic's mode is not another's. The settings row is found by user id,
+// and a lookup that forgot to scope it would read whichever row came first.
+func TestEachClinicGetsItsOwnMode(t *testing.T) {
+	app := newApp(t)
+	// The owners are named: connectAccount derives a user id from the length
+	// of the number, and these two are the same length, so two clinics would
+	// otherwise share one id and the test would pass proving nothing.
+	// The owners are named rather than taken from connectAccount, which
+	// derives a user id from the length of the number: these two numbers are
+	// the same length, so both clinics would share one settings row and the
+	// test would pass proving nothing.
+	connectAccount(t, app, "555000111", map[string]any{"user_id": "clinic-quiet"})
+	connectAccount(t, app, "555000222", map[string]any{"user_id": "clinic-talking"})
+	setAIMode(t, app, "clinic-quiet", string(webhook.ModeOff))
+	setAIMode(t, app, "clinic-talking", string(webhook.ModeAutopilot))
+
+	store := pbstore.NewWebhookStore(app)
+	for number, want := range map[string]webhook.Mode{
+		"555000111": webhook.ModeOff,
+		"555000222": webhook.ModeAutopilot,
+	} {
+		account, err := store.FindAccount(context.Background(), number)
+		if err != nil {
+			t.Fatalf("FindAccount(%s): %v", number, err)
+		}
+		if account.Mode != want {
+			t.Errorf("%s has mode %q, want %q", number, account.Mode, want)
+		}
+	}
+}
+
+// internal/webhook may not import this package's dependencies, so the three
+// positions are spelled out on both sides of the boundary. This is the one
+// place that can see both, and a rename on either side that did not reach
+// the other would otherwise only show up as an assistant that went quiet.
+func TestTheWordsStoredAndTheWordsTheGateReadsAreTheSame(t *testing.T) {
+	if string(webhook.ModeOff) != migrations.DefaultAIMode {
+		t.Errorf("the migration defaults a clinic to %q but the gate spells off as %q",
+			migrations.DefaultAIMode, webhook.ModeOff)
+	}
+}

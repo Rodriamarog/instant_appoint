@@ -67,9 +67,23 @@ type fakeStore struct {
 func newFakeStore() *fakeStore {
 	return &fakeStore{
 		accounts: map[string]webhook.Account{
-			phoneNumberID: {UserID: "user-1", AccessToken: "token-1"},
+			// On autopilot, because every case below that is not about the
+			// mode is about what the handler does when it is allowed to
+			// answer. The cases that are about the mode say so with setMode.
+			phoneNumberID: {UserID: "user-1", AccessToken: "token-1", Mode: webhook.ModeAutopilot},
 		},
 	}
+}
+
+// setMode puts the default connected number's clinic in a mode. It mutates
+// the store the handler already holds, so it may be called after setup.
+func (s *fakeStore) setMode(mode webhook.Mode) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	account := s.accounts[phoneNumberID]
+	account.Mode = mode
+	s.accounts[phoneNumberID] = account
 }
 
 func (s *fakeStore) FindAccount(_ context.Context, id string) (*webhook.Account, error) {
@@ -268,6 +282,14 @@ func (h *harness) sends() []send {
 	defer h.mu.Unlock()
 
 	return append([]send{}, h.sent...)
+}
+
+// histories returns one entry per call the handler made to the model.
+func (h *harness) histories() [][]webhook.ConversationMessage {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	return append([][]webhook.ConversationMessage{}, h.history...)
 }
 
 func (h *harness) sentTo() []string {
@@ -810,5 +832,78 @@ func TestConcurrentDeliveriesOfOneMessageProduceOneReply(t *testing.T) {
 	}
 	if got := len(h.sends()); got != 1 {
 		t.Errorf("sent %d replies, want 1", got)
+	}
+}
+
+// --- the AI mode switch (#26) --------------------------------------------
+
+// Before this ticket there was no way to stop the assistant answering. These
+// three cases are the switch: the same delivery, three settings, and the only
+// thing that differs is whether a customer hears from a bot.
+
+func TestAnAssistantSwitchedOffStoresTheMessageAndSendsNothing(t *testing.T) {
+	h := setup(options{})
+	h.store.setMode(webhook.ModeOff)
+
+	response := h.post(t, payload([]change{messages(textMessage("wamid.off", "5215511111111", "hola", frozen))}))
+
+	assertStatus(t, response, http.StatusOK)
+	// Stored, not dropped: switching the assistant off is a decision about
+	// who answers, not about whether the clinic sees its own messages.
+	assertEqual(t, "stored", h.store.ids(), []string{"wamid.off"})
+	assertEqual(t, "sent", h.sends(), []send{})
+}
+
+func TestAnAssistantInObserverModeStoresTheMessageAndSendsNothing(t *testing.T) {
+	h := setup(options{})
+	h.store.setMode(webhook.ModeObserver)
+
+	response := h.post(t, payload([]change{messages(textMessage("wamid.obs", "5215511111111", "hola", frozen))}))
+
+	assertStatus(t, response, http.StatusOK)
+	assertEqual(t, "stored", h.store.ids(), []string{"wamid.obs"})
+	assertEqual(t, "sent", h.sends(), []send{})
+}
+
+func TestAnAssistantOnAutopilotRepliesAndStoresBothHalves(t *testing.T) {
+	h := setup(options{})
+	h.store.setMode(webhook.ModeAutopilot)
+
+	response := h.post(t, payload([]change{messages(textMessage("wamid.auto", "5215511111111", "hola", frozen))}))
+
+	assertStatus(t, response, http.StatusOK)
+	assertEqual(t, "sent", h.sends(), []send{{phoneNumberID: phoneNumberID, to: "5215511111111", text: "reply to: hola"}})
+	assertEqual(t, "stored", h.store.ids(), []string{"wamid.auto", "wamid.reply-1"})
+}
+
+// A clinic that has never opened the settings has no row to read a mode off,
+// so the store hands the handler the zero value. This is the case the whole
+// ticket exists for: before it, that clinic's patients were answered by a bot
+// nobody had switched on.
+func TestAClinicWithNoModeSavedAtAllIsNotAnswered(t *testing.T) {
+	h := setup(options{})
+	h.store.setMode("")
+
+	response := h.post(t, payload([]change{messages(textMessage("wamid.none", "5215511111111", "hola", frozen))}))
+
+	assertStatus(t, response, http.StatusOK)
+	assertEqual(t, "stored", h.store.ids(), []string{"wamid.none"})
+	assertEqual(t, "sent", h.sends(), []send{})
+}
+
+// The mode gates the reply, not the generation of one. An assistant that is
+// not on autopilot must not reach Gemini either: the clinic is not paying for
+// words nobody will ever read, and #27's observer writing is a separate
+// decision with its own prompt.
+func TestAnAssistantThatIsNotOnAutopilotDoesNotCallTheModel(t *testing.T) {
+	for _, mode := range []webhook.Mode{webhook.ModeOff, webhook.ModeObserver} {
+		h := setup(options{})
+		h.store.setMode(mode)
+
+		h.post(t, payload([]change{messages(textMessage("wamid."+string(mode), "5215511111111", "hola", frozen))}))
+
+		if got := len(h.histories()); got != 0 {
+			t.Errorf("in %q the model was asked for %d replies, want none", mode, got)
+		}
 	}
 }
