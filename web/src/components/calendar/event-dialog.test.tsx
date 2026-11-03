@@ -337,7 +337,7 @@ test('an appointment opened for editing says where it stands, who put it there a
 
   const shown = await screen.findByText(/Cancelada/)
   expect(shown.textContent).toMatch(/por el paciente/)
-  expect(shown.textContent).toContain('2 de noviembre de 2026, 09:30')
+  expect(shown.textContent).toContain('lun 2 nov 2026, 09:30')
 })
 
 test('an appointment the assistant only proposed says so rather than looking booked', async () => {
@@ -391,7 +391,7 @@ test('a status change carries nothing but the status and who set it', async () =
   const user = userEvent.setup()
   renderDialog()
 
-  await user.type(screen.getByLabelText(/client name/i), ' (typed but not saved)')
+  await user.type(screen.getByLabelText(/nombre del cliente/i), ' (escrito sin guardar)')
   await user.click(screen.getByRole('button', { name: 'Marcar confirmada' }))
 
   await waitFor(() => expect(update).toHaveBeenCalled())

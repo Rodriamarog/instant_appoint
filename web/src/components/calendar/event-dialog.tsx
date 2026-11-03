@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { spellDateTime } from '@/lib/dates'
 import { errorMessage } from '@/lib/errors'
 import {
   actorLabel,
@@ -62,31 +63,8 @@ function splitPhone(stored: string): { countryCode: string; digits: string } {
 }
 
 /**
- * A stored instant in the reader's own zone, written out in Spanish.
- *
- * The month is a word and the clock is 24-hour for the same reason the
- * reminders themselves spell theirs that way: "03/11" is 3 November to one
- * reader and 11 March to another, and "3:30" is twelve hours wide. This one
- * is read by staff rather than patients, but it sits next to a cancellation
- * and gets read in a hurry.
- */
-function formatMoment(iso: string): string {
-  const instant = new Date(iso)
-  if (Number.isNaN(instant.getTime())) return ''
-
-  return instant.toLocaleString('es-MX', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-}
-
-/**
  * Where the appointment stands and how it got there, as one sentence:
- * "Cancelada por el paciente · 2 de noviembre de 2026, 09:30".
+ * "Cancelada por el paciente · lun 2 nov 2026, 09:30".
  *
  * Each half is dropped rather than faked when the row does not carry it. An
  * appointment migrated in from before this existed has a status and no
@@ -95,7 +73,10 @@ function formatMoment(iso: string): string {
  */
 function statusLine(event: Appointment): string {
   const who = actorLabel(event.status_set_by)
-  const when = event.status_set_at ? formatMoment(event.status_set_at) : ''
+  const moment = new Date(event.status_set_at ?? '')
+  // An unreadable timestamp is dropped rather than printed as "Invalid
+  // Date": the sentence still answers who, which is the half that matters.
+  const when = Number.isNaN(moment.getTime()) ? '' : spellDateTime(moment)
 
   return [
     [statusLabel(event.status), who && `por ${who}`].filter(Boolean).join(' '),
@@ -244,7 +225,7 @@ export function EventDialog({
       await setAppointmentStatus(event.id, status)
       onSaved()
     } catch (err) {
-      setError(errorMessage(err, 'Error saving appointment'))
+      setError(errorMessage(err, 'No se pudo cambiar el estado de la cita'))
     } finally {
       setSettingStatus(false)
     }
