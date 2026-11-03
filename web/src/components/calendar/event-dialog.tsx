@@ -21,6 +21,8 @@ import {
   actorLabel,
   createAppointment,
   deleteAppointment,
+  languageForCountryCode,
+  REMINDER_LANGUAGES,
   setAppointmentStatus,
   statusLabel,
   updateAppointment,
@@ -48,7 +50,17 @@ const COUNTRY_CODES = [
   { label: '+52', value: '521', flag: '🇲🇽' },
 ]
 
-const DEFAULT_COUNTRY_CODE = '1'
+/**
+ * Mexico, because the clinic is in Tijuana and most of its patients dial
+ * from this side of the line.
+ *
+ * It used to be +1, which was wrong twice over once the reminder language
+ * started following the prefix: it put the wrong country on most new
+ * bookings, and it defaulted their reminders to English — reversing, with
+ * nobody deciding anything, the language every appointment on the calendar
+ * already went out in.
+ */
+const DEFAULT_COUNTRY_CODE = '521'
 
 /** Splits a stored phone number back into the two fields that produced it. */
 function splitPhone(stored: string): { countryCode: string; digits: string } {
@@ -97,6 +109,15 @@ export function EventDialog({
   const [clientName, setClientName] = useState('')
   const [countryCode, setCountryCode] = useState(DEFAULT_COUNTRY_CODE)
   const [phoneNumber, setPhoneNumber] = useState('')
+  const [language, setLanguage] = useState(() =>
+    languageForCountryCode(DEFAULT_COUNTRY_CODE),
+  )
+  // Whether the language on screen is somebody's decision or still the guess
+  // made from the dialling prefix. Only the guess is allowed to move when
+  // the prefix changes: re-deriving it unconditionally would make an
+  // override impossible to keep, which is the failure the issue calls
+  // "inferred and locked".
+  const [languageChosen, setLanguageChosen] = useState(false)
   const [location, setLocation] = useState('')
   const [notes, setNotes] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -121,6 +142,8 @@ export function EventDialog({
       setClientName('')
       setCountryCode(DEFAULT_COUNTRY_CODE)
       setPhoneNumber('')
+      setLanguage(languageForCountryCode(DEFAULT_COUNTRY_CODE))
+      setLanguageChosen(false)
       setLocation('')
       setStartDate(localDateInput(now))
       setStartTime(localTimeInput(now))
@@ -135,6 +158,17 @@ export function EventDialog({
     setClientName(event.client_name || '')
     setCountryCode(code)
     setPhoneNumber(digits)
+    // A stored language is a decision already recorded — by staff here, or
+    // by the migration copying across what the business was already sending
+    // in — so it outranks the prefix and the prefix no longer moves it.
+    //
+    // A blank slot dragged out on the calendar carries no decisions, only
+    // the times: whatever language is on it is this dialog's own guess, and
+    // the prefix is still free to move it. event.id is how the rest of this
+    // file tells a stored appointment from a slot.
+    const stored = Boolean(event.id && event.language)
+    setLanguage(stored ? event.language : languageForCountryCode(code))
+    setLanguageChosen(stored)
     setLocation(event.location || '')
 
     // Both halves of each timestamp come from the same local clock. Reading
@@ -182,6 +216,7 @@ export function EventDialog({
       location,
       start_time,
       end_time,
+      language,
     }
 
     setSaving(true)
@@ -233,6 +268,14 @@ export function EventDialog({
       setError(errorMessage(err, 'No se pudo cambiar el estado de la cita'))
     } finally {
       setSettingStatus(false)
+    }
+  }
+
+  /** Changing the country re-guesses the language, unless somebody chose it. */
+  const handleCountryCode = (next: string) => {
+    setCountryCode(next)
+    if (!languageChosen) {
+      setLanguage(languageForCountryCode(next))
     }
   }
 
@@ -361,7 +404,7 @@ export function EventDialog({
               <select
                 id="country-code"
                 value={countryCode}
-                onChange={(e) => setCountryCode(e.target.value)}
+                onChange={(e) => handleCountryCode(e.target.value)}
                 className="h-9 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
               >
                 {COUNTRY_CODES.map((c) => (
@@ -381,6 +424,35 @@ export function EventDialog({
                 onChange={(e) => setPhoneNumber(e.target.value)}
               />
             </div>
+          </div>
+
+          {/*
+            Under the phone fields because that is where its default comes
+            from, and visible rather than hidden behind an "advanced" toggle:
+            a reminder in a language the patient does not read is not an edge
+            case on this list, it is half of it.
+          */}
+          <div className="space-y-2">
+            <Label htmlFor="reminder-language">Idioma del recordatorio</Label>
+            <select
+              id="reminder-language"
+              value={language}
+              onChange={(e) => {
+                setLanguage(e.target.value)
+                setLanguageChosen(true)
+              }}
+              className="h-9 w-full rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+            >
+              {REMINDER_LANGUAGES.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              En el que se le escribe al cliente. Lo adivinamos por la lada;
+              cámbialo si no es el suyo.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

@@ -38,8 +38,21 @@ test('each position says in plain words what it does', () => {
   // not guessable from the words alone; without this the clinic is choosing
   // what its patients are told by reading a thesaurus.
   expect(screen.getByText(/no responde ni escribe nada/i)).toBeDefined()
-  expect(screen.getByText(/Solo observa las conversaciones/i)).toBeDefined()
+  expect(screen.getByText(/Observa las conversaciones/i)).toBeDefined()
   expect(screen.getByText(/responde solo, por WhatsApp/i)).toBeDefined()
+})
+
+test('both active positions say that they write appointments', () => {
+  // The two of them put rows on the clinic's calendar, and a clinic that
+  // switched to Observador expecting a silent bystander would find
+  // appointments it never typed. Whether the assistant talks to the patient
+  // and whether it writes are two different promises, and only one of them
+  // is in the name of the position.
+  show('off')
+
+  for (const option of AI_MODE_OPTIONS.filter((o) => o.mode !== 'off')) {
+    expect(option.help).toMatch(/cita/i)
+  }
 })
 
 test('the saved position is the one shown as chosen', () => {

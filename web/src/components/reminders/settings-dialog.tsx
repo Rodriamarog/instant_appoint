@@ -1,7 +1,6 @@
 import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
-import { AIModeField } from '@/components/settings/ai-mode-field'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -143,17 +142,6 @@ export function ReminderSettingsDialog({
         </DialogHeader>
 
         <div className="space-y-5 pt-2">
-          {/*
-            Here because this is the only settings surface the app has. #26
-            describes the switch as living in Configuración, which #21 is
-            still to build; when it does, this element moves there unchanged
-            and this file goes back to being about reminders alone.
-          */}
-          <AIModeField
-            value={draft.ai_mode}
-            onChange={(ai_mode) => setDraft((d) => ({ ...d, ai_mode }))}
-          />
-
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">Enviar recordatorios</span>
             <button
@@ -252,8 +240,8 @@ export function ReminderSettingsDialog({
 
             {templates !== null && templates.length === 0 && !templatesError && (
               <p className="text-xs text-muted-foreground">
-                Aún no tienes plantillas aprobadas. Crea una en la página de
-                Plantillas y espera a que Meta la apruebe.
+                Aún no tienes plantillas aprobadas. Crea una en Configuración
+                › Plantillas y espera a que Meta la apruebe.
               </p>
             )}
 
@@ -264,6 +252,22 @@ export function ReminderSettingsDialog({
                 Un recordatorio rellena tres valores — el nombre, la fecha y la
                 hora — pero esta plantilla admite {values}. Meta rechazará el
                 envío.
+              </p>
+            )}
+
+            {/*
+              The variant picked here is no longer the language every
+              reminder goes out in — each appointment carries its own. Said
+              plainly because the consequence is not guessable from the
+              control: a clinic that writes to patients in English needs the
+              same template approved in en_US too, and the first sign that
+              it is not would otherwise be a reminder Meta refused.
+            */}
+            {chosen && (
+              <p className="text-xs text-muted-foreground">
+                Es la variante por defecto. Cada cita lleva su propio idioma,
+                así que necesitas esta plantilla aprobada en cada idioma al
+                que le escribas.
               </p>
             )}
 

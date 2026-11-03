@@ -38,7 +38,7 @@ function renderAt(path: string) {
       <Routes>
         <Route path="/login" element={<p>the login page</p>} />
         <Route element={<RequireAuth />}>
-          <Route path="/calendar" element={<p>the calendar</p>} />
+          <Route path="/inicio" element={<p>the day's appointments</p>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -53,18 +53,18 @@ afterEach(() => {
 test('a logged-out visit to an app page lands on the login page', () => {
   pb.authStore.clear()
 
-  renderAt('/calendar')
+  renderAt('/inicio')
 
   expect(screen.getByText('the login page')).toBeDefined()
-  expect(screen.queryByText('the calendar')).toBeNull()
+  expect(screen.queryByText("the day's appointments")).toBeNull()
 })
 
 test('a logged-in visit to an app page renders the page', () => {
   pb.authStore.save(tokenExpiringIn(3600), signedInRecord)
 
-  renderAt('/calendar')
+  renderAt('/inicio')
 
-  expect(screen.getByText('the calendar')).toBeDefined()
+  expect(screen.getByText("the day's appointments")).toBeDefined()
 })
 
 test('an expired session is treated as logged out', () => {
@@ -72,7 +72,7 @@ test('an expired session is treated as logged out', () => {
   // guard just because something is stored.
   pb.authStore.save(tokenExpiringIn(-60), signedInRecord)
 
-  renderAt('/calendar')
+  renderAt('/inicio')
 
   expect(screen.getByText('the login page')).toBeDefined()
 })
@@ -80,8 +80,8 @@ test('an expired session is treated as logged out', () => {
 test('clearing the session while on an app page redirects to login', () => {
   pb.authStore.save(tokenExpiringIn(3600), signedInRecord)
 
-  renderAt('/calendar')
-  expect(screen.getByText('the calendar')).toBeDefined()
+  renderAt('/inicio')
+  expect(screen.getByText("the day's appointments")).toBeDefined()
 
   // This is what Sign Out does. The guard has to notice without a reload.
   act(() => {

@@ -78,6 +78,7 @@ function savedEvent(overrides: Partial<Appointment> = {}): Appointment {
     // wherever this suite runs.
     status_set_at: new Date(2026, 10, 2, 9, 30).toISOString(),
     created_by: 'staff',
+    language: 'es',
     ...overrides,
   }
 }
@@ -108,6 +109,7 @@ const newSlot: Appointment = {
   start_time: '2026-11-09T17:00:00.000Z',
   end_time: '2026-11-09T18:00:00.000Z',
   status: 'pending',
+  language: 'es',
 }
 
 test('the dialog offers no reminder message to write', () => {
@@ -447,6 +449,75 @@ test('a rejected save is reported rather than swallowed', async () => {
     /failed to create record/i,
   )
   expect(onSaved).not.toHaveBeenCalled()
+})
+
+/**
+ * The reminder language. A border clinic's list has readers of both
+ * languages on it, so the one thing these cases are about is that the guess
+ * made from the dialling prefix is a starting point and never a decision
+ * taken away from the person at the desk.
+ */
+
+test('a new appointment is for a Mexican number, reminded in Spanish', async () => {
+  // The clinic is in Tijuana. Defaulting to +1 — which this did — also
+  // defaulted every new appointment's reminder to English, silently
+  // reversing what every existing one goes out in.
+  renderDialog({ mode: 'create', event: newSlot })
+
+  expect(value(/código de país/i)).toBe('521')
+  expect(value(/idioma del recordatorio/i)).toBe('es')
+})
+
+test('choosing a US number moves the reminder to English', async () => {
+  const user = userEvent.setup()
+  renderDialog({ mode: 'create', event: newSlot })
+
+  await user.selectOptions(screen.getByLabelText(/código de país/i), '1')
+
+  expect(value(/idioma del recordatorio/i)).toBe('en_US')
+})
+
+test('a language the staff member picked survives a correction to the number', async () => {
+  // The guess from the prefix is wrong often enough to matter, so a choice
+  // made at the desk has to outrank it. Re-deriving the language on every
+  // keystroke in the phone fields is how an override becomes impossible to
+  // keep.
+  const user = userEvent.setup()
+  renderDialog({ mode: 'create', event: newSlot })
+
+  await user.selectOptions(screen.getByLabelText(/idioma del recordatorio/i), 'en_US')
+  await user.selectOptions(screen.getByLabelText(/código de país/i), '521')
+
+  expect(value(/idioma del recordatorio/i)).toBe('en_US')
+})
+
+test('the appointment is saved with the language on screen', async () => {
+  const user = userEvent.setup()
+  renderDialog({ mode: 'create', event: newSlot })
+
+  await user.type(screen.getByLabelText(/nombre del cliente/i), 'Ann Cole')
+  await user.selectOptions(screen.getByLabelText(/idioma del recordatorio/i), 'en_US')
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
+
+  await waitFor(() => expect(create).toHaveBeenCalled())
+  expect(create.mock.calls[0][0]).toMatchObject({ language: 'en_US' })
+})
+
+test('reopening an appointment shows the language it is stored with, whatever the number says', async () => {
+  // A Mexican number whose owner reads English is the case this whole
+  // control exists for, and reopening the appointment must not quietly
+  // undo it.
+  const user = userEvent.setup()
+  renderDialog({
+    event: savedEvent({ client_phone: '5216641234567', language: 'en_US' }),
+  })
+
+  expect(value(/idioma del recordatorio/i)).toBe('en_US')
+
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
+
+  await waitFor(() => expect(update).toHaveBeenCalled())
+  expect(update.mock.calls[0][1]).toMatchObject({ language: 'en_US' })
 })
 
 // --- proposals and the conversation behind them ---------------------------

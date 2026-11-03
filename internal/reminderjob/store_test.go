@@ -46,8 +46,8 @@ func TestActiveSettingsReadsOnlyThePeopleWhoHaveRemindersSwitchedOn(t *testing.T
 	if settings.LeadTime != 90*time.Minute {
 		t.Errorf("LeadTime = %s, want 90m — timing_minutes is stored in minutes", settings.LeadTime)
 	}
-	if settings.TemplateName != "appointment_reminder" || settings.TemplateLanguage != "es" {
-		t.Errorf("template = %q/%q, want appointment_reminder/es", settings.TemplateName, settings.TemplateLanguage)
+	if settings.TemplateName != "appointment_reminder" || settings.DefaultLanguage != "es" {
+		t.Errorf("template = %q/%q, want appointment_reminder/es", settings.TemplateName, settings.DefaultLanguage)
 	}
 	if settings.Timezone != "America/Tijuana" {
 		t.Errorf("Timezone = %q, want America/Tijuana", settings.Timezone)
@@ -602,5 +602,33 @@ func TestTheRunIsScheduledOnceAMinute(t *testing.T) {
 	// what keeps `migrate` and `seed` from sending anything.
 	if app.Cron().HasStarted() {
 		t.Error("the cron is running outside serve")
+	}
+}
+
+// The language is read off the appointment and not off the business, which
+// is the whole of this ticket on the database side. Dropping it here would
+// leave every reminder falling back to the one variant the clinic
+// configured — the behaviour the column exists to replace, and invisible,
+// because a reminder in the wrong language still reports as sent.
+func TestAnAppointmentCarriesTheLanguageItsReminderIsWrittenIn(t *testing.T) {
+	app := newApp(t)
+	alice := newUser(t, app, "alice@instantappoint.test")
+
+	save(t, app, "appointments", map[string]any{
+		"user_id": alice, "client_name": "Ann Cole", "client_phone": "16191234567",
+		"start_time": "2026-11-03T16:30:00.000Z", "end_time": "2026-11-03T17:00:00.000Z",
+		"language": "en_US",
+	})
+
+	from := time.Date(2026, 11, 3, 16, 0, 0, 0, time.UTC)
+	found, err := reminderjob.NewStore(app).AppointmentsStartingBetween(context.Background(), from, from.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("AppointmentsStartingBetween: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("found %d appointments, want 1", len(found))
+	}
+	if got := found[0].Language; got != "en_US" {
+		t.Errorf("Language = %q, want en_US", got)
 	}
 }

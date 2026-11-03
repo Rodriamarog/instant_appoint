@@ -47,10 +47,12 @@ type Result struct {
 type fixture func(core.App, *Result) error
 
 // Order matters only where one fixture needs what another made: the WhatsApp
-// account hangs off the test user's id, so it runs after testUser.
+// account and the settings row both hang off the test user's id, so both run
+// after testUser.
 var fixtures = []fixture{
 	testUser,
 	whatsAppAccount,
+	businessSettings,
 }
 
 // Apply writes every development fixture, creating what is missing and

@@ -146,7 +146,7 @@ export function RemindersPage() {
     <section className="space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-heading text-2xl font-semibold">Recordatorios</h1>
+          <h2 className="font-heading text-xl font-semibold">Recordatorios</h2>
           <p className="text-muted-foreground">
             Sale un recordatorio por WhatsApp{' '}
             {settings.is_active
