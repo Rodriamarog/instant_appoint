@@ -103,6 +103,7 @@ func newJob(logger *slog.Logger, timeout time.Duration, run func(context.Context
 			"no_template_chosen", summary.NoTemplate,
 			"unusable_timezone", summary.BadTimezone,
 			"not_remindable", summary.NotRemindable,
+			"unwritable_language", summary.NoLanguage,
 			"given_up", summary.GaveUp,
 			"skipped", summary.Skipped,
 		)
