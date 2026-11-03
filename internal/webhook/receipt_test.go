@@ -101,6 +101,51 @@ func TestAClinicThatSendsNoRemindersStillSendsTheReceipt(t *testing.T) {
 	}
 }
 
+// --- whether the assistant may message a patient at all (#36) ------------
+
+// The control, and the only thing it is for. A clinic that has said the
+// assistant may not write to its patients unprompted means every
+// appointment, not only the ones the other suppression rules already catch
+// — so this is asserted in both modes that write appointments rather than
+// in the one the rest of this file happens to use.
+func TestAClinicThatHasTurnedTheReceiptOffGetsNoneInAnyMode(t *testing.T) {
+	for _, mode := range []webhook.Mode{webhook.ModeObserver, webhook.ModeAutopilot} {
+		t.Run(string(mode), func(t *testing.T) {
+			h := setup(options{extract: findsAnAppointment(true)})
+			h.store.setMode(mode)
+			h.store.setOutreach(webhook.OutreachOff)
+
+			h.post(t, payload([]change{messages(textMessage("wamid.in", "5215511111111", "el viernes a las 3", frozen))}))
+
+			// The appointment is still written. This control is about who
+			// the assistant talks to, not about what it may put in the
+			// calendar — that decision is the mode's, and the clinic has
+			// already made it.
+			if got := len(h.store.written()); got != 1 {
+				t.Fatalf("wrote %d appointments, want the appointment itself kept", got)
+			}
+			assertEqual(t, "receipts", h.receipts(), []receipt{})
+		})
+	}
+}
+
+// Autopilot is answering somebody who just wrote in, which is not the
+// assistant speaking unprompted and is not this control's business. A
+// clinic that wanted its patients unanswered has a switch for that, and it
+// is the mode.
+func TestAutopilotStillAnswersAPatientWhoWroteInWhileOutreachIsOff(t *testing.T) {
+	h := setup(options{})
+	h.store.setMode(webhook.ModeAutopilot)
+	h.store.setOutreach(webhook.OutreachOff)
+
+	response := h.post(t, payload([]change{messages(textMessage("wamid.auto", "5215511111111", "hola", frozen))}))
+
+	assertStatus(t, response, http.StatusOK)
+	assertEqual(t, "sent", h.sends(), []send{
+		{phoneNumberID: phoneNumberID, to: "5215511111111", text: "reply to: hola"},
+	})
+}
+
 // A proposal is not an agreement. It exists because the conversation was
 // hedged or partial, and it is written where a member of staff will look at
 // it — asking the patient to confirm a time the clinic has not offered them

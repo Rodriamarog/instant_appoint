@@ -32,6 +32,7 @@ beforeEach(() => {
     template_language: 'es',
     timezone: 'America/Tijuana',
     ai_mode: 'off',
+    patient_outreach: 'on',
   }
 
   updateSettings.mockReset().mockImplementation((id, body) => {
@@ -83,6 +84,28 @@ test('choosing a position writes it down without disturbing the rest of the row'
         template_name: 'recordatorio',
         timing_minutes: 1440,
       }),
+    ),
+  )
+})
+
+/**
+ * The second control on the page writes its own column and leaves the mode
+ * alone. Both save the same single row through the same call, so the one
+ * thing that could go wrong is one of them writing the other's field back
+ * as whatever this page last thought it was.
+ */
+test('silencing the assistant writes that column and leaves the mode alone', async () => {
+  const user = userEvent.setup()
+  storedSettings = { ...storedSettings, ai_mode: 'observer' }
+
+  render(<AssistantPage />)
+
+  await user.click(await screen.findByRole('switch'))
+
+  await waitFor(() =>
+    expect(updateSettings).toHaveBeenCalledWith(
+      'set123',
+      expect.objectContaining({ patient_outreach: 'off', ai_mode: 'observer' }),
     ),
   )
 })

@@ -651,6 +651,49 @@ func TestTheWordsStoredAndTheWordsTheGateReadsAreTheSame(t *testing.T) {
 		t.Errorf("the migration defaults a clinic to %q but the gate spells off as %q",
 			migrations.DefaultAIMode, webhook.ModeOff)
 	}
+	if string(webhook.OutreachOn) != migrations.DefaultPatientOutreach {
+		t.Errorf("the migration defaults patient_outreach to %q but the gate spells on as %q",
+			migrations.DefaultPatientOutreach, webhook.OutreachOn)
+	}
+}
+
+// The clinic's answer has to survive the trip out of the column, and the
+// word it is stored as is the word the gate compares against. A read that
+// quietly lost it would leave the control in Configuración moving and
+// nothing changing.
+func TestFindAccountCarriesWhetherTheAssistantMayMessagePatients(t *testing.T) {
+	app := newApp(t)
+	userID := connectAccount(t, app, "555000111", nil)
+	setAIMode(t, app, userID, string(webhook.ModeObserver))
+	setReminderSettings(t, app, userID, map[string]any{
+		migrations.PatientOutreachField: string(webhook.OutreachOff),
+	})
+
+	account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), "555000111")
+	if err != nil {
+		t.Fatalf("FindAccount: %v", err)
+	}
+	if account.Outreach.MessagesPatients() {
+		t.Errorf("Outreach = %q, which still lets the assistant message patients", account.Outreach)
+	}
+}
+
+// A clinic that has never opened Configuración has no row to read an answer
+// off, and the answer it predates is yes. Its assistant writes nothing in
+// ModeOff so nothing turns on this today, but the value this app falls back
+// to should be the one the column holds rather than whichever one a Go zero
+// value happens to be.
+func TestAClinicWithNoSettingsRowMayStillMessageItsPatients(t *testing.T) {
+	app := newApp(t)
+	connectAccount(t, app, "555000111", nil)
+
+	account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), "555000111")
+	if err != nil {
+		t.Fatalf("FindAccount: %v", err)
+	}
+	if string(account.Outreach) != migrations.DefaultPatientOutreach {
+		t.Errorf("Outreach = %q, want %q", account.Outreach, migrations.DefaultPatientOutreach)
+	}
 }
 
 // setReminderSettings fills in the half of a clinic's settings row the

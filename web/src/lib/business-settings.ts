@@ -65,6 +65,33 @@ export const AI_MODE_OPTIONS: { mode: AIMode; label: string; help: string }[] = 
   },
 ]
 
+/**
+ * Whether the assistant may write to a patient who has not just written in.
+ *
+ * The two words are a storage format, like AIMode's three: the column holds
+ * them, migrations/1793232012_patient_outreach.go writes them, and
+ * internal/webhook compares against them.
+ *
+ * It is a second setting rather than a fourth position on AIMode because the
+ * two answer different questions — what the assistant may do with a
+ * conversation, and whether it may start one.
+ */
+export type PatientOutreach = 'on' | 'off'
+
+/**
+ * Whether the assistant is allowed to speak first, as the control reads a
+ * stored value back.
+ *
+ * Only a deliberate 'off' is off, which is how internal/webhook reads the
+ * same column. A switch that showed "off" for a row written before this
+ * column existed, or for a word this build does not know, would be telling
+ * a clinic its patients hear nothing while they are still getting the
+ * receipt.
+ */
+export function messagesPatients(value: PatientOutreach): boolean {
+  return value !== 'off'
+}
+
 /** One business's settings. */
 export interface BusinessSettings {
   /** Absent until the first save. */
@@ -79,6 +106,8 @@ export interface BusinessSettings {
   timezone: string
   /** What the assistant is allowed to do with inbound messages. */
   ai_mode: AIMode
+  /** Whether the assistant may message a patient of its own accord. */
+  patient_outreach: PatientOutreach
 }
 
 /**
@@ -102,6 +131,14 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   // that predates the switch and one that registered today are in the same
   // position.
   ai_mode: 'off',
+  // On, and for the opposite reason to the line above rather than by
+  // oversight. A clinic only reaches this setting by having already put the
+  // assistant in Observador or Piloto automático, which is to say it has
+  // already agreed to appointments being written into its calendar; the
+  // receipt is the one thing that puts those in front of the patient who
+  // knows whether they agreed to them. The same value is the column default
+  // and the backfill in migrations/1793232012_patient_outreach.go.
+  patient_outreach: 'on',
 }
 
 /** The lead times the dialog offers, longest-used first in the old UI order. */
@@ -195,6 +232,7 @@ export async function saveBusinessSettings(
     template_language,
     timezone,
     ai_mode,
+    patient_outreach,
   } = settings
 
   // user_id is deliberately absent: ownership is not something an edit may
@@ -206,6 +244,7 @@ export async function saveBusinessSettings(
     template_language,
     timezone,
     ai_mode,
+    patient_outreach,
   }
 
   const existing = await findOwn()

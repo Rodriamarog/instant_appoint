@@ -106,7 +106,14 @@ func (s *WebhookStore) FindAccount(_ context.Context, phoneNumberID string) (*we
 		// setting falls back to. A zone has to be something — a receipt
 		// naming a UTC hour sends somebody in at ten at night — and this is
 		// the same value the migration gives a row it creates.
+		//
+		// Outreach is on for that same reason and not because it matters
+		// here: a clinic with no row is in ModeOff, so the assistant writes
+		// no appointment for a receipt to be about. Spelled out anyway, so
+		// that the default this app applies is the default the column
+		// holds rather than whichever one a Go zero value happens to be.
 		Mode:     webhook.ModeOff,
+		Outreach: webhook.Outreach(migrations.DefaultPatientOutreach),
 		Timezone: migrations.DefaultTimezone,
 	}
 
@@ -151,6 +158,7 @@ func (s *WebhookStore) readSettings(userID string, account *webhook.Account) err
 	}
 
 	account.Mode = webhook.Mode(record.GetString(migrations.AIModeField))
+	account.Outreach = webhook.Outreach(record.GetString(migrations.PatientOutreachField))
 
 	// Both halves, because either one missing means internal/reminders
 	// sends nothing: it skips a clinic that is not active and counts one

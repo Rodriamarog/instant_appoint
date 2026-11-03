@@ -196,7 +196,7 @@ test('a saved zone that is not one of the usual ones is kept', async () => {
  */
 test('saving the reminders does not disturb the assistant', async () => {
   const user = userEvent.setup()
-  show({ ai_mode: 'autopilot' })
+  show({ ai_mode: 'autopilot', patient_outreach: 'off' })
 
   expect(screen.queryByRole('radio', { name: /Piloto automático/ })).toBeNull()
 
@@ -205,7 +205,11 @@ test('saving the reminders does not disturb the assistant', async () => {
 
   await waitFor(() =>
     expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({ ai_mode: 'autopilot', timing_minutes: 120 }),
+      expect.objectContaining({
+        ai_mode: 'autopilot',
+        patient_outreach: 'off',
+        timing_minutes: 120,
+      }),
     ),
   )
 })

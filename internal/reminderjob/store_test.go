@@ -54,6 +54,40 @@ func TestActiveSettingsReadsOnlyThePeopleWhoHaveRemindersSwitchedOn(t *testing.T
 	}
 }
 
+// A reminder is the clinic's own scheduled message, not the assistant
+// speaking of its own accord, and #36's control does not reach it. The two
+// are told apart by is_active and a chosen template, which is what this
+// query asks about and all it asks about.
+//
+// This is here rather than as a pure test because there is nothing pure to
+// test: reminders.Settings carries no such field, and the whole of the
+// guarantee is that this query never learns to read one. A test that
+// cannot fail unless somebody adds the column to this function is exactly
+// the test that catches somebody adding it.
+func TestRemindersStillGoOutForAClinicThatHasSilencedTheAssistant(t *testing.T) {
+	app := newApp(t)
+	quiet := newUser(t, app, "quiet@instantappoint.test")
+
+	save(t, app, "business_settings", map[string]any{
+		"user_id": quiet, "timing_minutes": 90, "is_active": true,
+		"template_name": "appointment_reminder", "template_language": "es",
+		"timezone": "America/Tijuana",
+		"ai_mode":  "observer", "patient_outreach": "off",
+	})
+
+	active, err := reminderjob.NewStore(app).ActiveSettings(context.Background())
+	if err != nil {
+		t.Fatalf("ActiveSettings: %v", err)
+	}
+
+	if len(active) != 1 || active[0].UserID != quiet {
+		t.Fatalf("ActiveSettings returned %+v, want the clinic's reminders still scheduled", active)
+	}
+	if active[0].TemplateName != "appointment_reminder" || active[0].LeadTime != 90*time.Minute {
+		t.Errorf("the clinic's reminder configuration came back as %+v, want it untouched", active[0])
+	}
+}
+
 // start_time is a text column compared byte by byte, so the window bounds
 // have to be written in the same fixed-width shape the browser stores. A
 // bound without milliseconds would sort after every millisecond-bearing value

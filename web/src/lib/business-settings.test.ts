@@ -34,6 +34,7 @@ const stored = {
   template_language: 'es',
   timezone: 'America/Tijuana',
   ai_mode: 'autopilot' as const,
+  patient_outreach: 'on' as const,
 }
 
 /** The error the SDK raises when getFirstListItem matches nothing. */
@@ -86,6 +87,17 @@ test('a clinic that has saved nothing has the assistant switched off', async () 
   expect(DEFAULT_SETTINGS.ai_mode).toBe('off')
 })
 
+test('a clinic that has saved nothing still has its patients asked to confirm', async () => {
+  // The other promise to somebody who is not the user, and it points the
+  // other way from the line above. A clinic only reaches this setting by
+  // having already let the assistant write appointments into its calendar,
+  // and the receipt is the only thing that puts one of those in front of
+  // the patient who knows whether they agreed to it. Pinned as a literal
+  // for the same reason: reading it off the module would agree with any
+  // value it ever held.
+  expect(DEFAULT_SETTINGS.patient_outreach).toBe('on')
+})
+
 test('the chosen mode is part of what a save writes', async () => {
   getFirstListItem.mockResolvedValue(stored)
 
@@ -99,7 +111,21 @@ test('the first save of a clinic that never touched the switch creates it off', 
 
   await saveBusinessSettings({ ...DEFAULT_SETTINGS, timing_minutes: 30 })
 
-  expect(create.mock.calls[0][0]).toMatchObject({ ai_mode: 'off' })
+  expect(create.mock.calls[0][0]).toMatchObject({ ai_mode: 'off', patient_outreach: 'on' })
+})
+
+test('silencing the assistant is part of what a save writes', async () => {
+  // A column left out of the body is a control that moves and changes
+  // nothing — and this one is the difference between a patient being
+  // messaged and not.
+  getFirstListItem.mockResolvedValue(stored)
+
+  await saveBusinessSettings({ ...stored, patient_outreach: 'off' })
+
+  expect(update).toHaveBeenCalledWith(
+    'set123',
+    expect.objectContaining({ patient_outreach: 'off' }),
+  )
 })
 
 test('saved settings come back instead of the default', async () => {

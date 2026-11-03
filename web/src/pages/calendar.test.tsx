@@ -61,6 +61,7 @@ beforeEach(() => {
     template_language: 'es',
     timezone: CLINIC_TZ,
     ai_mode: 'off',
+    patient_outreach: 'on',
   })
   vi.spyOn(pb, 'collection').mockReturnValue({
     getFullList,

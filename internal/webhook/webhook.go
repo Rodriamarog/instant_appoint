@@ -151,6 +151,17 @@ type Account struct {
 	// ModeAutopilot, so nothing is sent.
 	Mode Mode
 
+	// Outreach is the clinic's patient_outreach setting: whether the
+	// assistant may message a patient who has not just messaged it. It
+	// rides along with the account for the same reason Mode does, and it
+	// is a second field rather than a fourth position on Mode because it
+	// answers a different question — see outreach.go.
+	//
+	// The zero value is what a clinic with no settings row looks like,
+	// and here that reads as on, which is the behaviour such a clinic
+	// already had.
+	Outreach Outreach
+
 	// Timezone is the IANA zone the clinic keeps time in, which is the
 	// clock a message to a patient names an hour on. Appointments are
 	// stored as UTC instants, so a receipt written without it would send

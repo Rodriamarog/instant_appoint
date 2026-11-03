@@ -162,6 +162,16 @@ func (h *handler) suppressionReason(account Account, appointment Appointment) st
 		return "the assistant did not write this appointment"
 	}
 
+	// The clinic's own instruction, and the only reason here it gave
+	// deliberately. It is checked before the rules this app reasoned out
+	// for itself because none of them are an argument against it: a clinic
+	// that has said the assistant may not message its patients unprompted
+	// has said so about every appointment, however the assistant came to
+	// write it.
+	if !account.Outreach.MessagesPatients() {
+		return "this clinic has turned off messages the assistant sends by itself"
+	}
+
 	if appointment.Status == appointments.Proposed {
 		// Nothing has been agreed. A proposal is a note for a member of
 		// staff to read, and asking the patient to confirm something the

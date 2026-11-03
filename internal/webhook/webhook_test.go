@@ -116,6 +116,12 @@ func newFakeStore() *fakeStore {
 				Mode:        webhook.ModeAutopilot,
 				Timezone:    "America/Tijuana",
 
+				// Allowed to message a patient unprompted, which is what
+				// every settings row holds unless the clinic said
+				// otherwise. The cases about that control say so with
+				// setOutreach.
+				Outreach: webhook.OutreachOn,
+
 				// A day's lead time, which is the default a clinic's
 				// settings row is born with, and far enough ahead of every
 				// appointment in these tests that the reminder is not yet
@@ -131,6 +137,12 @@ func newFakeStore() *fakeStore {
 // the store the handler already holds, so it may be called after setup.
 func (s *fakeStore) setMode(mode webhook.Mode) {
 	s.setAccount(func(account *webhook.Account) { account.Mode = mode })
+}
+
+// setOutreach says whether the default connected number's clinic lets the
+// assistant message a patient of its own accord.
+func (s *fakeStore) setOutreach(outreach webhook.Outreach) {
+	s.setAccount(func(account *webhook.Account) { account.Outreach = outreach })
 }
 
 // setAccount changes the default connected number's account in place, so it
