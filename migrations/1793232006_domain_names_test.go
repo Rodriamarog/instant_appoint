@@ -32,9 +32,13 @@ func newAppBeforeTheRename(t *testing.T) core.App {
 }
 
 // newAppBefore returns a bootstrapped app with every migration applied except
-// the named one and everything after it — the database as it stood the moment
-// before that migration shipped.
-func newAppBefore(t *testing.T, migration string) core.App {
+// the one named and everything after it, so a test can write the rows a real
+// database would already be holding and only then let that migration run.
+//
+// The cut is made on the filename because that is the ordering the migration
+// runner itself applies: deriving "before" any other way would let the test
+// and the runner disagree about what it means.
+func newAppBefore(t *testing.T, migrationFile string) core.App {
 	t.Helper()
 
 	app := pocketbase.NewWithConfig(pocketbase.Config{
@@ -53,15 +57,15 @@ func newAppBefore(t *testing.T, migration string) core.App {
 
 	earlier := core.MigrationsList{}
 	earlier.Copy(core.SystemMigrations)
-	for _, item := range core.AppMigrations.Items() {
-		if item.File >= migration {
+	for _, migration := range core.AppMigrations.Items() {
+		if migration.File >= migrationFile {
 			continue
 		}
-		earlier.Register(item.Up, item.Down, item.File)
+		earlier.Register(migration.Up, migration.Down, migration.File)
 	}
 
 	if _, err := core.NewMigrationsRunner(app, earlier).Up(); err != nil {
-		t.Fatalf("apply the migrations before %s: %v", migration, err)
+		t.Fatalf("apply the migrations before %s: %v", migrationFile, err)
 	}
 
 	return app
@@ -70,13 +74,15 @@ func newAppBefore(t *testing.T, migration string) core.App {
 // migrationsFrom counts the migrations at and after the named one, which is
 // the number Down() has to be given to revert it.
 //
-// Down takes a count of steps back from the end, so a literal here would be
-// right only until the next migration is written — and would then silently
-// revert that one instead, while still passing.
-func migrationsFrom(migration string) int {
+// Down takes a count of migrations, not a ticket, so the count is derived
+// rather than written down: every migration added after the one under test
+// would otherwise silently turn "revert this" into "revert the newest thing
+// and assert against this anyway", which passes for exactly as long as the
+// newest thing happens not to touch the same collections.
+func migrationsFrom(migrationFile string) int {
 	count := 0
-	for _, item := range core.AppMigrations.Items() {
-		if item.File >= migration {
+	for _, migration := range core.AppMigrations.Items() {
+		if migration.File >= migrationFile {
 			count++
 		}
 	}

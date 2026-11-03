@@ -40,8 +40,13 @@ const routerSecret = "integration-router-secret"
 
 // stack is the whole inbound path, assembled the way cmd/server assembles it.
 type stack struct {
-	app   core.App
-	url   string
+	app core.App
+	url string
+
+	// userID is the clinic behind the one connected number, which is what a
+	// test changing the AI mode has to name.
+	userID string
+
 	meta  *recorder
 	ai    *recorder
 	reply string
@@ -67,7 +72,11 @@ func newStack(t *testing.T) *stack {
 	t.Helper()
 
 	s := &stack{app: newApp(t), meta: &recorder{}, ai: &recorder{}, reply: "¿Te viene bien el martes a las 10?"}
-	connectAccount(t, s.app, "555000111", nil)
+	s.userID = connectAccount(t, s.app, "555000111", nil)
+	// On autopilot, which is the only mode that sends anything and so the
+	// only one in which the rest of this file has something to assert. The
+	// clinic that has not switched the assistant on is the last test here.
+	setAIMode(t, s.app, s.userID, "autopilot")
 
 	// Gemini, answering with one candidate.
 	geminiStub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -429,5 +438,37 @@ func TestAFailingAIStepStillAcknowledgesTheDelivery(t *testing.T) {
 	}
 	if s.meta.calls != 0 {
 		t.Errorf("an empty reply was sent to the customer %d times", s.meta.calls)
+	}
+}
+
+// The switch, through the whole assembled stack rather than against a fake.
+// A clinic that has not turned the assistant on gets its patient's message
+// stored and nothing sent — and the proof that nothing was sent is that
+// neither Gemini nor Meta was called at all.
+func TestADeliveryToAClinicWithTheAssistantOffIsStoredAndUnanswered(t *testing.T) {
+	for _, mode := range []string{"off", "observer"} {
+		s := newStack(t)
+		setAIMode(t, s.app, s.userID, mode)
+		now := time.Now()
+
+		status := s.deliver(t, "/api/webhook", deliveryBody("wamid.1", "5215511111111", "hola", now), routerSecret, now)
+		if status != http.StatusOK {
+			t.Fatalf("in %q the status was %d, want 200", mode, status)
+		}
+
+		// Stored, because the clinic still reads its own conversations.
+		if got := s.count(t, "whatsapp_messages"); got != 1 {
+			t.Errorf("in %q there are %d messages, want only the customer's", mode, got)
+		}
+		if got := s.count(t, "conversations"); got != 1 {
+			t.Errorf("in %q there are %d conversations, want 1", mode, got)
+		}
+
+		if s.ai.calls != 0 {
+			t.Errorf("in %q the model was called %d times, want none", mode, s.ai.calls)
+		}
+		if s.meta.calls != 0 {
+			t.Errorf("in %q WhatsApp was called %d times, want none", mode, s.meta.calls)
+		}
 	}
 }
