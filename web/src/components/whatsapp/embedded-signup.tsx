@@ -8,6 +8,14 @@ import { errorMessage } from '@/lib/errors'
 /** Meta only posts signup results from this origin. */
 const FB_ORIGIN = 'https://www.facebook.com'
 
+/**
+ * Shown when the signup ends with no authorization code and Meta never said
+ * why — the popup is simply gone. Deliberately says nothing about causes: the
+ * person did not do this and cannot act on the reason, only on the retry.
+ */
+const SIGNUP_DID_NOT_FINISH =
+  'The signup did not finish, so no number was connected. Try again.'
+
 declare global {
   interface Window {
     fbAsyncInit: () => void
@@ -48,6 +56,11 @@ export function WhatsAppEmbeddedSignup({ onConnected }: Props) {
   // popup opened.
   const signup = useRef<{ wabaId: string; phoneNumberId?: string } | null>(null)
 
+  // What the popup last reported, for the same reason signup is a ref: the
+  // FB.login callback closes over its first render. Null means the popup
+  // never said anything at all, which is the case worth complaining about.
+  const popupOutcome = useRef<'cancel' | 'error' | null>(null)
+
   useEffect(() => {
     // A hot reload leaves the SDK loaded but fbAsyncInit already spent.
     if (window.FB) setSdkReady(true)
@@ -86,8 +99,10 @@ export function WhatsAppEmbeddedSignup({ onConnected }: Props) {
       if (result.kind === 'finish') {
         signup.current = { wabaId: result.wabaId, phoneNumberId: result.phoneNumberId }
       } else if (result.kind === 'cancel') {
+        popupOutcome.current = 'cancel'
         setStatus('idle')
       } else {
+        popupOutcome.current = 'error'
         setStatus('error')
         setFailure(result.message)
       }
@@ -141,12 +156,24 @@ export function WhatsAppEmbeddedSignup({ onConnected }: Props) {
     setStatus('loading')
     setFailure('')
     signup.current = null
+    popupOutcome.current = null
 
     window.FB.login(
       (response: FBResponse) => {
-        // No authResponse means the popup was dismissed rather than failed.
+        // No authResponse covers three different endings, and they must
+        // not look alike. Meta posts CANCEL when the popup was dismissed on
+        // purpose and ERROR when it failed and said why; both have already
+        // put the page where it belongs. Having heard neither, the attempt
+        // died without a word — an SDK that lost track of the popup ends
+        // exactly here — and staying quiet about that is what makes a broken
+        // signup impossible to tell apart from one nobody attempted.
         if (!response.authResponse) {
-          setStatus('idle')
+          if (popupOutcome.current === null) {
+            setStatus('error')
+            setFailure(SIGNUP_DID_NOT_FINISH)
+          } else if (popupOutcome.current === 'cancel') {
+            setStatus('idle')
+          }
           return
         }
 
