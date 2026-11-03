@@ -185,10 +185,22 @@ func (c *Client) baseURL() string {
 	return c.BaseURL
 }
 
-// systemPrompt is the instruction from lib/ai-conversation.ts, verbatim.
+// systemPrompt is the instruction the model answers under.
 //
-// The blank line and the em dash are part of it. The date is the only variable
-// and the only thing anchoring the model's sense of when "next Tuesday" is.
+// It began as a verbatim port of lib/ai-conversation.ts, which told the model
+// to "confirm the appointment clearly" once a time was agreed. Nothing here
+// can create an appointment: the request below carries no tools, the response
+// reader looks only at text, and the one writer of appointments is the
+// dialog a member of staff fills in. So that line had the model telling
+// customers they were booked when no row existed anywhere, and the business
+// found out when someone turned up. The lines below leave the model able to do
+// everything it could already do — answer, gather, settle on a time — while
+// putting the booking itself on a person, which is where it happens until the
+// write path lands.
+//
+// The blank line and the em dash are inherited from the original. The date is
+// the only variable and the only thing anchoring the model's sense of when
+// "next Tuesday" is.
 func (c *Client) systemPrompt() string {
 	now := time.Now
 	if c.Now != nil {
@@ -198,9 +210,12 @@ func (c *Client) systemPrompt() string {
 	return "You are a friendly appointment booking assistant for a business.\n" +
 		"Today is " + now().In(c.zone).Format(jsDateTime) + ".\n" +
 		"\n" +
-		"Your job is to help customers book appointments through natural conversation.\n" +
+		"Your job is to help customers arrange appointments through natural conversation.\n" +
 		"Keep responses concise and conversational — this is WhatsApp, not email.\n" +
-		"When the customer and business agree on a specific date and time, confirm the appointment clearly.\n" +
+		"You cannot create, change or cancel appointments, and nothing you say books one.\n" +
+		"Find out what the customer needs, their name, and the day and time that suits them.\n" +
+		"Once that is settled, repeat it back and tell them a member of staff will be in touch to confirm it.\n" +
+		"Never say or imply that the customer already has an appointment.\n" +
 		"Reply in the same language the customer uses."
 }
 

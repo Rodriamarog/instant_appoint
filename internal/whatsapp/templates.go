@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/pocketbase/pocketbase/core"
 
@@ -79,7 +80,20 @@ type templateDraftRequest struct {
 	Category string `json:"category"`
 	Language string `json:"language"`
 	Body     string `json:"body"`
+
+	// Buttons are quick-reply labels. Absent or empty means a plain template,
+	// which is what every draft submitted before buttons existed looks like.
+	Buttons []string `json:"buttons"`
 }
+
+// What Meta accepts in a row of quick replies. Both limits are its own, and
+// both are checked here rather than paid for with a round trip: a rejection
+// comes back as an opaque Graph error, and the label the patient taps is not
+// something to discover is wrong after the review clock has started.
+const (
+	maxQuickReplyButtons = 3
+	maxQuickReplyLabel   = 25
+)
 
 // createTemplate submits a draft for Meta's approval.
 //
@@ -99,6 +113,15 @@ func createTemplate(client *meta.Client) func(*core.RequestEvent) error {
 			return e.BadRequestError("A template needs a name, a category, a language and a body.", nil)
 		}
 
+		if len(draft.Buttons) > maxQuickReplyButtons {
+			return e.BadRequestError("A template can carry at most three buttons.", nil)
+		}
+		for _, label := range draft.Buttons {
+			if strings.TrimSpace(label) == "" || len(label) > maxQuickReplyLabel {
+				return e.BadRequestError("Every button needs a label of 25 characters or fewer.", nil)
+			}
+		}
+
 		account, err := requireAccount(e)
 		if err != nil {
 			return err
@@ -110,6 +133,7 @@ func createTemplate(client *meta.Client) func(*core.RequestEvent) error {
 				Category: draft.Category,
 				Language: draft.Language,
 				Body:     draft.Body,
+				Buttons:  draft.Buttons,
 			})
 		if err != nil {
 			return metaError(e, "Submitting the template to Meta failed.", err)

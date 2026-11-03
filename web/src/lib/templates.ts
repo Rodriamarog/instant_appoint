@@ -14,7 +14,11 @@ export interface MessageTemplate {
   status: string
   category: string
   language: string
-  components?: { type: string; text?: string }[]
+  components?: {
+    type: string
+    text?: string
+    buttons?: { type: string; text?: string }[]
+  }[]
 }
 
 /** What the create form submits. */
@@ -23,6 +27,9 @@ export interface TemplateDraft {
   category: string
   language: string
   body: string
+
+  /** Quick-reply labels, in the order they sit under the message. */
+  buttons: string[]
 }
 
 export const CATEGORIES = ['UTILITY', 'MARKETING', 'AUTHENTICATION']
@@ -33,13 +40,47 @@ export const LANGUAGES = [
   { code: 'pt_BR', label: 'Portuguese (pt_BR)' },
 ]
 
-/** The body text, which is the only component this app creates or renders. */
+/** Meta's own limits on a row of quick replies. */
+export const MAX_BUTTONS = 3
+export const MAX_BUTTON_LABEL = 25
+
+/**
+ * The Confirm and Cancel wording suggested for each language on offer.
+ *
+ * The buttons live inside the template, so Meta approves them once, in one
+ * language, and a send cannot swap them for the recipient's. Offering the
+ * matching pair with the language is the only point at which that is cheap
+ * to get right — afterwards it costs a new template and another review.
+ */
+export const QUICK_REPLIES: Record<string, [string, string]> = {
+  es: ['Confirmar', 'Cancelar'],
+  en_US: ['Confirm', 'Cancel'],
+  pt_BR: ['Confirmar', 'Cancelar'],
+}
+
+/** The body text, the component that carries the words of the message. */
 export function templateBody(template: MessageTemplate): string {
   const body = template.components?.find(
     (component) => component.type?.toUpperCase() === 'BODY',
   )
 
   return body?.text ?? ''
+}
+
+/**
+ * The template's quick-reply labels, in order.
+ *
+ * Order is the whole identity of a quick reply: a tap is reported by the
+ * button's index under the message, so a list read out of order would name
+ * the wrong one. A template with no buttons gives an empty list rather than
+ * nothing, because most of them have none.
+ */
+export function templateButtons(template: MessageTemplate): string[] {
+  const buttons = template.components?.find(
+    (component) => component.type?.toUpperCase() === 'BUTTONS',
+  )
+
+  return (buttons?.buttons ?? []).map((button) => button.text ?? '')
 }
 
 /**
@@ -87,6 +128,17 @@ export function validateDraft(
 
   if (!draft.body.trim()) {
     problems.body = 'A body is required.'
+  }
+
+  // Meta answers a bad button with the same opaque rejection as a bad name,
+  // except the cost is higher: by then the person has usually decided the
+  // wording and moved on.
+  if (draft.buttons.length > MAX_BUTTONS) {
+    problems.buttons = 'Un mensaje admite como máximo tres botones.'
+  } else if (draft.buttons.some((label) => !label.trim())) {
+    problems.buttons = 'Cada botón necesita un texto.'
+  } else if (draft.buttons.some((label) => label.length > MAX_BUTTON_LABEL)) {
+    problems.buttons = 'El texto de un botón no puede pasar de 25 caracteres.'
   }
 
   return problems

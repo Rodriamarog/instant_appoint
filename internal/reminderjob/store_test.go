@@ -247,7 +247,7 @@ func claimFor(eventID, userID, accountID string, at time.Time) reminders.Claim {
 		AccountID:     accountID,
 		PhoneNumberID: "200000000000002",
 		ToNumber:      "5216641234567",
-		Content:       "appointment_reminder (es): Ana Lopez | 03/11/2026 | 08:30",
+		Content:       "appointment_reminder (es): Ana Lopez | 3 de noviembre de 2026 | 08:30",
 		At:            at,
 	}
 }
@@ -281,7 +281,7 @@ func TestAClaimWritesOneOutboundReminderAttachedToTheCustomersConversation(t *te
 		"event_id":            "evt1",
 		"whatsapp_account_id": accountID,
 		"sent_at":             iso(at),
-		"message_content":     "appointment_reminder (es): Ana Lopez | 03/11/2026 | 08:30",
+		"message_content":     "appointment_reminder (es): Ana Lopez | 3 de noviembre de 2026 | 08:30",
 	} {
 		if got := row.GetString(field); got != want {
 			t.Errorf("%s = %q, want %q", field, got, want)

@@ -205,6 +205,153 @@ test('submits a complete draft and reports that it is pending', async () => {
     category: 'MARKETING',
     language: 'en_US',
     body: 'Thanks for visiting {{1}}.',
+    buttons: [],
+  })
+})
+
+// A reminder the patient answers with one tap. The buttons are part of the
+// template Meta approves, so they are chosen here or not at all.
+test('submits a template carrying Confirm and Cancel quick replies', async () => {
+  stubAccounts(connected)
+  const calls = stubServer({
+    '/api/whatsapp/templates/create': {
+      body: { success: true, template: { id: '1', status: 'PENDING' } },
+    },
+  })
+  const user = userEvent.setup()
+
+  renderPage()
+  await screen.findByText('appointment_reminder')
+  await user.click(screen.getByRole('button', { name: /new template/i }))
+  await user.type(screen.getByLabelText(/^name$/i), 'cita_recordatorio')
+  await user.type(screen.getByLabelText(/body/i), 'Hola {{{{1}}.')
+  await user.click(screen.getByRole('checkbox', { name: /botones/i }))
+  await user.click(screen.getByRole('button', { name: /submit for approval/i }))
+
+  await screen.findByText(/submitted for approval/i)
+
+  const create = calls.find((call) => call.url.endsWith('/create'))
+  expect(JSON.parse(String(create?.init?.body))).toEqual({
+    name: 'cita_recordatorio',
+    category: 'UTILITY',
+    language: 'es',
+    body: 'Hola {{1}}.',
+    buttons: ['Confirmar', 'Cancelar'],
+  })
+})
+
+// The same template exists once per language at Meta, and the buttons are
+// approved inside it: an English template with a Spanish "Confirmar" on it
+// cannot be relabelled per recipient later.
+test('relabels the buttons with the language, but not wording of your own', async () => {
+  stubAccounts(connected)
+  const calls = stubServer({
+    '/api/whatsapp/templates/create': {
+      body: { success: true, template: { id: '1', status: 'PENDING' } },
+    },
+  })
+  const user = userEvent.setup()
+
+  renderPage()
+  await screen.findByText('appointment_reminder')
+  await user.click(screen.getByRole('button', { name: /new template/i }))
+  await user.type(screen.getByLabelText(/^name$/i), 'appointment_reminder')
+  await user.type(screen.getByLabelText(/body/i), 'Hi {{{{1}}.')
+  await user.click(screen.getByRole('checkbox', { name: /botones/i }))
+  await user.selectOptions(screen.getByLabelText(/language/i), 'en_US')
+
+  expect((screen.getByLabelText(/botón 1/i) as HTMLInputElement).value).toBe(
+    'Confirm',
+  )
+
+  // Wording the person typed is theirs. Switching language after it must not
+  // throw it away.
+  await user.clear(screen.getByLabelText(/botón 2/i))
+  await user.type(screen.getByLabelText(/botón 2/i), 'Not this time')
+  await user.selectOptions(screen.getByLabelText(/language/i), 'es')
+  await user.click(screen.getByRole('button', { name: /submit for approval/i }))
+
+  await screen.findByText(/submitted for approval/i)
+
+  const create = calls.find((call) => call.url.endsWith('/create'))
+  expect(JSON.parse(String(create?.init?.body))).toMatchObject({
+    language: 'es',
+    buttons: ['Confirm', 'Not this time'],
+  })
+})
+
+// Whether the submitted template has its buttons is only knowable from what
+// Meta sends back, and it is knowable too late to change: approval is what
+// freezes them.
+test('shows the buttons a template carries next to its review status', async () => {
+  stubAccounts(connected)
+  stubServer({
+    '/api/whatsapp/templates': {
+      body: {
+        templates: [
+          {
+            name: 'cita_recordatorio',
+            status: 'PENDING',
+            category: 'UTILITY',
+            language: 'es',
+            components: [
+              { type: 'BODY', text: 'Hola {{1}}.' },
+              {
+                type: 'BUTTONS',
+                buttons: [
+                  { type: 'QUICK_REPLY', text: 'Confirmar' },
+                  { type: 'QUICK_REPLY', text: 'Cancelar' },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    },
+  })
+
+  renderPage()
+
+  expect(await screen.findByText('cita_recordatorio')).toBeDefined()
+  expect(screen.getByText('PENDING')).toBeDefined()
+  expect(screen.getByText('Confirmar')).toBeDefined()
+  expect(screen.getByText('Cancelar')).toBeDefined()
+})
+
+// Every template that existed before buttons did has none, and the reminder
+// a business already relies on is one of them.
+test('a template with no buttons still reads and sends as it always did', async () => {
+  stubAccounts(connected)
+  const calls = stubServer({
+    '/api/whatsapp/templates/send': {
+      body: { success: true, message_id: 'wamid.TEST' },
+    },
+  })
+  const user = userEvent.setup()
+
+  renderPage()
+  await screen.findByText('appointment_reminder')
+
+  expect(screen.queryByText('Confirmar')).toBeNull()
+  expect(
+    screen.getByText('Hola {{1}}, te recordamos tu cita {{2}}.'),
+  ).toBeDefined()
+
+  await user.click(screen.getByRole('button', { name: /send test/i }))
+  await user.type(screen.getByLabelText(/send to/i), '5216641234567')
+  await user.type(screen.getByLabelText('{{1}}'), 'Ana')
+  await user.type(screen.getByLabelText('{{2}}'), 'mañana')
+  await user.click(screen.getByRole('button', { name: /^send$/i }))
+
+  await waitFor(() => {
+    expect(calls.some((call) => call.url.endsWith('/send'))).toBe(true)
+  })
+  const sent = calls.find((call) => call.url.endsWith('/send'))
+  expect(JSON.parse(String(sent?.init?.body))).toEqual({
+    template_name: 'appointment_reminder',
+    language_code: 'es',
+    to: '5216641234567',
+    body_parameters: ['Ana', 'mañana'],
   })
 })
 

@@ -142,7 +142,7 @@ func TestOneDueReminderSendsExactlyOneTemplateAndWritesExactlyOneRow(t *testing.
 	}
 
 	parameters, _ := component["parameters"].([]any)
-	want := []string{"Ana Lopez", "03/11/2026", "08:30"}
+	want := []string{"Ana Lopez", "3 de noviembre de 2026", "08:30"}
 	if len(parameters) != len(want) {
 		t.Fatalf("parameters = %v, want %v", parameters, want)
 	}
