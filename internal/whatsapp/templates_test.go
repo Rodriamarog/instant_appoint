@@ -340,6 +340,34 @@ func TestCreateTemplateSubmitsQuickReplyButtonsAlongsideTheBody(t *testing.T) {
 	}
 }
 
+// An accented label is the normal case in a Spanish interface, and counting
+// its bytes refused wording Meta's own limit allows: "Confirmación de la
+// visita" is 25 characters and 26 bytes. The browser counted the same label
+// as 25 and accepted it, so the form passed the person's wording and the
+// handler then rejected it. Both sides count characters now, and this is the
+// label that tells the two units apart.
+func TestCreateTemplateAcceptsAnAccentedLabelOfTheFullLength(t *testing.T) {
+	app := newApp(t)
+	user := newUser(t, app, "owner@example.test")
+	connectedAccount(t, app, user.Id, "999000111222333", "200000000000002")
+	graph := newTemplateGraph(t)
+	mux := newMux(t, app, graph.client(), user)
+
+	rec := send(t, mux, http.MethodPost, "/api/whatsapp/templates/create",
+		`{"name":"appointment_reminder","category":"UTILITY","language":"es",`+
+			`"body":"Hola {{1}}.","buttons":["Confirmación de la visita","Cancelar"]}`)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body: %s)", rec.Code, rec.Body)
+	}
+	if len(graph.requests) != 1 {
+		t.Fatalf("made %d Graph calls, want 1: %v", len(graph.requests), graph.requests)
+	}
+	if !strings.Contains(graph.requests[0].body, `"text":"Confirmación de la visita"`) {
+		t.Errorf("the label did not reach Meta intact: %s", graph.requests[0].body)
+	}
+}
+
 // The second language variant is the same request with the words changed.
 // A template name does not identify a template at Meta — the same name
 // exists once per language — so each variant is submitted separately and
