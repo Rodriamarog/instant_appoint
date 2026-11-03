@@ -473,9 +473,24 @@ type Button struct {
 	Title string
 }
 
-// MaxReplyButtons is how many reply buttons Meta accepts on one interactive
-// message. A fourth is not truncated: the whole message is refused.
-const MaxReplyButtons = 3
+// Meta's own limits on a row of reply buttons, whether they go out under an
+// interactive message or are submitted as a template's quick replies: the
+// two are the same row of buttons as far as Meta is concerned, so they are
+// one pair of numbers here rather than a pair per caller.
+//
+// Neither is truncated when exceeded. A fourth button has the whole message
+// refused, and an over-long label has the whole template rejected — which
+// on the template path costs a Graph round trip to learn, and a rejection
+// that reads like any other transport failure.
+const (
+	MaxReplyButtons = 3
+
+	// MaxReplyButtonLabel is how long one button's text may be. Checked
+	// with len, so it is counted in bytes and an accented Spanish label
+	// runs out sooner than its reader would expect — which errs towards
+	// refusing early rather than discovering the limit from Meta.
+	MaxReplyButtonLabel = 25
+)
 
 type interactiveBody struct {
 	// Type is "button" for reply buttons — not the button's own type, which

@@ -86,15 +86,6 @@ type templateDraftRequest struct {
 	Buttons []string `json:"buttons"`
 }
 
-// What Meta accepts in a row of quick replies. Both limits are its own, and
-// both are checked here rather than paid for with a round trip: a rejection
-// comes back as an opaque Graph error, and the label the patient taps is not
-// something to discover is wrong after the review clock has started.
-const (
-	maxQuickReplyButtons = 3
-	maxQuickReplyLabel   = 25
-)
-
 // createTemplate submits a draft for Meta's approval.
 //
 // Nothing is stored here: templates live at Meta, and the freshly created one
@@ -113,11 +104,16 @@ func createTemplate(client *meta.Client) func(*core.RequestEvent) error {
 			return e.BadRequestError("A template needs a name, a category, a language and a body.", nil)
 		}
 
-		if len(draft.Buttons) > maxQuickReplyButtons {
+		// Both limits are Meta's — see internal/meta — and both are checked
+		// here rather than paid for with a round trip: a rejection comes
+		// back as an opaque Graph error, and the label the patient taps is
+		// not something to discover is wrong after the review clock has
+		// started.
+		if len(draft.Buttons) > meta.MaxReplyButtons {
 			return e.BadRequestError("A template can carry at most three buttons.", nil)
 		}
 		for _, label := range draft.Buttons {
-			if strings.TrimSpace(label) == "" || len(label) > maxQuickReplyLabel {
+			if strings.TrimSpace(label) == "" || len(label) > meta.MaxReplyButtonLabel {
 				return e.BadRequestError("Every button needs a label of 25 characters or fewer.", nil)
 			}
 		}
