@@ -42,6 +42,25 @@ func Register(r *router.Router[*core.RequestEvent], dist fs.FS) {
 	}
 }
 
+// relaxOpenerPolicy lets a popup the shell opens keep its opener, overriding
+// the same-origin Cross-Origin-Opener-Policy that PocketBase's default
+// security headers set on every route.
+//
+// same-origin puts a cross-origin popup in a browsing context group of its own
+// and severs window.opener in both directions. Meta's Embedded Signup reports
+// the account it connected by posting a message to its opener, so under the
+// default that result can never arrive: the popup opens, the Facebook SDK is
+// left holding a handle it cannot track, and connecting a number fails without
+// a sign anywhere.
+//
+// same-origin-allow-popups keeps the half that protects this app — no other
+// window can get a reference into this one — while letting a popup this page
+// opened keep its opener. The policy is per-document, so only the shell needs
+// it and every other response keeps the stricter default.
+func relaxOpenerPolicy(e *core.RequestEvent) {
+	e.Response.Header().Set("Cross-Origin-Opener-Policy", "same-origin-allow-popups")
+}
+
 // spa serves dist, falling back to index.html when the request names no file.
 func spa(dist fs.FS) func(*core.RequestEvent) error {
 	// indexFallback is deliberately off: apis.Static's own fallback is
@@ -50,6 +69,14 @@ func spa(dist fs.FS) func(*core.RequestEvent) error {
 	static := apis.Static(dist, false)
 
 	return func(e *core.RequestEvent) error {
+		name := path.Clean("/" + strings.TrimPrefix(e.Request.PathValue(apis.StaticWildcardParam), "/"))
+
+		// The bare path is the shell as well, and Static answers it from
+		// index.html without ever reaching the fallback below.
+		if name == "/" || name == "/"+router.IndexPage {
+			relaxOpenerPolicy(e)
+		}
+
 		err := static(e)
 		if err == nil || !errors.Is(err, router.ErrFileNotFound) {
 			return err
@@ -58,10 +85,11 @@ func spa(dist fs.FS) func(*core.RequestEvent) error {
 		// Only extensionless paths can be client-side routes. Anything that
 		// names a file keeps its 404 so a stale or mistyped asset URL fails
 		// loudly instead of being answered with HTML.
-		name := e.Request.PathValue(apis.StaticWildcardParam)
-		if path.Ext(path.Clean("/"+strings.TrimPrefix(name, "/"))) != "" {
+		if path.Ext(name) != "" {
 			return err
 		}
+
+		relaxOpenerPolicy(e)
 
 		return e.FileFS(dist, router.IndexPage)
 	}

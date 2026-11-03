@@ -171,3 +171,43 @@ func TestRootServesTheAppShell(t *testing.T) {
 		t.Fatalf("body = %q, want the app shell", body)
 	}
 }
+
+func TestTheAppShellLetsAPopupKeepItsOpener(t *testing.T) {
+	mux := newMux(t, testDist())
+
+	// Meta's Embedded Signup reports its result by posting a message to
+	// window.opener. PocketBase's default Cross-Origin-Opener-Policy of
+	// same-origin puts a cross-origin popup in its own browsing context group
+	// and severs that link both ways, so the result can never arrive and
+	// connecting a number fails without a sign. The shell relaxes it to
+	// same-origin-allow-popups, which keeps the half that matters: no other
+	// window can get a reference into this one.
+	for _, path := range []string{"/", "/whatsapp", "/calendar/123"} {
+		rec := get(t, mux, path)
+
+		if got := rec.Header().Get("Cross-Origin-Opener-Policy"); got != "same-origin-allow-popups" {
+			t.Errorf("GET %s: Cross-Origin-Opener-Policy = %q, want same-origin-allow-popups", path, got)
+		}
+	}
+}
+
+func TestOnlyTheShellRelaxesTheOpenerPolicy(t *testing.T) {
+	mux := newMux(t, testDist())
+
+	// The relaxation exists for the one document that opens Meta's popup.
+	// Everything else must be left alone so PocketBase's stricter default
+	// stands.
+	//
+	// This harness holds no PocketBase middleware, so "untouched" is all it
+	// can see: absence here means this handler set nothing, not that the
+	// default is absent in a running server. What the default actually is,
+	// and that the shell's override survives it, is a property of the real
+	// stack — see the note on the ticket.
+	for _, path := range []string{"/assets/app.js", "/assets/missing.js", "/api/does-not-exist"} {
+		rec := get(t, mux, path)
+
+		if got := rec.Header().Get("Cross-Origin-Opener-Policy"); got != "" {
+			t.Errorf("GET %s: Cross-Origin-Opener-Policy = %q, want none so the default stands", path, got)
+		}
+	}
+}
