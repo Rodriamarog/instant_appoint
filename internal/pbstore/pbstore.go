@@ -26,6 +26,7 @@ import (
 	sqlite "modernc.org/sqlite"
 	sqlitelib "modernc.org/sqlite/lib"
 
+	"github.com/Rodriamarog/instant_appoint/internal/appointments"
 	"github.com/Rodriamarog/instant_appoint/internal/webhook"
 	"github.com/Rodriamarog/instant_appoint/migrations"
 )
@@ -35,9 +36,20 @@ import (
 // one.
 const activeConversation = "active"
 
-// conversationMessage is the message_type every message in a conversation
-// carries, as opposed to "reminder".
+// conversationMessage is the message_type an ordinary message in a
+// conversation carries, as opposed to "reminder" or a tap on a button.
 const conversationMessage = "text"
+
+// reminderMessage is the message_type internal/reminderjob writes on the row
+// recording a reminder it sent. That row is the only thing holding both
+// Meta's id for the reminder and the appointment it was about, which is what
+// a tap on the reminder's buttons is matched through.
+//
+// Spelled here as well as there because neither package may import the
+// other, and it sits in the predicate of a unique index besides: it is not a
+// label, and a disagreement between the two spellings would quietly match no
+// tap to anything.
+const reminderMessage = "reminder"
 
 // WebhookStore persists what the webhook handler receives.
 type WebhookStore struct {
@@ -222,17 +234,27 @@ func (s *WebhookStore) SaveMessage(_ context.Context, userID string, message web
 		return err
 	}
 
+	messageType := conversationMessage
+	if message.Kind != webhook.KindText {
+		messageType = string(message.Kind)
+	}
+
 	record := core.NewRecord(collection)
 	record.Set("user_id", userID)
 	// to_number holds the customer in both directions; the name is from when
 	// this collection only recorded reminders going out.
 	record.Set("to_number", message.CustomerPhone)
 	record.Set("message_content", message.Content)
-	record.Set("message_type", conversationMessage)
+	record.Set("message_type", messageType)
 	record.Set("direction", string(message.Direction))
 	record.Set("conversation_id", message.ConversationID)
 	record.Set("sent_at", message.SentAt)
 	record.Set("message_id", message.MessageID)
+	// Empty on everything but a tap that moved an appointment. The reminder
+	// index this column also serves is predicated on message_type =
+	// 'reminder', so a tap naming the same appointment does not collide with
+	// the reminder it answers.
+	record.Set("event_id", message.AppointmentID)
 
 	if err := s.app.Save(record); err != nil {
 		if message.MessageID != "" && IsUniqueViolation(err) {
@@ -279,6 +301,64 @@ func (s *WebhookStore) ConversationHistory(_ context.Context, conversationID str
 	}
 
 	return history, nil
+}
+
+// AppointmentForReminder returns the appointment a sent reminder was about,
+// given Meta's id for that reminder, or "" when this clinic has no reminder
+// with that id.
+//
+// Matched on the reminder's own wamid rather than on the customer's number,
+// because the number does not identify an appointment: a patient with two
+// bookings in one week has two reminders out at once, and the only thing
+// separating them is which message the tap answers.
+//
+// Scoped to the clinic, and to rows this app wrote as reminders. A tap can
+// answer any message the business ever sent; one answering an ordinary reply
+// finds nothing here, which is the correct answer and not a fault.
+func (s *WebhookStore) AppointmentForReminder(_ context.Context, userID, reminderMessageID string) (string, error) {
+	if reminderMessageID == "" {
+		return "", nil
+	}
+
+	record, err := s.app.FindFirstRecordByFilter(
+		migrations.WhatsAppMessagesCollection,
+		"user_id = {:userID} && message_id = {:messageID} && message_type = {:type}",
+		dbx.Params{"userID": userID, "messageID": reminderMessageID, "type": reminderMessage},
+	)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return "", nil
+
+	case err != nil:
+		return "", err
+	}
+
+	return record.GetString("event_id"), nil
+}
+
+// SetAppointmentStatus moves an appointment and records who moved it and
+// when.
+//
+// Three columns and nothing else. The appointment's own details are
+// somebody's work — a phone number corrected while this was in flight, a
+// note typed at the desk — and a status change is not an edit of them.
+func (s *WebhookStore) SetAppointmentStatus(
+	_ context.Context,
+	appointmentID string,
+	status appointments.Status,
+	by appointments.Actor,
+	at string,
+) error {
+	record, err := s.app.FindRecordById(migrations.AppointmentsCollection, appointmentID)
+	if err != nil {
+		return err
+	}
+
+	record.Set(migrations.StatusField, string(status))
+	record.Set(migrations.StatusSetByField, string(by))
+	record.Set(migrations.StatusSetAtField, at)
+
+	return s.app.Save(record)
 }
 
 // IsUniqueViolation reports whether err is a unique or primary-key constraint

@@ -30,10 +30,14 @@ import (
 // store an empty one — and an empty status is an appointment no reminder will
 // ever go out for, with nothing logged and nothing to see. The vocabulary
 // lives in internal/appointments and is enforced by the code that writes it.
+// Exported because internal/pbstore writes three of them: the patient's tap
+// on a reminder lands in Go, not in the browser, and a column name spelled
+// twice is a column name that can disagree with itself.
 const (
-	statusField         = "status"
-	statusSetByField    = "status_set_by"
-	statusSetAtField    = "status_set_at"
+	StatusField      = "status"
+	StatusSetByField = "status_set_by"
+	StatusSetAtField = "status_set_at"
+
 	createdByField      = "created_by"
 	conversationIDField = "conversation_id"
 )
@@ -50,17 +54,17 @@ func init() {
 			// and no repetition — which is PocketBase's only way to give a
 			// field a create-time default.
 			&core.TextField{
-				Name:                statusField,
+				Name:                StatusField,
 				Max:                 20,
 				AutogeneratePattern: string(appointments.Pending),
 			},
 
-			&core.TextField{Name: statusSetByField, Max: 20},
+			&core.TextField{Name: StatusSetByField, Max: 20},
 
 			// ISO-8601 as internal/isotime writes it, text like every other
 			// timestamp in this app: the fixed width is what makes a string
 			// comparison agree with chronological order.
-			&core.TextField{Name: statusSetAtField, Max: 50},
+			&core.TextField{Name: StatusSetAtField, Max: 50},
 
 			&core.TextField{Name: createdByField, Max: 20},
 
@@ -104,7 +108,7 @@ func init() {
 		}
 
 		for _, field := range []string{
-			statusField, statusSetByField, statusSetAtField,
+			StatusField, StatusSetByField, StatusSetAtField,
 			createdByField, conversationIDField,
 		} {
 			collection.Fields.RemoveByName(field)

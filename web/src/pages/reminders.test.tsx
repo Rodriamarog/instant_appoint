@@ -26,6 +26,7 @@ const notFound = () =>
 let appointments: Appointment[] = []
 let storedSettings: Record<string, unknown> | null = null
 let connectedAccount: Record<string, unknown> | null = null
+let unmatchedTaps: Record<string, unknown>[] = []
 
 const createSettings = vi.fn()
 const updateSettings = vi.fn()
@@ -52,6 +53,7 @@ beforeEach(() => {
   appointments = []
   storedSettings = null
   connectedAccount = null
+  unmatchedTaps = []
   createSettings.mockReset().mockImplementation((body) => {
     storedSettings = { id: 'set123', ...body }
     return Promise.resolve(storedSettings)
@@ -67,10 +69,17 @@ beforeEach(() => {
         getFullList: () => Promise.resolve(appointments),
       },
       whatsapp_messages: {
-        // Two reads now: the sent column is a page of history, and the
-        // already-reminded set is asked for by appointment id.
+        // Three reads now: the sent column is a page of history, the
+        // already-reminded set is asked for by appointment id, and the
+        // unmatched taps are asked for on their own. The last two share a
+        // method, so they are told apart by what they ask for.
         getList: () => Promise.resolve({ items: [] }),
-        getFullList: () => Promise.resolve([]),
+        getFullList: (options?: { filter?: string }) =>
+          Promise.resolve(
+            (options?.filter ?? '').includes('message_type = "button"')
+              ? unmatchedTaps
+              : [],
+          ),
       },
       whatsapp_accounts: {
         getFullList: () => Promise.resolve(connectedAccount ? [connectedAccount] : []),
@@ -228,4 +237,44 @@ test('a reminder whose moment has passed is marked due', async () => {
   render(<RemindersPage />)
 
   expect(await screen.findByText('Por enviar')).toBeDefined()
+})
+
+/**
+ * A patient pressed a button under a reminder and the booking did not move.
+ * Nothing else in the app will ever say so — the appointment looks exactly
+ * as it did before the reminder went out — so this page has to.
+ */
+test('a tap that matched no appointment is called out, with who and what', async () => {
+  unmatchedTaps = [
+    {
+      id: 'msg1',
+      user_id: signedInUser.id,
+      conversation_id: 'conv1',
+      direction: 'inbound',
+      message_content: 'Cancelar',
+      message_type: 'button',
+      message_id: 'wamid.tap1',
+      sent_at: '2026-11-02T11:30:00.000Z',
+      to_number: '5215512345678',
+      event_id: '',
+      status: '',
+    },
+  ]
+
+  render(<RemindersPage />)
+
+  const warning = await screen.findByText(/Respuestas sin vincular/)
+  const banner = warning.closest('div')
+
+  expect(banner?.textContent).toContain('5215512345678')
+  expect(banner?.textContent).toContain('Cancelar')
+})
+
+test('nothing is said when every tap found its appointment', async () => {
+  render(<RemindersPage />)
+
+  expect(await screen.findByText('Próximos')).toBeDefined()
+  await waitFor(() =>
+    expect(screen.queryByText(/Respuestas sin vincular/)).toBeNull(),
+  )
 })

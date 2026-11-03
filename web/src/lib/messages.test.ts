@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { listConversations } from '@/lib/conversations'
 import {
   listMessages,
+  listUnmatchedTaps,
   listSentReminders,
   remindedEventIds,
   type Message,
@@ -177,4 +178,29 @@ test('asking about no appointments asks the database nothing', async () => {
 
   expect(await remindedEventIds([])).toEqual(new Set())
   expect(getFullList).not.toHaveBeenCalled()
+})
+
+/**
+ * The taps that changed nothing, asked for as a bounded list: this person's,
+ * taps only, the ones carrying no appointment, and only recent ones.
+ *
+ * The window is what keeps the warning readable. Nothing marks one of these
+ * as dealt with, so without it the page would accumulate every tap that ever
+ * missed and become a banner nobody reads.
+ */
+test('the unmatched taps asked for are this person’s, recent, and newest first', async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-11-02T12:00:00.000Z'))
+
+  const getFullList = stubList([])
+  await listUnmatchedTaps()
+
+  const options = getFullList.mock.calls[0][0]
+  expect(options?.filter).toContain("user_id = 'user123'")
+  expect(options?.filter).toContain('message_type = "button"')
+  expect(options?.filter).toContain('event_id = ""')
+  expect(options?.filter).toContain("sent_at >= '2026-10-26T12:00:00.000Z'")
+  expect(options?.sort).toBe('-sent_at')
+
+  vi.useRealTimers()
 })
