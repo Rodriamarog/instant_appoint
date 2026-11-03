@@ -114,7 +114,7 @@ test('the dialog offers no reminder message to write', () => {
   // teach staff that typing here changed what the client received.
   renderDialog({ mode: 'create', event: newSlot })
 
-  expect(screen.queryByLabelText(/reminder message/i)).toBeNull()
+  expect(screen.queryByLabelText(/mensaje de recordatorio/i)).toBeNull()
 })
 
 test('a note is the staff member’s own words, never copy written for them', async () => {
@@ -123,15 +123,15 @@ test('a note is the staff member’s own words, never copy written for them', as
   const user = userEvent.setup()
   renderDialog({ mode: 'create', event: newSlot })
 
-  await user.type(screen.getByLabelText(/client name/i), 'Ana')
+  await user.type(screen.getByLabelText(/nombre del cliente/i), 'Ana')
 
-  expect(value(/notes/i)).toBe('')
+  expect(value(/notas/i)).toBe('')
 
-  await user.type(screen.getByLabelText(/notes/i), 'Bring your x-rays.')
+  await user.type(screen.getByLabelText(/notas/i), 'Bring your x-rays.')
 
-  expect(value(/notes/i)).toBe('Bring your x-rays.')
+  expect(value(/notas/i)).toBe('Bring your x-rays.')
 
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
   await waitFor(() => expect(create).toHaveBeenCalled())
   expect(create.mock.calls[0][0]).toMatchObject({ notes: 'Bring your x-rays.' })
@@ -144,9 +144,9 @@ test('text written when the field was a reminder message is still shown and stil
   const user = userEvent.setup()
   renderDialog()
 
-  expect(value(/notes/i)).toBe('See you at the back entrance, Ana.')
+  expect(value(/notas/i)).toBe('See you at the back entrance, Ana.')
 
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
   await waitFor(() => expect(update).toHaveBeenCalled())
   expect(update.mock.calls[0][1]).toMatchObject({
@@ -162,11 +162,11 @@ test('a note changes nothing about what a reminder is built from', async () => {
   const user = userEvent.setup()
   renderDialog({ mode: 'create', event: newSlot })
 
-  await user.type(screen.getByLabelText(/client name/i), 'Ana Ruiz')
-  await user.selectOptions(screen.getByLabelText(/country code/i), '521')
-  await user.type(screen.getByLabelText(/phone number/i), '5512345678')
-  await user.type(screen.getByLabelText(/notes/i), 'Allergic to latex.')
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.type(screen.getByLabelText(/nombre del cliente/i), 'Ana Ruiz')
+  await user.selectOptions(screen.getByLabelText(/código de país/i), '521')
+  await user.type(screen.getByLabelText(/número de teléfono/i), '5512345678')
+  await user.type(screen.getByLabelText(/notas/i), 'Allergic to latex.')
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
   await waitFor(() => expect(create).toHaveBeenCalled())
 
@@ -180,10 +180,10 @@ test('a new appointment is created for the signed-in person', async () => {
   const user = userEvent.setup()
   const { onSaved } = renderDialog({ mode: 'create', event: newSlot })
 
-  await user.type(screen.getByLabelText(/client name/i), 'Ana Ruiz')
-  await user.type(screen.getByLabelText(/phone number/i), '5512345678')
-  await user.type(screen.getByLabelText(/location/i), 'Suite 2')
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.type(screen.getByLabelText(/nombre del cliente/i), 'Ana Ruiz')
+  await user.type(screen.getByLabelText(/número de teléfono/i), '5512345678')
+  await user.type(screen.getByLabelText(/lugar/i), 'Suite 2')
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
   await waitFor(() => expect(create).toHaveBeenCalled())
 
@@ -200,10 +200,10 @@ test('the country code is stored as a prefix on the phone number', async () => {
   const user = userEvent.setup()
   renderDialog({ mode: 'create', event: newSlot })
 
-  await user.type(screen.getByLabelText(/client name/i), 'Ana Ruiz')
-  await user.selectOptions(screen.getByLabelText(/country code/i), '521')
-  await user.type(screen.getByLabelText(/phone number/i), '55 1234 5678')
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.type(screen.getByLabelText(/nombre del cliente/i), 'Ana Ruiz')
+  await user.selectOptions(screen.getByLabelText(/código de país/i), '521')
+  await user.type(screen.getByLabelText(/número de teléfono/i), '55 1234 5678')
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
   await waitFor(() => expect(create).toHaveBeenCalled())
   expect(create.mock.calls[0][0].client_phone).toBe('5215512345678')
@@ -212,16 +212,16 @@ test('the country code is stored as a prefix on the phone number', async () => {
 test('a stored phone number is split back into its country code and digits', () => {
   renderDialog({ event: savedEvent({ client_phone: '5215512345678' }) })
 
-  expect(value(/country code/i)).toBe('521')
-  expect(value(/phone number/i)).toBe('5512345678')
+  expect(value(/código de país/i)).toBe('521')
+  expect(value(/número de teléfono/i)).toBe('5512345678')
 })
 
 test('the times written are the millisecond-precision UTC format', async () => {
   const user = userEvent.setup()
   renderDialog({ mode: 'create', event: newSlot })
 
-  await user.type(screen.getByLabelText(/client name/i), 'Ana Ruiz')
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.type(screen.getByLabelText(/nombre del cliente/i), 'Ana Ruiz')
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
   await waitFor(() => expect(create).toHaveBeenCalled())
 
@@ -243,7 +243,7 @@ test('an appointment opened for editing keeps the time it was saved with', async
   })
   renderDialog({ event: saved })
 
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
   await waitFor(() => expect(update).toHaveBeenCalled())
   expect(update.mock.calls[0][1]).toMatchObject({
@@ -256,14 +256,14 @@ test('an appointment that ends before it starts is refused', async () => {
   const user = userEvent.setup()
   renderDialog({ mode: 'create', event: newSlot })
 
-  await user.type(screen.getByLabelText(/client name/i), 'Ana Ruiz')
-  await user.clear(screen.getByLabelText(/end time/i))
-  await user.type(screen.getByLabelText(/end time/i), '08:00')
-  await user.clear(screen.getByLabelText(/start time/i))
-  await user.type(screen.getByLabelText(/start time/i), '09:00')
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.type(screen.getByLabelText(/nombre del cliente/i), 'Ana Ruiz')
+  await user.clear(screen.getByLabelText(/hora de fin/i))
+  await user.type(screen.getByLabelText(/hora de fin/i), '08:00')
+  await user.clear(screen.getByLabelText(/hora de inicio/i))
+  await user.type(screen.getByLabelText(/hora de inicio/i), '09:00')
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
-  expect((await screen.findByRole('alert')).textContent).toMatch(/end time/i)
+  expect((await screen.findByRole('alert')).textContent).toMatch(/hora de fin/i)
   expect(create).not.toHaveBeenCalled()
 })
 
@@ -271,9 +271,9 @@ test('an appointment with no client name is refused', async () => {
   const user = userEvent.setup()
   renderDialog({ mode: 'create', event: newSlot })
 
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
-  expect((await screen.findByRole('alert')).textContent).toMatch(/client name/i)
+  expect((await screen.findByRole('alert')).textContent).toMatch(/nombre del cliente/i)
   expect(create).not.toHaveBeenCalled()
 })
 
@@ -281,10 +281,10 @@ test('editing an existing appointment updates it rather than creating another', 
   const user = userEvent.setup()
   const { onSaved } = renderDialog()
 
-  const name = screen.getByLabelText(/client name/i)
+  const name = screen.getByLabelText(/nombre del cliente/i)
   await user.clear(name)
   await user.type(name, 'Ana Ruiz-Moreno')
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
   await waitFor(() => expect(update).toHaveBeenCalled())
   expect(update.mock.calls[0][0]).toBe('evt123')
@@ -299,7 +299,7 @@ test('an edit keeps the location rather than erasing it', async () => {
   const user = userEvent.setup()
   renderDialog()
 
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
   await waitFor(() => expect(update).toHaveBeenCalled())
   expect(update.mock.calls[0][1]).toMatchObject({ location: 'Suite 2' })
@@ -309,7 +309,7 @@ test('an appointment is deleted from the dialog', async () => {
   const user = userEvent.setup()
   const { onSaved } = renderDialog()
 
-  await user.click(screen.getByRole('button', { name: 'Delete' }))
+  await user.click(screen.getByRole('button', { name: 'Eliminar' }))
 
   await waitFor(() => expect(remove).toHaveBeenCalledWith('evt123'))
   expect(onSaved).toHaveBeenCalled()
@@ -318,7 +318,7 @@ test('an appointment is deleted from the dialog', async () => {
 test('a new appointment offers no Delete button', () => {
   renderDialog({ mode: 'create', event: newSlot })
 
-  expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Eliminar' })).toBeNull()
 })
 
 // --- status and provenance ------------------------------------------------
@@ -437,8 +437,8 @@ test('a rejected save is reported rather than swallowed', async () => {
   create.mockRejectedValue(new Error('Failed to create record.'))
   const { onSaved } = renderDialog({ mode: 'create', event: newSlot })
 
-  await user.type(screen.getByLabelText(/client name/i), 'Ana Ruiz')
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.type(screen.getByLabelText(/nombre del cliente/i), 'Ana Ruiz')
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
   expect((await screen.findByRole('alert')).textContent).toMatch(
     /failed to create record/i,

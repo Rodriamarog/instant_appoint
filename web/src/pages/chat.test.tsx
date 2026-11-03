@@ -191,8 +191,8 @@ test('a reply is sent and shown in the thread', async () => {
   renderChat({ conversations: conversations.feed, messages: () => messages.feed })
 
   await userEvent.click(await screen.findByRole('button', { name: /5216642222222/ }))
-  await userEvent.type(screen.getByLabelText('Message'), 'Tuesday at ten it is.')
-  await userEvent.click(screen.getByRole('button', { name: /send/i }))
+  await userEvent.type(screen.getByLabelText('Mensaje'), 'Tuesday at ten it is.')
+  await userEvent.click(screen.getByRole('button', { name: /enviar/i }))
 
   const shown = await screen.findByText('Tuesday at ten it is.')
   expect(shown.closest('li')?.dataset.direction).toBe('outbound')
@@ -206,7 +206,7 @@ test('a reply is sent and shown in the thread', async () => {
 
   // The box is cleared, and the reply the connection echoes back does not
   // double it up.
-  expect((screen.getByLabelText('Message') as HTMLInputElement).value).toBe('')
+  expect((screen.getByLabelText('Mensaje') as HTMLInputElement).value).toBe('')
   messages.deliver([...thread, sent])
   await waitFor(() =>
     expect(screen.getAllByText('Tuesday at ten it is.')).toHaveLength(1),
@@ -232,14 +232,14 @@ test('a refused send says why and keeps what was typed', async () => {
   })
 
   await userEvent.click(await screen.findByRole('button', { name: /5216642222222/ }))
-  await userEvent.type(screen.getByLabelText('Message'), 'Still there?')
-  await userEvent.click(screen.getByRole('button', { name: /send/i }))
+  await userEvent.type(screen.getByLabelText('Mensaje'), 'Still there?')
+  await userEvent.click(screen.getByRole('button', { name: /enviar/i }))
 
   expect(await screen.findByRole('alert')).toHaveProperty(
     'textContent',
     'WhatsApp rejected the message: too late.',
   )
-  expect((screen.getByLabelText('Message') as HTMLInputElement).value).toBe(
+  expect((screen.getByLabelText('Mensaje') as HTMLInputElement).value).toBe(
     'Still there?',
   )
 })

@@ -18,7 +18,7 @@ export function WhatsAppPage() {
       setAccounts(await listConnectedAccounts())
       setError('')
     } catch {
-      setError('Could not load your connected numbers.')
+      setError('No se pudieron cargar tus números conectados.')
     } finally {
       setIsLoading(false)
     }
@@ -35,8 +35,8 @@ export function WhatsAppPage() {
       <div>
         <h1 className="font-heading text-2xl font-semibold">WhatsApp</h1>
         <p className="text-muted-foreground">
-          Connect the WhatsApp Business number appointment reminders and replies
-          are sent from.
+          Conecta el número de WhatsApp Business desde el que salen los
+          recordatorios de las citas y las respuestas.
         </p>
       </div>
 
@@ -50,7 +50,7 @@ export function WhatsAppPage() {
                 : 'rounded-full px-3 py-1 text-xs font-medium ring-1 ring-border'
             }
           >
-            {isLoading ? 'Checking...' : isConnected ? 'Connected' : 'Not connected'}
+            {isLoading ? 'Comprobando...' : isConnected ? 'Conectado' : 'Sin conectar'}
           </span>
         </CardHeader>
 
@@ -62,15 +62,15 @@ export function WhatsAppPage() {
               <p className="font-medium">{account.verified_name || 'WhatsApp Business'}</p>
               <p className="text-sm">{displayNumber(account)}</p>
               <p className="text-xs text-muted-foreground">
-                WhatsApp Business account {account.waba_id}
+                Cuenta de WhatsApp Business {account.waba_id}
               </p>
             </div>
           ))}
 
           <p className="text-sm text-muted-foreground">
             {isConnected
-              ? 'This number is connected through Meta’s Cloud API. Connect another below.'
-              : 'Your number must belong to a WhatsApp Business account. A number already on the free WhatsApp Business app can keep using it — Meta calls this coexistence, and the signup handles it.'}
+              ? 'Este número está conectado a través de la Cloud API de Meta. Puedes conectar otro aquí abajo.'
+              : 'Tu número debe pertenecer a una cuenta de WhatsApp Business. Un número que ya use la app gratuita de WhatsApp Business puede seguir usándola — Meta lo llama coexistencia, y la conexión lo contempla.'}
           </p>
 
           <WhatsAppEmbeddedSignup onConnected={load} />

@@ -14,7 +14,7 @@ const FB_ORIGIN = 'https://www.facebook.com'
  * person did not do this and cannot act on the reason, only on the retry.
  */
 const SIGNUP_DID_NOT_FINISH =
-  'The signup did not finish, so no number was connected. Try again.'
+  'La conexión no terminó, así que no se conectó ningún número. Inténtalo de nuevo.'
 
 declare global {
   interface Window {
@@ -83,7 +83,9 @@ export function WhatsAppEmbeddedSignup({ onConnected }: Props) {
       script.defer = true
       script.onerror = () => {
         setStatus('error')
-        setFailure('Could not load the Facebook SDK. An ad blocker usually causes this.')
+        setFailure(
+          'No se pudo cargar el SDK de Facebook. Normalmente lo provoca un bloqueador de anuncios.',
+        )
       }
       document.body.appendChild(script)
     }
@@ -117,7 +119,9 @@ export function WhatsAppEmbeddedSignup({ onConnected }: Props) {
     const finished = signup.current
     if (!finished) {
       setStatus('error')
-      setFailure('Facebook did not say which WhatsApp Business account was connected.')
+      setFailure(
+        'Facebook no dijo qué cuenta de WhatsApp Business se conectó.',
+      )
       return
     }
 
@@ -134,7 +138,7 @@ export function WhatsAppEmbeddedSignup({ onConnected }: Props) {
             phone_number_id: finished.phoneNumberId,
           }),
         },
-        'Connecting the account failed.',
+        'No se pudo conectar la cuenta.',
       )
 
       signup.current = null
@@ -142,14 +146,16 @@ export function WhatsAppEmbeddedSignup({ onConnected }: Props) {
       onConnected()
     } catch (err) {
       setStatus('error')
-      setFailure(errorMessage(err, 'Connecting the account failed.'))
+      setFailure(errorMessage(err, 'No se pudo conectar la cuenta.'))
     }
   }
 
   const launch = () => {
     if (!window.FB) {
       setStatus('error')
-      setFailure('The Facebook SDK is still loading. Try again in a moment.')
+      setFailure(
+        'El SDK de Facebook todavía se está cargando. Inténtalo en un momento.',
+      )
       return
     }
 
@@ -200,10 +206,12 @@ export function WhatsAppEmbeddedSignup({ onConnected }: Props) {
         disabled={!sdkReady || status === 'loading' || status === 'success'}
         className="bg-[#1877F2] text-white hover:bg-[#166FE5]"
       >
-        {!sdkReady && 'Loading...'}
-        {sdkReady && status === 'loading' && 'Opening Facebook...'}
-        {sdkReady && status === 'success' && 'Connected'}
-        {sdkReady && (status === 'idle' || status === 'error') && 'Connect WhatsApp Business'}
+        {!sdkReady && 'Cargando...'}
+        {sdkReady && status === 'loading' && 'Abriendo Facebook...'}
+        {sdkReady && status === 'success' && 'Conectado'}
+        {sdkReady &&
+          (status === 'idle' || status === 'error') &&
+          'Conectar WhatsApp Business'}
       </Button>
 
       {status === 'error' && failure && (

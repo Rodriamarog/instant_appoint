@@ -77,7 +77,7 @@ export function TemplatesPage() {
       setListError('')
     } catch (error) {
       setListError(
-        errorMessage(error, 'Could not load your templates.'),
+        errorMessage(error, 'No se pudieron cargar tus plantillas.'),
       )
     } finally {
       setIsLoading(false)
@@ -89,18 +89,18 @@ export function TemplatesPage() {
   }, [load])
 
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading templates…</p>
+    return <p className="text-sm text-muted-foreground">Cargando plantillas…</p>
   }
 
   if (!hasAccount) {
     return (
       <div className="space-y-3">
-        <h2 className="font-heading text-2xl font-bold">Templates</h2>
+        <h2 className="font-heading text-2xl font-bold">Plantillas</h2>
         <p className="text-sm text-muted-foreground">
-          Connect a WhatsApp Business number before creating templates.
+          Conecta un número de WhatsApp Business antes de crear plantillas.
         </p>
         <Link to="/whatsapp" className="text-sm underline">
-          Go to WhatsApp setup
+          Ir a la conexión de WhatsApp
         </Link>
       </div>
     )
@@ -109,10 +109,11 @@ export function TemplatesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-heading text-2xl font-bold">Templates</h2>
+        <h2 className="font-heading text-2xl font-bold">Plantillas</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Message templates live at Meta. A new one stays PENDING until Meta
-          approves it, and only an approved template can be sent.
+          Las plantillas de mensaje viven en Meta. Una nueva se queda en
+          PENDING hasta que Meta la aprueba, y solo se puede enviar una
+          plantilla aprobada.
         </p>
       </div>
 
@@ -122,12 +123,12 @@ export function TemplatesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Your templates</CardTitle>
+          <CardTitle>Tus plantillas</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {templates.length === 0 && !listError && (
             <p className="text-sm text-muted-foreground">
-              No templates yet. Create one above.
+              Aún no hay plantillas. Crea una aquí arriba.
             </p>
           )}
           {templates.map((template) => (
@@ -186,13 +187,13 @@ function CreateTemplateForm({ onCreated }: { onCreated: () => Promise<void> }) {
     try {
       await createTemplate(draft)
       setSuccess(
-        `"${draft.name}" was submitted for approval. It stays PENDING until Meta approves it.`,
+        `"${draft.name}" se envió a aprobación. Se queda en PENDING hasta que Meta la apruebe.`,
       )
       setDraft(emptyDraft)
       setIsOpen(false)
       await onCreated()
     } catch (error) {
-      setFailure(errorMessage(error, 'Submitting the template failed.'))
+      setFailure(errorMessage(error, 'No se pudo enviar la plantilla.'))
     } finally {
       setIsSubmitting(false)
     }
@@ -208,7 +209,7 @@ function CreateTemplateForm({ onCreated }: { onCreated: () => Promise<void> }) {
           setSuccess('')
         }}
       >
-        {isOpen ? 'Cancel' : 'New template'}
+        {isOpen ? 'Cancelar' : 'Nueva plantilla'}
       </Button>
 
       {success && <Alert>{success}</Alert>}
@@ -217,16 +218,16 @@ function CreateTemplateForm({ onCreated }: { onCreated: () => Promise<void> }) {
       {isOpen && (
         <Card>
           <CardHeader>
-            <CardTitle>New template</CardTitle>
+            <CardTitle>Nueva plantilla</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-1">
-                <Label htmlFor="template-name">Name</Label>
+                <Label htmlFor="template-name">Nombre</Label>
                 <Input
                   id="template-name"
                   value={draft.name}
-                  placeholder="appointment_reminder"
+                  placeholder="recordatorio_de_cita"
                   onChange={(event) =>
                     setDraft({ ...draft, name: event.target.value })
                   }
@@ -235,7 +236,7 @@ function CreateTemplateForm({ onCreated }: { onCreated: () => Promise<void> }) {
               </div>
 
               <div className="space-y-1">
-                <Label htmlFor="template-category">Category</Label>
+                <Label htmlFor="template-category">Categoría</Label>
                 <select
                   id="template-category"
                   className="h-9 w-full rounded-md border px-2 text-sm"
@@ -254,7 +255,7 @@ function CreateTemplateForm({ onCreated }: { onCreated: () => Promise<void> }) {
               </div>
 
               <div className="space-y-1">
-                <Label htmlFor="template-language">Language</Label>
+                <Label htmlFor="template-language">Idioma</Label>
                 <select
                   id="template-language"
                   className="h-9 w-full rounded-md border px-2 text-sm"
@@ -272,7 +273,7 @@ function CreateTemplateForm({ onCreated }: { onCreated: () => Promise<void> }) {
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="template-body">Body</Label>
+              <Label htmlFor="template-body">Mensaje</Label>
               <Textarea
                 id="template-body"
                 rows={3}
@@ -283,7 +284,7 @@ function CreateTemplateForm({ onCreated }: { onCreated: () => Promise<void> }) {
                 }
               />
               <p className="text-xs text-muted-foreground">
-                Use {'{{1}}'}, {'{{2}}'} where a value goes.
+                Usa {'{{1}}'}, {'{{2}}'} donde vaya un valor.
               </p>
               <FieldProblem problem={problems.body} />
             </div>
@@ -340,7 +341,7 @@ function CreateTemplateForm({ onCreated }: { onCreated: () => Promise<void> }) {
             </div>
 
             <Button type="button" onClick={submit} disabled={isSubmitting}>
-              {isSubmitting ? 'Submitting…' : 'Submit for approval'}
+              {isSubmitting ? 'Enviando…' : 'Enviar a aprobación'}
             </Button>
           </CardContent>
         </Card>
@@ -373,13 +374,16 @@ function TemplateRow({ template }: { template: MessageTemplate }) {
 
   const send = async () => {
     if (!to.trim()) {
-      setFeedback({ ok: false, text: 'Enter a number to send to.' })
+      setFeedback({ ok: false, text: 'Escribe el número al que enviar.' })
       return
     }
     // Meta rejects the whole send if a placeholder has no value, so the
     // missing one is worth saying before the round trip.
     if (slots.some((slot) => !(values[slot] ?? '').trim())) {
-      setFeedback({ ok: false, text: 'Fill every placeholder before sending.' })
+      setFeedback({
+        ok: false,
+        text: 'Rellena todos los valores antes de enviar.',
+      })
       return
     }
 
@@ -392,14 +396,14 @@ function TemplateRow({ template }: { template: MessageTemplate }) {
         to: to.trim(),
         bodyParameters: slots.map((slot) => values[slot].trim()),
       })
-      setFeedback({ ok: true, text: `Message sent (${messageID}).` })
+      setFeedback({ ok: true, text: `Mensaje enviado (${messageID}).` })
       setIsOpen(false)
       setTo('')
       setValues({})
     } catch (error) {
       setFeedback({
         ok: false,
-        text: errorMessage(error, 'Sending failed.'),
+        text: errorMessage(error, 'No se pudo enviar.'),
       })
     } finally {
       setIsSending(false)
@@ -433,7 +437,7 @@ function TemplateRow({ template }: { template: MessageTemplate }) {
                 setFeedback(null)
               }}
             >
-              {isOpen ? 'Close' : 'Send test'}
+              {isOpen ? 'Cerrar' : 'Enviar prueba'}
             </Button>
           )}
         </div>
@@ -465,11 +469,11 @@ function TemplateRow({ template }: { template: MessageTemplate }) {
       {isOpen && (
         <div className="space-y-2 pt-1">
           <div className="space-y-1">
-            <Label htmlFor={`send-to-${template.name}`}>Send to</Label>
+            <Label htmlFor={`send-to-${template.name}`}>Enviar a</Label>
             <Input
               id={`send-to-${template.name}`}
               value={to}
-              placeholder="Country code and number, digits only"
+              placeholder="Código de país y número, solo dígitos"
               onChange={(event) => setTo(event.target.value)}
             />
           </div>
@@ -490,7 +494,7 @@ function TemplateRow({ template }: { template: MessageTemplate }) {
           ))}
 
           <Button type="button" onClick={send} disabled={isSending}>
-            {isSending ? 'Sending…' : 'Send'}
+            {isSending ? 'Enviando…' : 'Enviar'}
           </Button>
         </div>
       )}

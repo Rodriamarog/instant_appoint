@@ -25,7 +25,7 @@ export function LoginPage() {
 
   const handleResendVerification = async () => {
     if (!email) {
-      setError('Please enter your email address first')
+      setError('Escribe primero tu correo electrónico')
       return
     }
 
@@ -35,9 +35,11 @@ export function LoginPage() {
 
     try {
       await requestVerification(email)
-      setVerificationMessage('Verification email sent! Check your inbox.')
+      setVerificationMessage(
+        'Te enviamos el correo de verificación. Revisa tu bandeja de entrada.',
+      )
     } catch (err) {
-      setError(errorMessage(err, 'Failed to send verification email'))
+      setError(errorMessage(err, 'No se pudo enviar el correo de verificación'))
     } finally {
       setIsResendingVerification(false)
     }
@@ -59,7 +61,7 @@ export function LoginPage() {
       await signIn(emailVal, passwordVal)
       navigate('/calendar')
     } catch (err) {
-      setError(errorMessage(err, 'Failed to login'))
+      setError(errorMessage(err, 'No se pudo iniciar sesión'))
       setIsLoading(false) // Only reset on error; success navigates away.
     }
   }
@@ -72,7 +74,7 @@ export function LoginPage() {
             InstantAppoint
           </CardTitle>
           <CardDescription className="text-center">
-            Sign in to your account to manage appointments
+            Inicia sesión en tu cuenta para gestionar tus citas
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
@@ -96,13 +98,13 @@ export function LoginPage() {
 
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
-                Email
+                Correo electrónico
               </label>
               <Input
                 id="email"
                 name="email"
                 type="email"
-                placeholder="Enter your email"
+                placeholder="Escribe tu correo"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -111,13 +113,13 @@ export function LoginPage() {
 
             <div className="space-y-2">
               <label htmlFor="password" className="text-sm font-medium">
-                Password
+                Contraseña
               </label>
               <Input
                 id="password"
                 name="password"
                 type="password"
-                placeholder="Enter your password"
+                placeholder="Escribe tu contraseña"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -127,25 +129,25 @@ export function LoginPage() {
 
           <CardFooter className="flex flex-col space-y-4">
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Signing in...' : 'Sign In'}
+              {isLoading ? 'Iniciando sesión...' : 'Iniciar sesión'}
             </Button>
 
             <div className="text-sm text-center text-gray-600 space-y-2">
               <p>
-                Don&apos;t have an account?{' '}
+                ¿No tienes cuenta?{' '}
                 <Link to="/register" className="text-blue-600 hover:underline">
-                  Sign up
+                  Crear cuenta
                 </Link>
               </p>
               <p>
-                Haven&apos;t verified your email?{' '}
+                ¿Aún no verificas tu correo?{' '}
                 <button
                   type="button"
                   onClick={handleResendVerification}
                   disabled={isResendingVerification}
                   className="text-blue-600 hover:underline disabled:opacity-50"
                 >
-                  {isResendingVerification ? 'Sending...' : 'Resend verification'}
+                  {isResendingVerification ? 'Enviando...' : 'Reenviar verificación'}
                 </button>
               </p>
             </div>

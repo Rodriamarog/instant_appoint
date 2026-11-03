@@ -168,7 +168,7 @@ export function EventDialog({
     setError(null)
 
     if (!clientName.trim()) {
-      setError('Client name is required')
+      setError('El nombre del cliente es obligatorio')
       return
     }
 
@@ -178,12 +178,12 @@ export function EventDialog({
       start_time = localInputsToIso(startDate, startTime)
       end_time = localInputsToIso(endDate, endTime)
     } catch {
-      setError('Both the start and end date and time are required')
+      setError('Hacen falta la fecha y la hora de inicio y de fin')
       return
     }
 
     if (new Date(end_time) <= new Date(start_time)) {
-      setError('End time must be after start time')
+      setError('La hora de fin debe ser posterior a la de inicio')
       return
     }
 
@@ -207,7 +207,7 @@ export function EventDialog({
       }
       onSaved()
     } catch (err) {
-      setError(errorMessage(err, 'Error saving appointment'))
+      setError(errorMessage(err, 'No se pudo guardar la cita'))
     } finally {
       setSaving(false)
     }
@@ -215,7 +215,7 @@ export function EventDialog({
 
   const handleDelete = async () => {
     if (!event?.id) return
-    if (!confirm('Delete this appointment?')) return
+    if (!confirm('¿Eliminar esta cita?')) return
 
     setError(null)
     setDeleting(true)
@@ -223,7 +223,7 @@ export function EventDialog({
       await deleteAppointment(event.id)
       onSaved()
     } catch (err) {
-      setError(errorMessage(err, 'Error deleting appointment'))
+      setError(errorMessage(err, 'No se pudo eliminar la cita'))
     } finally {
       setDeleting(false)
     }
@@ -257,12 +257,12 @@ export function EventDialog({
       <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle>
-            {mode === 'create' ? 'New Appointment' : 'Edit Appointment'}
+            {mode === 'create' ? 'Nueva cita' : 'Editar cita'}
           </DialogTitle>
           <DialogDescription>
             {mode === 'create'
-              ? 'Schedule a new appointment'
-              : 'Edit appointment details'}
+              ? 'Agenda una cita nueva'
+              : 'Cambia los datos de la cita'}
           </DialogDescription>
         </DialogHeader>
 
@@ -317,18 +317,18 @@ export function EventDialog({
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="client-name">Client Name *</Label>
+            <Label htmlFor="client-name">Nombre del cliente *</Label>
             <Input
               id="client-name"
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
-              placeholder="e.g. Ana Ruiz"
+              placeholder="p. ej. Ana Ruiz"
             />
           </div>
 
           <div className="grid grid-cols-[auto_1fr] gap-2">
             <div className="space-y-2">
-              <Label htmlFor="country-code">Country code</Label>
+              <Label htmlFor="country-code">Código de país</Label>
               <select
                 id="country-code"
                 value={countryCode}
@@ -343,7 +343,7 @@ export function EventDialog({
               </select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number</Label>
+              <Label htmlFor="phone">Número de teléfono</Label>
               <Input
                 id="phone"
                 type="text"
@@ -356,7 +356,7 @@ export function EventDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="start-date">Start Date *</Label>
+              <Label htmlFor="start-date">Fecha de inicio *</Label>
               <Input
                 id="start-date"
                 type="date"
@@ -365,7 +365,7 @@ export function EventDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="start-time">Start Time *</Label>
+              <Label htmlFor="start-time">Hora de inicio *</Label>
               <Input
                 id="start-time"
                 type="time"
@@ -377,7 +377,7 @@ export function EventDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="end-date">End Date *</Label>
+              <Label htmlFor="end-date">Fecha de fin *</Label>
               <Input
                 id="end-date"
                 type="date"
@@ -386,7 +386,7 @@ export function EventDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="end-time">End Time *</Label>
+              <Label htmlFor="end-time">Hora de fin *</Label>
               <Input
                 id="end-time"
                 type="time"
@@ -397,12 +397,12 @@ export function EventDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="location">Location</Label>
+            <Label htmlFor="location">Lugar</Label>
             <Input
               id="location"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g. Suite 2"
+              placeholder="p. ej. Consultorio 2"
             />
           </div>
 
@@ -415,16 +415,16 @@ export function EventDialog({
             message to a client in it again.
           */}
           <div className="space-y-2">
-            <Label htmlFor="notes">Notes</Label>
+            <Label htmlFor="notes">Notas</Label>
             <Textarea
               id="notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Allergic to latex"
+              placeholder="p. ej. Alérgico al látex"
               rows={3}
             />
             <p className="text-xs text-muted-foreground">
-              For your team only. The client never sees this.
+              Solo para tu equipo. El cliente nunca lo ve.
             </p>
           </div>
         </div>
@@ -441,24 +441,24 @@ export function EventDialog({
               {deleting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
+                  Eliminando...
                 </>
               ) : (
-                'Delete'
+                'Eliminar'
               )}
             </Button>
           )}
           <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
-            Cancel
+            Cancelar
           </Button>
           <Button type="button" onClick={handleSave} disabled={busy}>
             {saving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
+                Guardando...
               </>
             ) : (
-              'Save'
+              'Guardar'
             )}
           </Button>
         </DialogFooter>

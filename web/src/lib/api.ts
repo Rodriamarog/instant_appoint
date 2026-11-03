@@ -23,7 +23,7 @@ import { pb } from '@/lib/pocketbase'
 export async function call<T>(
   path: string,
   init?: RequestInit,
-  fallback = 'The request failed. Please try again.',
+  fallback = 'La solicitud falló. Inténtalo de nuevo.',
 ): Promise<T> {
   const response = await fetch(path, {
     ...init,

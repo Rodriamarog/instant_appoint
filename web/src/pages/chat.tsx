@@ -47,7 +47,7 @@ export function ChatPage({
 
   const describe = useCallback((error: unknown) => {
     setProblem(
-      errorMessage(error, 'Something went wrong. Try again.'),
+      errorMessage(error, 'Algo salió mal. Inténtalo de nuevo.'),
     )
   }, [])
 
@@ -113,13 +113,13 @@ export function ChatPage({
       <div className="flex h-[70vh] overflow-hidden rounded-xl border">
         <div className="flex w-72 shrink-0 flex-col border-r">
           <div className="border-b bg-muted/40 px-4 py-3">
-            <p className="text-sm font-medium">Conversations</p>
+            <p className="text-sm font-medium">Conversaciones</p>
           </div>
 
           <ul className="flex-1 overflow-y-auto">
             {conversations.length === 0 && (
               <li className="mt-8 px-4 text-center text-sm text-muted-foreground">
-                No conversations yet
+                Aún no hay conversaciones
               </li>
             )}
 
@@ -148,7 +148,7 @@ export function ChatPage({
         {!selected ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
             <MessageSquare className="h-5 w-5" />
-            Select a conversation
+            Elige una conversación
           </div>
         ) : (
           <div className="flex flex-1 flex-col">
@@ -202,8 +202,8 @@ export function ChatPage({
               <Input
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
-                placeholder="Type a message..."
-                aria-label="Message"
+                placeholder="Escribe un mensaje..."
+                aria-label="Mensaje"
               />
               <Button type="submit" disabled={sending || !draft.trim()}>
                 {sending ? (
@@ -211,7 +211,7 @@ export function ChatPage({
                 ) : (
                   <Send className="h-4 w-4" />
                 )}
-                {sending ? 'Sending' : 'Send'}
+                {sending ? 'Enviando' : 'Enviar'}
               </Button>
             </form>
           </div>

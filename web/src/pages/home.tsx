@@ -23,21 +23,21 @@ export function HomePage() {
         </p>
 
         <h1 className="font-heading mt-4 max-w-lg text-4xl font-semibold tracking-tight">
-          Appointments, and the WhatsApp reminders that go with them.
+          Las citas, y los recordatorios de WhatsApp que las acompañan.
         </h1>
 
         <p className="mt-5 max-w-xl text-lg leading-8 text-muted-foreground">
-          A calendar, a connected WhatsApp Business number, and a reminder
-          before every appointment — in one place. Sign in, or create an
-          account to get started.
+          Un calendario, un número de WhatsApp Business conectado y un
+          recordatorio antes de cada cita — todo en el mismo lugar. Inicia
+          sesión, o crea una cuenta para empezar.
         </p>
 
         <div className="mt-10 flex flex-col gap-3 sm:flex-row">
           <Button asChild size="lg">
-            <Link to="/login">Sign In</Link>
+            <Link to="/login">Iniciar sesión</Link>
           </Button>
           <Button asChild size="lg" variant="outline">
-            <Link to="/register">Create Account</Link>
+            <Link to="/register">Crear cuenta</Link>
           </Button>
         </div>
       </main>

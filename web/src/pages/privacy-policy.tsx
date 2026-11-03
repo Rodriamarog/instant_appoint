@@ -8,70 +8,115 @@
 export function PrivacyPolicyPage() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-16">
-      <h1 className="text-3xl font-bold mb-2">Privacy Policy</h1>
-      <p className="text-gray-500 mb-8">Last updated: May 16, 2026</p>
+      <h1 className="text-3xl font-bold mb-2">Política de privacidad</h1>
+      <p className="text-gray-500 mb-8">
+        Última actualización: 16 de mayo de 2026
+      </p>
 
       <section className="space-y-6 text-gray-700">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">1. About NeuroCrow</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            1. Sobre NeuroCrow
+          </h2>
           <p>
-            NeuroCrow ("we", "our", "us") is a SaaS platform that helps service businesses manage
-            appointment bookings via WhatsApp. This Privacy Policy explains how we collect, use,
-            and protect information when you use our platform.
+            NeuroCrow («nosotros») es una plataforma SaaS que ayuda a los
+            negocios de servicios a gestionar sus citas por WhatsApp. Esta
+            política de privacidad explica qué información recogemos, cómo la
+            usamos y cómo la protegemos cuando usas la plataforma.
           </p>
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">2. Information We Collect</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            2. Información que recogemos
+          </h2>
           <ul className="list-disc pl-5 space-y-1">
-            <li>Account information: name, email address, and password when you register.</li>
-            <li>WhatsApp Business Account details: phone number, WABA ID, and access tokens provided during setup.</li>
-            <li>Message data: inbound and outbound WhatsApp messages processed through our platform for the purpose of appointment management.</li>
-            <li>Calendar data: appointment details including client phone numbers, dates, and times.</li>
+            <li>
+              Datos de la cuenta: nombre, correo electrónico y contraseña al
+              registrarte.
+            </li>
+            <li>
+              Datos de la cuenta de WhatsApp Business: número de teléfono, ID
+              de la WABA y los tokens de acceso que se entregan durante la
+              conexión.
+            </li>
+            <li>
+              Mensajes: los mensajes de WhatsApp entrantes y salientes que
+              pasan por la plataforma, con el fin de gestionar las citas.
+            </li>
+            <li>
+              Datos del calendario: los detalles de cada cita, incluidos el
+              teléfono del cliente, la fecha y la hora.
+            </li>
           </ul>
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">3. How We Use Your Information</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            3. Cómo usamos tu información
+          </h2>
           <ul className="list-disc pl-5 space-y-1">
-            <li>To operate the appointment booking and reminder features of the platform.</li>
-            <li>To send WhatsApp messages on your behalf to your customers.</li>
-            <li>To authenticate your WhatsApp Business Account via Meta's APIs.</li>
-            <li>To improve the reliability and performance of our services.</li>
+            <li>
+              Para operar la agenda de citas y los recordatorios de la
+              plataforma.
+            </li>
+            <li>
+              Para enviar mensajes de WhatsApp a tus clientes en tu nombre.
+            </li>
+            <li>
+              Para autenticar tu cuenta de WhatsApp Business con las API de
+              Meta.
+            </li>
+            <li>
+              Para mejorar la fiabilidad y el rendimiento de nuestros
+              servicios.
+            </li>
           </ul>
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">4. WhatsApp Data</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            4. Datos de WhatsApp
+          </h2>
           <p>
-            NeuroCrow integrates with the WhatsApp Business Platform via Meta's official Cloud API.
-            Message content processed through our platform is used solely to facilitate appointment
-            booking and reminders. We do not sell or share WhatsApp message data with third parties.
-            Users may opt out of receiving WhatsApp messages by replying STOP.
+            NeuroCrow se integra con la plataforma de WhatsApp Business a
+            través de la Cloud API oficial de Meta. El contenido de los
+            mensajes que pasan por la plataforma se usa únicamente para
+            agendar citas y enviar recordatorios. No vendemos ni compartimos
+            los mensajes de WhatsApp con terceros. Quien no quiera seguir
+            recibiéndolos puede responder STOP.
           </p>
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">5. Data Retention</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            5. Conservación de los datos
+          </h2>
           <p>
-            We retain message and appointment data for as long as your account is active. You may
-            request deletion of your data at any time by contacting us.
+            Conservamos los mensajes y las citas mientras tu cuenta siga
+            activa. Puedes pedir que borremos tus datos en cualquier momento
+            escribiéndonos.
           </p>
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">6. Third-Party Services</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            6. Servicios de terceros
+          </h2>
           <p>
-            We use Meta's WhatsApp Business Platform to deliver messages. Your use of WhatsApp is
-            also subject to Meta's Privacy Policy. We use PocketBase for data storage hosted on
-            our own infrastructure.
+            Usamos la plataforma de WhatsApp Business de Meta para entregar
+            los mensajes. Tu uso de WhatsApp queda sujeto además a la
+            política de privacidad de Meta. Para almacenar los datos usamos
+            PocketBase, alojado en nuestra propia infraestructura.
           </p>
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">7. Contact</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            7. Contacto
+          </h2>
           <p>
-            If you have questions about this Privacy Policy, contact us at:{' '}
+            Si tienes dudas sobre esta política de privacidad, escríbenos a:{' '}
             <a href="mailto:support@neurocrow.com" className="text-blue-600 underline">
               support@neurocrow.com
             </a>

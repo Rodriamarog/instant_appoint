@@ -54,7 +54,7 @@ test('a connected number is listed with its name, number and WABA', async () => 
   expect(await screen.findByText('Dev Clinic')).toBeDefined()
   expect(screen.getByText('+5216641234567')).toBeDefined()
   expect(screen.getByText(/100000000000001/)).toBeDefined()
-  expect(screen.getByText('Connected')).toBeDefined()
+  expect(screen.getByText('Conectado')).toBeDefined()
 })
 
 test("falls back to the phone number id when Meta's number was never stored", async () => {
@@ -72,7 +72,7 @@ test('says so when no number is connected', async () => {
 
   render(<WhatsAppPage />)
 
-  expect(await screen.findByText('Not connected')).toBeDefined()
+  expect(await screen.findByText('Sin conectar')).toBeDefined()
 })
 
 test('the query never mentions the access token', async () => {

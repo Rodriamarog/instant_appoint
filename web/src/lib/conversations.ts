@@ -62,5 +62,5 @@ export function polledConversations(everyMs = 5000): Feed<Conversation> {
 
 /** The customer's number as a person reads it. */
 export function formatPhone(phone: string): string {
-  return phone ? `+${phone}` : 'Unknown number'
+  return phone ? `+${phone}` : 'Número desconocido'
 }

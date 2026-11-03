@@ -3,11 +3,11 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import { signOut } from '@/lib/auth'
 
 const links = [
-  { to: '/calendar', label: 'Calendar' },
+  { to: '/calendar', label: 'Calendario' },
   { to: '/chat', label: 'Chat' },
   { to: '/whatsapp', label: 'WhatsApp' },
-  { to: '/reminders', label: 'Reminders' },
-  { to: '/templates', label: 'Templates' },
+  { to: '/reminders', label: 'Recordatorios' },
+  { to: '/templates', label: 'Plantillas' },
 ]
 
 /**
@@ -44,7 +44,7 @@ export function Shell() {
             onClick={handleSignOut}
             className="ml-auto rounded-lg bg-black px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800"
           >
-            Sign Out
+            Cerrar sesión
           </button>
         </nav>
       </header>
