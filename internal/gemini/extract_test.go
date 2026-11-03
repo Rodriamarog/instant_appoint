@@ -184,3 +184,63 @@ func TestTheReplyRequestOffersTheModelNoTools(t *testing.T) {
 		t.Errorf("the reply request declared tools: %#v", tools)
 	}
 }
+
+// readingInstruction is the instruction the conversation is read under,
+// which is the only place a change to it can be observed from outside the
+// package.
+func readingInstruction(t *testing.T) string {
+	t.Helper()
+
+	client, got := stub(t, http.StatusOK, noCall)
+	if _, err := client.ExtractAppointment(context.Background(), aConversation); err != nil {
+		t.Fatalf("ExtractAppointment: %v", err)
+	}
+
+	instruction, _ := got.body["systemInstruction"].(map[string]any)
+	parts, _ := instruction["parts"].([]any)
+	if len(parts) != 1 {
+		t.Fatalf("systemInstruction.parts = %#v, want one part", instruction["parts"])
+	}
+	text, _ := parts[0].(map[string]any)["text"].(string)
+
+	return text
+}
+
+// The asymmetry again, this time in the words rather than the wiring.
+//
+// Not declaring a cancel tool stops the model cancelling anything, but it
+// does not tell it what to do instead — and left to itself the obvious
+// reading of "the patient wants to move their Tuesday appointment" is a
+// confident record of the new time, which is a second appointment on the
+// clinic's calendar with the first still on it. The instruction has to send
+// it to a person, and a person reads proposals.
+func TestTellsTheModelThatMovingOrCancellingIsAPersonsJob(t *testing.T) {
+	instruction := strings.ToLower(readingInstruction(t))
+
+	for _, required := range []string{
+		"move or cancel",
+		"certain false",
+		"a person will read it",
+	} {
+		if !strings.Contains(instruction, required) {
+			t.Errorf("the reading instruction never says %q:\n%s", required, instruction)
+		}
+	}
+}
+
+// The split the whole feature turns on, said to the model in the one place
+// it can act on. "Certain" has to mean a named day, a named time and both
+// sides agreeing — anything looser and every half-finished thread becomes a
+// booking the clinic plans its day around.
+func TestTellsTheModelWhatCertainMeans(t *testing.T) {
+	instruction := strings.ToLower(readingInstruction(t))
+
+	for _, required := range []string{
+		"names a day, names a time, and both sides have agreed",
+		"never invent a date or a time",
+	} {
+		if !strings.Contains(instruction, required) {
+			t.Errorf("the reading instruction never says %q:\n%s", required, instruction)
+		}
+	}
+}
