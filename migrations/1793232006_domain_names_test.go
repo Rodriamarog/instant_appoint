@@ -71,6 +71,25 @@ func newAppBefore(t *testing.T, migrationFile string) core.App {
 	return app
 }
 
+// migrationsFrom counts the migrations at and after the named one, which is
+// the number Down() has to be given to revert it.
+//
+// Down takes a count of migrations, not a ticket, so the count is derived
+// rather than written down: every migration added after the one under test
+// would otherwise silently turn "revert this" into "revert the newest thing
+// and assert against this anyway", which passes for exactly as long as the
+// newest thing happens not to touch the same collections.
+func migrationsFrom(migrationFile string) int {
+	count := 0
+	for _, migration := range core.AppMigrations.Items() {
+		if migration.File >= migrationFile {
+			count++
+		}
+	}
+
+	return count
+}
+
 // saveUnder writes a row directly into a collection by name, which is how a
 // fixture gets into a schema the current code no longer has names for.
 func saveUnder(t *testing.T, app core.App, collection string, values map[string]any) string {
@@ -285,21 +304,7 @@ func TestRollingTheRenameBackRestoresTheOldNamesAndTheirRows(t *testing.T) {
 	full := core.MigrationsList{}
 	full.Copy(core.SystemMigrations)
 	full.Copy(core.AppMigrations)
-
-	// Down takes a count of migrations, not a ticket, so the count is
-	// derived rather than written down: every migration added after the
-	// rename would otherwise silently turn "revert the rename" into
-	// "revert the newest thing and assert against the rename anyway", which
-	// passes for as long as the newest thing happens not to touch these
-	// collections.
-	since := 0
-	for _, migration := range core.AppMigrations.Items() {
-		if migration.File >= theRenameMigration {
-			since++
-		}
-	}
-
-	if _, err := core.NewMigrationsRunner(app, full).Down(since); err != nil {
+	if _, err := core.NewMigrationsRunner(app, full).Down(migrationsFrom(theRenameMigration)); err != nil {
 		t.Fatalf("revert the rename: %v", err)
 	}
 

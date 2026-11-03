@@ -163,17 +163,7 @@ func TestRollingTheSwitchBackRemovesTheFieldAndKeepsTheSettings(t *testing.T) {
 	full.Copy(core.SystemMigrations)
 	full.Copy(core.AppMigrations)
 
-	// Counted rather than written as 1, so that a migration landing after
-	// this one does not turn "revert the switch" into "revert that instead"
-	// while the assertions below carry on reading as if it had not.
-	since := 0
-	for _, migration := range core.AppMigrations.Items() {
-		if migration.File >= theAIModeMigration {
-			since++
-		}
-	}
-
-	if _, err := core.NewMigrationsRunner(app, full).Down(since); err != nil {
+	if _, err := core.NewMigrationsRunner(app, full).Down(migrationsFrom(theAIModeMigration)); err != nil {
 		t.Fatalf("revert the switch: %v", err)
 	}
 

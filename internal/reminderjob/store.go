@@ -10,6 +10,7 @@ import (
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 
+	"github.com/Rodriamarog/instant_appoint/internal/appointments"
 	"github.com/Rodriamarog/instant_appoint/internal/isotime"
 	"github.com/Rodriamarog/instant_appoint/internal/pbstore"
 	"github.com/Rodriamarog/instant_appoint/internal/reminders"
@@ -89,7 +90,10 @@ func (s *Store) AppointmentsStartingBetween(_ context.Context, from, to time.Tim
 		return nil, err
 	}
 
-	appointments := make([]reminders.Appointment, 0, len(records))
+	// Not called appointments: that name is the package the status
+	// vocabulary comes from, and a local of the same name shadows it for
+	// the rest of the function.
+	due := make([]reminders.Appointment, 0, len(records))
 	for _, record := range records {
 		start, err := isotime.Parse(record.GetString("start_time"))
 		if err != nil {
@@ -101,16 +105,20 @@ func (s *Store) AppointmentsStartingBetween(_ context.Context, from, to time.Tim
 			continue
 		}
 
-		appointments = append(appointments, reminders.Appointment{
+		due = append(due, reminders.Appointment{
 			ID:          record.Id,
 			UserID:      record.GetString("user_id"),
 			ClientName:  record.GetString("client_name"),
 			ClientPhone: record.GetString("client_phone"),
 			StartTime:   start,
+			// Passed through exactly as stored. A value this app does not
+			// recognise is one no reminder goes out for, which is the side
+			// of that question a patient can forgive.
+			Status: appointments.Status(record.GetString("status")),
 		})
 	}
 
-	return appointments, nil
+	return due, nil
 }
 
 // AccountFor returns the person's connected Cloud API number, or nil when

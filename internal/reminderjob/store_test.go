@@ -10,6 +10,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	sqlite "modernc.org/sqlite"
 
+	"github.com/Rodriamarog/instant_appoint/internal/appointments"
 	"github.com/Rodriamarog/instant_appoint/internal/meta"
 	"github.com/Rodriamarog/instant_appoint/internal/pbstore"
 	"github.com/Rodriamarog/instant_appoint/internal/reminderjob"
@@ -134,6 +135,53 @@ func TestAnAppointmentCarriesWhatTheReminderNeeds(t *testing.T) {
 	}
 	if want := time.Date(2026, 11, 3, 16, 30, 0, 0, time.UTC); !appointment.StartTime.Equal(want) {
 		t.Errorf("StartTime = %s, want %s", appointment.StartTime, want)
+	}
+}
+
+// The status is read off the row rather than assumed, because it is the one
+// field on an appointment that can stop a reminder outright. Getting it wrong
+// is invisible in both directions: the run simply says it sent nothing, or a
+// patient is told to come to an appointment that was cancelled.
+func TestAnAppointmentCarriesTheStatusThatDecidesWhetherItIsRemindedAbout(t *testing.T) {
+	app := newApp(t)
+	alice := newUser(t, app, "alice@instantappoint.test")
+
+	booked := func(clientName string, values map[string]any) {
+		row := map[string]any{
+			"user_id": alice, "client_name": clientName, "client_phone": "5216641234567",
+			"start_time": "2026-11-03T16:30:00.000Z", "end_time": "2026-11-03T17:00:00.000Z",
+		}
+		for key, value := range values {
+			row[key] = value
+		}
+		save(t, app, "appointments", row)
+	}
+
+	booked("Ana Lopez", map[string]any{"status": string(appointments.Cancelled)})
+	booked("Beto Ruiz", map[string]any{"status": string(appointments.Proposed)})
+	// No status at all: the column's create-time default is what answers,
+	// and it has to answer with a real state rather than an empty one.
+	booked("Carla Diaz", nil)
+
+	from := time.Date(2026, 11, 3, 16, 0, 0, 0, time.UTC)
+	found, err := reminderjob.NewStore(app).AppointmentsStartingBetween(context.Background(), from, from.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("AppointmentsStartingBetween: %v", err)
+	}
+
+	got := map[string]appointments.Status{}
+	for _, appointment := range found {
+		got[appointment.ClientName] = appointment.Status
+	}
+
+	for clientName, want := range map[string]appointments.Status{
+		"Ana Lopez":  appointments.Cancelled,
+		"Beto Ruiz":  appointments.Proposed,
+		"Carla Diaz": appointments.Pending,
+	} {
+		if got[clientName] != want {
+			t.Errorf("%s came back as %q, want %q", clientName, got[clientName], want)
+		}
 	}
 }
 

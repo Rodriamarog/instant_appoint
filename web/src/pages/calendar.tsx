@@ -7,6 +7,7 @@ import { EventDialog } from '@/components/calendar/event-dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   listAppointmentsBetween,
+  statusLabel,
   type Appointment,
 } from '@/lib/appointments'
 import {
@@ -103,6 +104,50 @@ interface SlotEvent {
  */
 const WINDOW_SLACK_DAYS = 7
 
+/**
+ * The two states that are not a booking somebody is expected at: a proposal
+ * the assistant is unsure about, and an appointment that is not happening.
+ *
+ * They are the two the grid has to call out, and they are the same two no
+ * reminder goes out for — internal/appointments decides that, and a slot
+ * that looked ordinary while being silently skipped is the mismatch this is
+ * here to stop.
+ */
+function labelFor(status: Appointment['status']): string | null {
+  return status === 'proposed' || status === 'cancelled' ? statusLabel(status) : null
+}
+
+/**
+ * What a slot prints: the client's name, and the word for its state when it
+ * has one worth reading at a glance.
+ */
+function SlotLabel({ event }: { event: SlotEvent }) {
+  const label = labelFor(event.resource.status)
+
+  return (
+    <span className="flex items-center gap-1">
+      <span className="truncate">{event.title}</span>
+      {label && (
+        <span className="shrink-0 rounded-full bg-black/20 px-1.5 text-[10px] font-medium">
+          {label}
+        </span>
+      )}
+    </span>
+  )
+}
+
+/** Dimmed, and struck through once it is not happening at all. */
+function slotStyle(event: SlotEvent): { className: string } {
+  switch (event.resource.status) {
+    case 'proposed':
+      return { className: 'opacity-70' }
+    case 'cancelled':
+      return { className: 'opacity-50 line-through' }
+    default:
+      return { className: '' }
+  }
+}
+
 function windowFor(date: Date): { from: Date; to: Date } {
   return {
     from: moment(date).startOf('month').subtract(WINDOW_SLACK_DAYS, 'days').toDate(),
@@ -151,6 +196,7 @@ export function CalendarPage() {
   }, [load])
 
   const views = useMemo<View[]>(() => ['month', 'week', 'day'], [])
+  const slotComponents = useMemo(() => ({ event: SlotLabel }), [])
 
   return (
     <div className="space-y-4">
@@ -171,6 +217,8 @@ export function CalendarPage() {
           view={view}
           views={views}
           onView={setView}
+          components={slotComponents}
+          eventPropGetter={slotStyle}
           date={date}
           onNavigate={setDate}
           onSelectSlot={(slot) => {
@@ -180,6 +228,9 @@ export function CalendarPage() {
               id: '',
               user_id: '',
               client_name: '',
+              // What saving it will produce. Nothing is stored yet, so the
+              // dialog shows no status for it either.
+              status: 'pending',
               // Through isoMillis like every other writer, not
               // toISOString directly. The two agree today; the point of the
               // module is that no call site decides that for itself, because

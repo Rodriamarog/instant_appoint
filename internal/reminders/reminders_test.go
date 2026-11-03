@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Rodriamarog/instant_appoint/internal/appointments"
 	"github.com/Rodriamarog/instant_appoint/internal/reminders"
 )
 
@@ -23,6 +24,10 @@ func settingsFor(user string, lead time.Duration) reminders.Settings {
 	}
 }
 
+// appointment is an ordinary booking: pending, which is what staff booking
+// one produces and what every row predating the status column was migrated
+// into. The cases about the other three states set Status themselves — see
+// status_test.go.
 func appointment(id, user, title, phone string, start time.Time) reminders.Appointment {
 	return reminders.Appointment{
 		ID:          id,
@@ -30,6 +35,7 @@ func appointment(id, user, title, phone string, start time.Time) reminders.Appoi
 		ClientName:  title,
 		ClientPhone: phone,
 		StartTime:   start,
+		Status:      appointments.Pending,
 	}
 }
 
