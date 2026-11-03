@@ -17,6 +17,43 @@ import { pb } from '@/lib/pocketbase'
  */
 export const COLLECTION = 'business_settings'
 
+/**
+ * How much a clinic has let the assistant do with its patients' messages.
+ *
+ * The three words are a storage format: they are what the column holds, what
+ * migrations/1793232008_ai_mode.go writes, and what internal/webhook compares
+ * against to decide whether a patient hears from a bot. Renaming one here
+ * without renaming it there leaves every stored row meaning nothing.
+ */
+export type AIMode = 'off' | 'observer' | 'autopilot'
+
+/**
+ * The three positions, in the order they give the assistant more rope, with
+ * the plain-language explanation each one is offered under.
+ *
+ * The explanation is part of the option rather than prose beside the control
+ * because the difference between "no responde" and "no responde todavía" is
+ * the whole decision somebody is making here, and it is not guessable from a
+ * three-word label.
+ */
+export const AI_MODE_OPTIONS: { mode: AIMode; label: string; help: string }[] = [
+  {
+    mode: 'off',
+    label: 'Apagado',
+    help: 'El asistente no responde ni escribe nada. Los mensajes de tus pacientes se siguen guardando y los ves en Chat.',
+  },
+  {
+    mode: 'observer',
+    label: 'Observador',
+    help: 'El asistente no responde. Solo observa las conversaciones que atiende tu clínica.',
+  },
+  {
+    mode: 'autopilot',
+    label: 'Piloto automático',
+    help: 'El asistente responde solo, por WhatsApp, a los mensajes recientes de tus pacientes.',
+  },
+]
+
 /** One business's settings. */
 export interface BusinessSettings {
   /** Absent until the first save. */
@@ -29,6 +66,8 @@ export interface BusinessSettings {
   template_language: string
   /** An IANA zone name; the date and time in a reminder are spelled in it. */
   timezone: string
+  /** What the assistant is allowed to do with inbound messages. */
+  ai_mode: AIMode
 }
 
 /**
@@ -44,6 +83,14 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   template_name: '',
   template_language: 'es',
   timezone: 'America/Tijuana',
+  // Off, and not because nothing better is known: a clinic that has never
+  // opened this page has not agreed to anything its patients will be told,
+  // and switching the assistant on deliberately is the moment it takes
+  // responsibility for what the assistant says. The same value is the column
+  // default and the backfill in migrations/1793232008_ai_mode.go, so a clinic
+  // that predates the switch and one that registered today are in the same
+  // position.
+  ai_mode: 'off',
 }
 
 /** The lead times the dialog offers, longest-used first in the old UI order. */
@@ -130,8 +177,14 @@ export async function loadBusinessSettings(): Promise<BusinessSettings> {
 export async function saveBusinessSettings(
   settings: BusinessSettings,
 ): Promise<BusinessSettings> {
-  const { timing_minutes, is_active, template_name, template_language, timezone } =
-    settings
+  const {
+    timing_minutes,
+    is_active,
+    template_name,
+    template_language,
+    timezone,
+    ai_mode,
+  } = settings
 
   // user_id is deliberately absent: ownership is not something an edit may
   // change, and the update rule refuses the attempt regardless.
@@ -141,6 +194,7 @@ export async function saveBusinessSettings(
     template_name,
     template_language,
     timezone,
+    ai_mode,
   }
 
   const existing = await findOwn()

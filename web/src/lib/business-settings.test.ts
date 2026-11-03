@@ -33,6 +33,7 @@ const stored = {
   template_name: 'appointment_reminder',
   template_language: 'es',
   timezone: 'America/Tijuana',
+  ai_mode: 'autopilot' as const,
 }
 
 /** The error the SDK raises when getFirstListItem matches nothing. */
@@ -75,6 +76,30 @@ test('the default sends a reminder a day ahead, in Spanish, Tijuana time', async
   expect(DEFAULT_SETTINGS.is_active).toBe(true)
   expect(DEFAULT_SETTINGS.template_language).toBe('es')
   expect(DEFAULT_SETTINGS.timezone).toBe('America/Tijuana')
+})
+
+test('a clinic that has saved nothing has the assistant switched off', async () => {
+  // The one default in this module that is a promise to somebody who is not
+  // the user: nobody's patients should be answered by a bot their clinic
+  // never knowingly switched on. Pinned as a literal, because reading it off
+  // the module would agree with any value it ever held.
+  expect(DEFAULT_SETTINGS.ai_mode).toBe('off')
+})
+
+test('the chosen mode is part of what a save writes', async () => {
+  getFirstListItem.mockResolvedValue(stored)
+
+  await saveBusinessSettings({ ...stored, ai_mode: 'observer' })
+
+  expect(update).toHaveBeenCalledWith('set123', expect.objectContaining({ ai_mode: 'observer' }))
+})
+
+test('the first save of a clinic that never touched the switch creates it off', async () => {
+  getFirstListItem.mockRejectedValue(notFound())
+
+  await saveBusinessSettings({ ...DEFAULT_SETTINGS, timing_minutes: 30 })
+
+  expect(create.mock.calls[0][0]).toMatchObject({ ai_mode: 'off' })
 })
 
 test('saved settings come back instead of the default', async () => {
