@@ -112,7 +112,7 @@ test('moving to the next month asks for that month instead', async () => {
 
   await waitFor(() => expect(getFullList).toHaveBeenCalledTimes(1))
 
-  await user.click(screen.getByRole('button', { name: 'Next' }))
+  await user.click(screen.getByRole('button', { name: 'Siguiente' }))
 
   await waitFor(() => expect(getFullList).toHaveBeenCalledTimes(2))
   expect(filterOfCall(1)).toContain(isoMillis(new Date(2026, 10, 24, 0, 0, 0, 0)))
@@ -123,23 +123,23 @@ test('month, week and day views each render and can be navigated', async () => {
   render(<CalendarPage />)
 
   await waitFor(() => expect(getFullList).toHaveBeenCalled())
-  expect(screen.getByText('November 2026')).toBeDefined()
+  expect(screen.getByText('noviembre 2026')).toBeDefined()
 
-  await user.click(screen.getByRole('button', { name: 'Week' }))
-  expect(screen.getByRole('button', { name: 'Week' }).className).toContain('rbc-active')
+  await user.click(screen.getByRole('button', { name: 'Semana' }))
+  expect(screen.getByRole('button', { name: 'Semana' }).className).toContain('rbc-active')
 
-  await user.click(screen.getByRole('button', { name: 'Day' }))
-  expect(screen.getByRole('button', { name: 'Day' }).className).toContain('rbc-active')
+  await user.click(screen.getByRole('button', { name: 'Día' }))
+  expect(screen.getByRole('button', { name: 'Día' }).className).toContain('rbc-active')
 
   // Day view navigates a day at a time. The month window already covers the
   // next day, so nothing is refetched — but the day on show has to move.
   const shown = toolbarLabel()
-  await user.click(screen.getByRole('button', { name: 'Next' }))
+  await user.click(screen.getByRole('button', { name: 'Siguiente' }))
   await waitFor(() => expect(toolbarLabel()).not.toBe(shown))
 
-  await user.click(screen.getByRole('button', { name: 'Month' }))
-  expect(screen.getByRole('button', { name: 'Month' }).className).toContain('rbc-active')
-  expect(screen.getByText('November 2026')).toBeDefined()
+  await user.click(screen.getByRole('button', { name: 'Mes' }))
+  expect(screen.getByRole('button', { name: 'Mes' }).className).toContain('rbc-active')
+  expect(screen.getByText('noviembre 2026')).toBeDefined()
 })
 
 test('clicking an appointment opens it for editing', async () => {
@@ -149,14 +149,14 @@ test('clicking an appointment opens it for editing', async () => {
   await user.click(await screen.findByText('Ana Ruiz'))
 
   const dialog = await screen.findByRole('dialog')
-  expect(within(dialog).getByText('Edit Appointment')).toBeDefined()
-  expect((within(dialog).getByLabelText(/client name/i) as HTMLInputElement).value).toBe(
-    'Ana Ruiz',
-  )
+  expect(within(dialog).getByText('Editar cita')).toBeDefined()
+  expect(
+    (within(dialog).getByLabelText(/nombre del cliente/i) as HTMLInputElement).value,
+  ).toBe('Ana Ruiz')
   // Opening an appointment is how its notes are read, so the stored text has
   // to be on screen rather than only in the row.
   expect(
-    (within(dialog).getByLabelText(/notes/i) as HTMLTextAreaElement).value,
+    (within(dialog).getByLabelText(/notas/i) as HTMLTextAreaElement).value,
   ).toBe('See you at the back entrance, Ana.')
 })
 
@@ -174,7 +174,7 @@ test('saving from the dialog reloads the appointments', async () => {
     update,
   } as unknown as ReturnType<typeof pb.collection>)
 
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
   await waitFor(() => expect(update).toHaveBeenCalled())
   await waitFor(() => expect(getFullList.mock.calls.length).toBeGreaterThan(before))

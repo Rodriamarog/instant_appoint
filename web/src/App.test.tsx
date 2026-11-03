@@ -17,8 +17,8 @@ afterEach(() => {
 })
 
 test.each([
-  ['/politica-de-privacidad', 'Privacy Policy'],
-  ['/terminos-de-servicio', 'Terms of Service'],
+  ['/politica-de-privacidad', 'Política de privacidad'],
+  ['/terminos-de-servicio', 'Términos de servicio'],
 ])('%s renders without a session', (path, heading) => {
   pb.authStore.clear()
 
@@ -29,7 +29,7 @@ test.each([
   )
 
   expect(screen.getByRole('heading', { level: 1, name: heading })).toBeDefined()
-  expect(screen.queryByText(/not found/i)).toBeNull()
+  expect(screen.queryByText(/no encontrada/i)).toBeNull()
 })
 
 /**
@@ -51,8 +51,8 @@ test('the root serves a real landing page, signed out', () => {
 
   // The two ways in, and the two pages the review also wants reachable.
   for (const [name, href] of [
-    ['Sign In', '/login'],
-    ['Create Account', '/register'],
+    ['Iniciar sesión', '/login'],
+    ['Crear cuenta', '/register'],
     ['Política de privacidad', '/politica-de-privacidad'],
     ['Términos de servicio', '/terminos-de-servicio'],
   ]) {

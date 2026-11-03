@@ -117,7 +117,7 @@ test('asks for a connected number before asking Meta for anything', async () => 
 
   renderPage()
 
-  expect(await screen.findByText(/connect a whatsapp/i)).toBeDefined()
+  expect(await screen.findByText(/conecta un número de whatsapp/i)).toBeDefined()
   expect(calls).toHaveLength(0)
 })
 
@@ -146,11 +146,11 @@ test('will not submit a draft that is missing a name or a body', async () => {
 
   renderPage()
   await screen.findByText('appointment_reminder')
-  await user.click(screen.getByRole('button', { name: /new template/i }))
-  await user.click(screen.getByRole('button', { name: /submit for approval/i }))
+  await user.click(screen.getByRole('button', { name: /nueva plantilla/i }))
+  await user.click(screen.getByRole('button', { name: /enviar a aprobación/i }))
 
-  expect(await screen.findByText(/name is required/i)).toBeDefined()
-  expect(screen.getByText(/body is required/i)).toBeDefined()
+  expect(await screen.findByText(/el nombre es obligatorio/i)).toBeDefined()
+  expect(screen.getByText(/el mensaje es obligatorio/i)).toBeDefined()
   expect(
     calls.filter((call) => call.url.endsWith('/create')),
   ).toHaveLength(0)
@@ -163,12 +163,12 @@ test('will not submit a name Meta would reject', async () => {
 
   renderPage()
   await screen.findByText('appointment_reminder')
-  await user.click(screen.getByRole('button', { name: /new template/i }))
-  await user.type(screen.getByLabelText(/name/i), 'Appointment Reminder!')
-  await user.type(screen.getByLabelText(/body/i), 'Hola')
-  await user.click(screen.getByRole('button', { name: /submit for approval/i }))
+  await user.click(screen.getByRole('button', { name: /nueva plantilla/i }))
+  await user.type(screen.getByLabelText(/nombre/i), 'Appointment Reminder!')
+  await user.type(screen.getByLabelText(/mensaje/i), 'Hola')
+  await user.click(screen.getByRole('button', { name: /enviar a aprobación/i }))
 
-  expect(await screen.findByText(/lowercase letters, numbers/i)).toBeDefined()
+  expect(await screen.findByText(/solo minúsculas, números/i)).toBeDefined()
   expect(calls.filter((call) => call.url.endsWith('/create'))).toHaveLength(0)
 })
 
@@ -183,20 +183,20 @@ test('submits a complete draft and reports that it is pending', async () => {
 
   renderPage()
   await screen.findByText('appointment_reminder')
-  await user.click(screen.getByRole('button', { name: /new template/i }))
-  await user.type(screen.getByLabelText(/name/i), 'visit_summary')
-  await user.selectOptions(screen.getByLabelText(/category/i), 'MARKETING')
-  await user.selectOptions(screen.getByLabelText(/language/i), 'en_US')
+  await user.click(screen.getByRole('button', { name: /nueva plantilla/i }))
+  await user.type(screen.getByLabelText(/nombre/i), 'visit_summary')
+  await user.selectOptions(screen.getByLabelText(/categoría/i), 'MARKETING')
+  await user.selectOptions(screen.getByLabelText(/idioma/i), 'en_US')
   // user-event reads "{{" as an escaped "{", so a literal {{1}} is doubled.
   await user.type(
-    screen.getByLabelText(/body/i),
+    screen.getByLabelText(/mensaje/i),
     'Thanks for visiting {{{{1}}.',
   )
-  await user.click(screen.getByRole('button', { name: /submit for approval/i }))
+  await user.click(screen.getByRole('button', { name: /enviar a aprobación/i }))
 
   // "PENDING" alone is also a badge in the list, so the assertion names the
   // sentence the form shows rather than the word.
-  expect(await screen.findByText(/submitted for approval/i)).toBeDefined()
+  expect(await screen.findByText(/se envió a aprobación/i)).toBeDefined()
 
   const create = calls.find((call) => call.url.endsWith('/create'))
   expect(create).toBeDefined()
@@ -222,13 +222,13 @@ test('submits a template carrying Confirm and Cancel quick replies', async () =>
 
   renderPage()
   await screen.findByText('appointment_reminder')
-  await user.click(screen.getByRole('button', { name: /new template/i }))
-  await user.type(screen.getByLabelText(/^name$/i), 'cita_recordatorio')
-  await user.type(screen.getByLabelText(/body/i), 'Hola {{{{1}}.')
+  await user.click(screen.getByRole('button', { name: /nueva plantilla/i }))
+  await user.type(screen.getByLabelText(/^nombre$/i), 'cita_recordatorio')
+  await user.type(screen.getByLabelText(/mensaje/i), 'Hola {{{{1}}.')
   await user.click(screen.getByRole('checkbox', { name: /botones/i }))
-  await user.click(screen.getByRole('button', { name: /submit for approval/i }))
+  await user.click(screen.getByRole('button', { name: /enviar a aprobación/i }))
 
-  await screen.findByText(/submitted for approval/i)
+  await screen.findByText(/se envió a aprobación/i)
 
   const create = calls.find((call) => call.url.endsWith('/create'))
   expect(JSON.parse(String(create?.init?.body))).toEqual({
@@ -254,11 +254,11 @@ test('relabels the buttons with the language, but not wording of your own', asyn
 
   renderPage()
   await screen.findByText('appointment_reminder')
-  await user.click(screen.getByRole('button', { name: /new template/i }))
-  await user.type(screen.getByLabelText(/^name$/i), 'appointment_reminder')
-  await user.type(screen.getByLabelText(/body/i), 'Hi {{{{1}}.')
+  await user.click(screen.getByRole('button', { name: /nueva plantilla/i }))
+  await user.type(screen.getByLabelText(/^nombre$/i), 'appointment_reminder')
+  await user.type(screen.getByLabelText(/mensaje/i), 'Hi {{{{1}}.')
   await user.click(screen.getByRole('checkbox', { name: /botones/i }))
-  await user.selectOptions(screen.getByLabelText(/language/i), 'en_US')
+  await user.selectOptions(screen.getByLabelText(/idioma/i), 'en_US')
 
   expect((screen.getByLabelText(/botón 1/i) as HTMLInputElement).value).toBe(
     'Confirm',
@@ -268,10 +268,10 @@ test('relabels the buttons with the language, but not wording of your own', asyn
   // throw it away.
   await user.clear(screen.getByLabelText(/botón 2/i))
   await user.type(screen.getByLabelText(/botón 2/i), 'Not this time')
-  await user.selectOptions(screen.getByLabelText(/language/i), 'es')
-  await user.click(screen.getByRole('button', { name: /submit for approval/i }))
+  await user.selectOptions(screen.getByLabelText(/idioma/i), 'es')
+  await user.click(screen.getByRole('button', { name: /enviar a aprobación/i }))
 
-  await screen.findByText(/submitted for approval/i)
+  await screen.findByText(/se envió a aprobación/i)
 
   const create = calls.find((call) => call.url.endsWith('/create'))
   expect(JSON.parse(String(create?.init?.body))).toMatchObject({
@@ -337,11 +337,11 @@ test('a template with no buttons still reads and sends as it always did', async 
     screen.getByText('Hola {{1}}, te recordamos tu cita {{2}}.'),
   ).toBeDefined()
 
-  await user.click(screen.getByRole('button', { name: /send test/i }))
-  await user.type(screen.getByLabelText(/send to/i), '5216641234567')
+  await user.click(screen.getByRole('button', { name: /enviar prueba/i }))
+  await user.type(screen.getByLabelText(/enviar a/i), '5216641234567')
   await user.type(screen.getByLabelText('{{1}}'), 'Ana')
   await user.type(screen.getByLabelText('{{2}}'), 'mañana')
-  await user.click(screen.getByRole('button', { name: /^send$/i }))
+  await user.click(screen.getByRole('button', { name: /^enviar$/i }))
 
   await waitFor(() => {
     expect(calls.some((call) => call.url.endsWith('/send'))).toBe(true)
@@ -372,10 +372,10 @@ test("shows Meta's rejection when a draft is refused", async () => {
 
   renderPage()
   await screen.findByText('appointment_reminder')
-  await user.click(screen.getByRole('button', { name: /new template/i }))
-  await user.type(screen.getByLabelText(/name/i), 'visit_summary')
-  await user.type(screen.getByLabelText(/body/i), 'Thanks!')
-  await user.click(screen.getByRole('button', { name: /submit for approval/i }))
+  await user.click(screen.getByRole('button', { name: /nueva plantilla/i }))
+  await user.type(screen.getByLabelText(/nombre/i), 'visit_summary')
+  await user.type(screen.getByLabelText(/mensaje/i), 'Thanks!')
+  await user.click(screen.getByRole('button', { name: /enviar a aprobación/i }))
 
   expect(await screen.findByText(/already exists/i)).toBeDefined()
 })
@@ -391,16 +391,16 @@ test('sends a template with a value for each of its placeholders', async () => {
 
   renderPage()
   await screen.findByText('appointment_reminder')
-  await user.click(screen.getByRole('button', { name: /send test/i }))
+  await user.click(screen.getByRole('button', { name: /enviar prueba/i }))
 
   // The number is the tester's to supply: the page ships with nobody's.
-  const phone = screen.getByLabelText(/send to/i) as HTMLInputElement
+  const phone = screen.getByLabelText(/enviar a/i) as HTMLInputElement
   expect(phone.value).toBe('')
 
   await user.type(phone, '5216641234567')
   await user.type(screen.getByLabelText(/\{\{1\}\}/), 'Ana')
   await user.type(screen.getByLabelText(/\{\{2\}\}/), 'mañana a las 10')
-  await user.click(screen.getByRole('button', { name: /^send$/i }))
+  await user.click(screen.getByRole('button', { name: /^enviar$/i }))
 
   await waitFor(() => {
     expect(calls.some((call) => call.url.endsWith('/send'))).toBe(true)
@@ -413,7 +413,7 @@ test('sends a template with a value for each of its placeholders', async () => {
     to: '5216641234567',
     body_parameters: ['Ana', 'mañana a las 10'],
   })
-  expect(await screen.findByText(/message sent/i)).toBeDefined()
+  expect(await screen.findByText(/mensaje enviado/i)).toBeDefined()
 })
 
 test('will not send without a number or without every placeholder filled', async () => {
@@ -423,17 +423,17 @@ test('will not send without a number or without every placeholder filled', async
 
   renderPage()
   await screen.findByText('appointment_reminder')
-  await user.click(screen.getByRole('button', { name: /send test/i }))
-  await user.click(screen.getByRole('button', { name: /^send$/i }))
+  await user.click(screen.getByRole('button', { name: /enviar prueba/i }))
+  await user.click(screen.getByRole('button', { name: /^enviar$/i }))
 
-  expect(await screen.findByText(/number to send to/i)).toBeDefined()
+  expect(await screen.findByText(/escribe el número al que enviar/i)).toBeDefined()
   expect(calls.filter((call) => call.url.endsWith('/send'))).toHaveLength(0)
 
-  await user.type(screen.getByLabelText(/send to/i), '5216641234567')
+  await user.type(screen.getByLabelText(/enviar a/i), '5216641234567')
   await user.type(screen.getByLabelText(/\{\{1\}\}/), 'Ana')
-  await user.click(screen.getByRole('button', { name: /^send$/i }))
+  await user.click(screen.getByRole('button', { name: /^enviar$/i }))
 
-  expect(await screen.findByText(/every placeholder/i)).toBeDefined()
+  expect(await screen.findByText(/rellena todos los valores/i)).toBeDefined()
   expect(calls.filter((call) => call.url.endsWith('/send'))).toHaveLength(0)
 })
 
@@ -446,9 +446,9 @@ test('offers no test send for a template Meta has not approved', async () => {
   await screen.findByText('welcome_message')
 
   // Exactly one of the two templates is approved, so exactly one send button.
-  expect(screen.getAllByRole('button', { name: /send test/i })).toHaveLength(1)
-  await user.click(screen.getByRole('button', { name: /send test/i }))
-  expect(screen.getByLabelText(/send to/i)).toBeDefined()
+  expect(screen.getAllByRole('button', { name: /enviar prueba/i })).toHaveLength(1)
+  await user.click(screen.getByRole('button', { name: /enviar prueba/i }))
+  expect(screen.getByLabelText(/enviar a/i)).toBeDefined()
 })
 
 test("shows the server's message when a send is refused", async () => {
@@ -468,11 +468,11 @@ test("shows the server's message when a send is refused", async () => {
 
   renderPage()
   await screen.findByText('appointment_reminder')
-  await user.click(screen.getByRole('button', { name: /send test/i }))
-  await user.type(screen.getByLabelText(/send to/i), '15550000000')
+  await user.click(screen.getByRole('button', { name: /enviar prueba/i }))
+  await user.type(screen.getByLabelText(/enviar a/i), '15550000000')
   await user.type(screen.getByLabelText(/\{\{1\}\}/), 'Ana')
   await user.type(screen.getByLabelText(/\{\{2\}\}/), 'hoy')
-  await user.click(screen.getByRole('button', { name: /^send$/i }))
+  await user.click(screen.getByRole('button', { name: /^enviar$/i }))
 
   expect(await screen.findByText(/not in allowed list/i)).toBeDefined()
 })

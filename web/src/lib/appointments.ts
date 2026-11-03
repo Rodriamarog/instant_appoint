@@ -58,7 +58,7 @@ export async function createAppointment(
 ): Promise<Appointment> {
   const owner = pb.authStore.record?.id
   if (!owner) {
-    throw new Error('Your session has expired. Sign in again to save this.')
+    throw new Error('Tu sesión expiró. Inicia sesión otra vez para guardar esto.')
   }
 
   return pb.collection(COLLECTION).create<Appointment>({

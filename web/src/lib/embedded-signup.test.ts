@@ -47,7 +47,7 @@ describe('parseSignupMessage', () => {
     })
     expect(parseSignupMessage(msg('ERROR'))).toEqual({
       kind: 'error',
-      message: 'Unknown error from Facebook',
+      message: 'Error desconocido de Facebook',
     })
   })
 

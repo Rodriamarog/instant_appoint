@@ -34,7 +34,7 @@ function DialogContent({
           className="absolute top-5 right-5 rounded-full opacity-60 transition-opacity hover:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/30 focus-visible:outline-none"
         >
           <X className="size-4" />
-          <span className="sr-only">Close</span>
+          <span className="sr-only">Cerrar</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>

@@ -60,7 +60,7 @@ export async function signIn(email: string, password: string): Promise<void> {
   if (user && !user.verified) {
     pb.authStore.clear()
     throw new Error(
-      'Please verify your email address before logging in. Check your email for the verification link.',
+      'Verifica tu correo electrónico antes de iniciar sesión. Busca en tu correo el enlace de verificación.',
     )
   }
 }

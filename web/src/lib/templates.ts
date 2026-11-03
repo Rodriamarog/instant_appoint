@@ -35,9 +35,9 @@ export interface TemplateDraft {
 export const CATEGORIES = ['UTILITY', 'MARKETING', 'AUTHENTICATION']
 
 export const LANGUAGES = [
-  { code: 'es', label: 'Spanish (es)' },
-  { code: 'en_US', label: 'English (en_US)' },
-  { code: 'pt_BR', label: 'Portuguese (pt_BR)' },
+  { code: 'es', label: 'Español (es)' },
+  { code: 'en_US', label: 'Inglés (en_US)' },
+  { code: 'pt_BR', label: 'Portugués (pt_BR)' },
 ]
 
 /** Meta's own limits on a row of quick replies. */
@@ -113,21 +113,21 @@ export function validateDraft(
   const problems: Partial<Record<keyof TemplateDraft, string>> = {}
 
   if (!draft.name.trim()) {
-    problems.name = 'A name is required.'
+    problems.name = 'El nombre es obligatorio.'
   } else if (!/^[a-z0-9_]+$/.test(draft.name)) {
-    problems.name = 'Use lowercase letters, numbers and underscores only.'
+    problems.name = 'Usa solo minúsculas, números y guiones bajos.'
   }
 
   if (!CATEGORIES.includes(draft.category)) {
-    problems.category = 'Choose a category.'
+    problems.category = 'Elige una categoría.'
   }
 
   if (!LANGUAGES.some((language) => language.code === draft.language)) {
-    problems.language = 'Choose a language.'
+    problems.language = 'Elige un idioma.'
   }
 
   if (!draft.body.trim()) {
-    problems.body = 'A body is required.'
+    problems.body = 'El mensaje es obligatorio.'
   }
 
   // Meta answers a bad button with the same opaque rejection as a bad name,

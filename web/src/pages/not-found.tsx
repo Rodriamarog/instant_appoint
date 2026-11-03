@@ -7,11 +7,13 @@ import { Link } from 'react-router'
 export function NotFoundPage() {
   return (
     <section className="space-y-3">
-      <h1 className="font-heading text-2xl font-semibold">Page not found</h1>
+      <h1 className="font-heading text-2xl font-semibold">
+        Página no encontrada
+      </h1>
       <p className="text-muted-foreground">
-        There is nothing at this address.{' '}
+        No hay nada en esta dirección.{' '}
         <Link to="/" className="underline">
-          Go home
+          Ir al inicio
         </Link>
         .
       </p>
