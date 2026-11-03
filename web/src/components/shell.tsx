@@ -2,13 +2,30 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 
 import { signOut } from '@/lib/auth'
 
+/**
+ * The whole of the signed-in navigation.
+ *
+ * Two tabs, because only one of the five this replaced was daily work:
+ * connecting a number happens once, choosing a template is a setup act with a
+ * Meta review attached, and the reminder settings are decided and then left
+ * alone. All three sit under Configuración now.
+ */
 const links = [
-  { to: '/calendar', label: 'Calendario' },
-  { to: '/chat', label: 'Chat' },
-  { to: '/whatsapp', label: 'WhatsApp' },
-  { to: '/reminders', label: 'Recordatorios' },
-  { to: '/templates', label: 'Plantillas' },
+  { to: '/inicio', label: 'Inicio' },
+  { to: '/configuracion', label: 'Configuración' },
 ]
+
+/**
+ * True while the person is on `to` or on a page beneath it.
+ *
+ * The separator is part of the comparison on purpose: a bare prefix test
+ * would light /inicio up for an /inicio-anything added later, which is a
+ * different page. An exact match is not enough either — Configuración holds
+ * four sub-pages, and the tab went dark on every one of them.
+ */
+function isCurrent(pathname: string, to: string): boolean {
+  return pathname === to || pathname.startsWith(to + '/')
+}
 
 /**
  * The layout every signed-in page renders inside. It assumes a session: the
@@ -26,14 +43,20 @@ export function Shell() {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b">
-        <nav className="mx-auto flex max-w-5xl items-center gap-6 px-6 py-4 text-sm">
+        <nav
+          aria-label="Principal"
+          className="mx-auto flex max-w-5xl items-center gap-6 px-6 py-4 text-sm"
+        >
           <span className="font-heading font-semibold">InstantAppoint</span>
           {links.map(({ to, label }) => (
             <Link
               key={to}
               to={to}
+              aria-current={isCurrent(pathname, to) ? 'page' : undefined}
               className={
-                pathname === to ? 'text-foreground' : 'text-muted-foreground'
+                isCurrent(pathname, to)
+                  ? 'text-foreground'
+                  : 'text-muted-foreground'
               }
             >
               {label}
