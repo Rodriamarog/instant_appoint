@@ -25,6 +25,48 @@ export const COLLECTION = 'appointments'
 export type AppointmentStatus = 'proposed' | 'pending' | 'confirmed' | 'cancelled'
 
 /**
+ * The language a patient's reminder is written in, as Meta spells a template
+ * variant.
+ *
+ * The codes are Meta's own and not names of this app's invention, because
+ * the value travels straight through to the send: the Go job puts it in the
+ * language field of the template message. The form that creates a template
+ * offers a third, pt_BR, which is deliberately not here — nothing in this
+ * app can write a date in Portuguese, and the reminder job holds back any
+ * appointment asking for one rather than sending a Spanish month inside
+ * Portuguese wording.
+ *
+ * Labels are Spanish because the staff reading them are.
+ */
+export const REMINDER_LANGUAGES = [
+  { code: 'es', label: 'Español' },
+  { code: 'en_US', label: 'Inglés' },
+]
+
+/**
+ * What a patient is written to in when nothing better is known.
+ *
+ * Spanish: the clinic is in Tijuana, every business here starts on the
+ * Spanish template, and it is the one variant the reminder job is certain
+ * the business has approved.
+ */
+export const DEFAULT_REMINDER_LANGUAGE = 'es'
+
+/**
+ * The language to guess from a phone number's dialling prefix.
+ *
+ * Right most of the time and wrong often enough to matter, which is the
+ * whole reason the dialog shows it as a control the staff member can change
+ * rather than applying it invisibly at send time. The prefixes are the ones
+ * the dialog offers; anything else falls back rather than guessing English,
+ * because an English reminder needs an en_US template the business may never
+ * have had approved.
+ */
+export function languageForCountryCode(countryCode: string): string {
+  return countryCode.startsWith('1') ? 'en_US' : DEFAULT_REMINDER_LANGUAGE
+}
+
+/**
  * Who did something to an appointment. Staff work in this app, the patient
  * taps a button in WhatsApp, the assistant acts on a conversation it read.
  */
@@ -42,6 +84,13 @@ export interface Appointment {
   location?: string
 
   status: AppointmentStatus
+
+  /**
+   * The template variant this patient's reminder goes out in — one of
+   * REMINDER_LANGUAGES. It belongs to the appointment and not to the
+   * business: a border clinic's list has readers of both languages on it.
+   */
+  language: string
 
   /**
    * How it reached that status, and when.
@@ -74,7 +123,13 @@ export interface Appointment {
  */
 export type AppointmentDraft = Pick<
   Appointment,
-  'client_name' | 'client_phone' | 'notes' | 'start_time' | 'end_time' | 'location'
+  | 'client_name'
+  | 'client_phone'
+  | 'notes'
+  | 'start_time'
+  | 'end_time'
+  | 'location'
+  | 'language'
 >
 
 /**

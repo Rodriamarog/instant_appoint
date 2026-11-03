@@ -44,8 +44,18 @@ type Settings struct {
 	// chosen one yet, which is not something to guess at.
 	TemplateName string
 
-	// TemplateLanguage is the template's language variant, e.g. "es".
-	TemplateLanguage string
+	// DefaultLanguage is the template variant the business configured, as
+	// Meta spells it: "es", "en_US".
+	//
+	// It used to be the language every one of this business's reminders went
+	// out in. It is now only a default: the language belongs to the
+	// appointment, and this is what an appointment that carries none of its
+	// own falls back to — which is what every row written before the column
+	// existed looked like until the migration copied this value onto it.
+	// Keeping the fallback means an older client that writes an appointment
+	// without a language still gets the behaviour the clinic had, rather
+	// than silence.
+	DefaultLanguage string
 
 	// Timezone is an IANA zone name. The date and the time in the reminder
 	// are spelled in it; the appointment itself is a UTC instant.
@@ -65,6 +75,16 @@ type Appointment struct {
 	ClientPhone string
 
 	StartTime time.Time
+
+	// Language is the template variant this patient is written to in, as
+	// Meta spells it: "es", "en_US". Empty falls back to the business's
+	// Settings.DefaultLanguage.
+	//
+	// It is the patient's language, not the clinic's. A Tijuana clinic
+	// treats people from both sides of the border, and a Mexican patient who
+	// prefers English is unremarkable here — which is why staff can set it
+	// rather than it being inferred from the phone number and locked.
+	Language string
 
 	// Status decides whether a reminder is owed at all — see
 	// appointments.Status.AllowsReminders. A Store that leaves it blank gets
@@ -220,6 +240,15 @@ type Summary struct {
 	// it is the one reason a clinic may want to go and look at.
 	NotRemindable int
 
+	// NoLanguage counts the reminders held back because the language the
+	// appointment asks for has no row in the spelling table — pt_BR, which
+	// the template form offers and this app has no month names for.
+	//
+	// Its own counter rather than part of Skipped because it is a clinic's
+	// configuration asking for something this build cannot write, and the
+	// only way to fix it is for somebody to go and look.
+	NoLanguage int
+
 	// GaveUp counts reminders past MaxAttempts.
 	GaveUp int
 
@@ -237,10 +266,8 @@ const timeLayout = "15:04"
 
 // language is which of the two languages a reminder's date is spelled in.
 //
-// Spanish is the zero value because it is what every reminder this app has
-// sent was spelled in, and nothing yet picks the other: choosing per
-// appointment is a separate change, and this type exists so that change is a
-// caller passing english rather than a rewrite of how a date is written.
+// Spanish is the zero value because it is what every reminder this app sent
+// before an appointment could carry a language of its own.
 type language int
 
 const (
@@ -248,8 +275,16 @@ const (
 	english
 )
 
-// spelling is one language's worth of calendar vocabulary.
+// spelling is one language's worth of calendar vocabulary, and the name Meta
+// knows that language by.
 type spelling struct {
+	// variant is the template's language code, which a send names and Meta
+	// picks the approved wording by. It sits in the same row as the month
+	// names deliberately: the wording Meta assembles and the date this app
+	// hands it have to be the same language, and keeping the two in separate
+	// tables is how they come apart.
+	variant string
+
 	months [12]string
 
 	// date is a layout for fmt.Sprintf taking the day, the month's name and
@@ -272,6 +307,7 @@ type spelling struct {
 // that chose the digits in the first place still holds, and this satisfies it.
 var spellings = [...]spelling{
 	spanish: {
+		variant: "es",
 		months: [12]string{
 			"enero", "febrero", "marzo", "abril", "mayo", "junio",
 			"julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
@@ -279,12 +315,35 @@ var spellings = [...]spelling{
 		date: "%[1]d de %[2]s de %[3]d",
 	},
 	english: {
+		// en_US and not en: it is what the template form offers, so it is
+		// what a business's approved variant is actually called, and Meta
+		// matches the code it is given rather than the language in it.
+		variant: "en_US",
 		months: [12]string{
 			"January", "February", "March", "April", "May", "June",
 			"July", "August", "September", "October", "November", "December",
 		},
 		date: "%[2]s %[1]d, %[3]d",
 	},
+}
+
+// languageFor is the variant code a reminder was asked for, as a language
+// this app can write a date in.
+//
+// Not found is the whole point of the second return. The template form offers
+// pt_BR and there is no Portuguese row here, so a clinic can configure a
+// variant whose months this build does not know — and the wrong answer is to
+// fall back to Spanish, which would put a Spanish month inside Portuguese
+// wording and look entirely ordinary from the outside. The caller holds the
+// reminder back instead.
+func languageFor(variant string) (language, bool) {
+	for index, spelling := range spellings {
+		if spelling.variant == variant {
+			return language(index), true
+		}
+	}
+
+	return 0, false
 }
 
 // spellDate writes out the date a reminder names, with the month as a word.
@@ -410,6 +469,24 @@ func Run(ctx context.Context, store Store, sender Sender, now time.Time) (Summar
 			continue
 		}
 
+		// Resolved before anything is claimed or sent, because a reminder
+		// whose date cannot be written is one that must not go out at all —
+		// see Summary.NoLanguage. Whether Meta has actually approved this
+		// template in this variant is a question only Meta can answer: an
+		// unapproved one comes back refused and is recorded as a failed
+		// attempt, which is the second half of the same guarantee. Between
+		// them, no patient is sent a message in a language they did not ask
+		// for.
+		variant := appointment.Language
+		if variant == "" {
+			variant = settings.DefaultLanguage
+		}
+		lang, ok := languageFor(variant)
+		if !ok {
+			summary.NoLanguage++
+			continue
+		}
+
 		if attempt.Failures >= MaxAttempts {
 			summary.GaveUp++
 			continue
@@ -438,11 +515,7 @@ func Run(ctx context.Context, store Store, sender Sender, now time.Time) (Summar
 			continue
 		}
 
-		// Spanish for everybody, which is no worse than the digits it
-		// replaces: those were day-first, so a Spanish reader was the one
-		// they already suited. Reading the language off the appointment is
-		// the next change, not this one.
-		parameters := bodyParameters(appointment, location, spanish)
+		parameters := bodyParameters(appointment, location, lang)
 
 		claimID, err := store.Claim(ctx, Claim{
 			AppointmentID: appointment.ID,
@@ -450,7 +523,7 @@ func Run(ctx context.Context, store Store, sender Sender, now time.Time) (Summar
 			AccountID:     account.ID,
 			PhoneNumberID: account.PhoneNumberID,
 			ToNumber:      appointment.ClientPhone,
-			Content:       content(settings, parameters),
+			Content:       content(settings.TemplateName, variant, parameters),
 			At:            now,
 		})
 		switch {
@@ -463,7 +536,7 @@ func Run(ctx context.Context, store Store, sender Sender, now time.Time) (Summar
 		}
 
 		messageID, err := sender.SendTemplate(ctx, *account, appointment.ClientPhone,
-			settings.TemplateName, settings.TemplateLanguage, parameters)
+			settings.TemplateName, variant, parameters)
 		if err != nil {
 			summary.Failed++
 			if markErr := store.MarkFailed(ctx, claimID); markErr != nil {
@@ -493,6 +566,11 @@ func bodyParameters(appointment Appointment, location *time.Location, lang langu
 // Meta assembles the real text from the approved template, which this app
 // never holds, so this records the template and its parameters rather than
 // inventing a message that was never delivered.
-func content(settings Settings, parameters []string) string {
-	return fmt.Sprintf("%s (%s): %s", settings.TemplateName, settings.TemplateLanguage, strings.Join(parameters, " | "))
+//
+// variant is the one the send asked for and not the business's setting: two
+// patients of one clinic now receive different wording from the same
+// template, and a row that named the setting would tell the clinic the wrong
+// one.
+func content(templateName, variant string, parameters []string) string {
+	return fmt.Sprintf("%s (%s): %s", templateName, variant, strings.Join(parameters, " | "))
 }
