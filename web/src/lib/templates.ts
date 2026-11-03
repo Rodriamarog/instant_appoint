@@ -45,6 +45,20 @@ export const MAX_BUTTONS = 3
 export const MAX_BUTTON_LABEL = 25
 
 /**
+ * How long a button's label is, counted the way the Go handler counts it.
+ *
+ * String.length counts UTF-16 units, so an emoji would read as two, and the
+ * handler's own check (meta.ReplyButtonLabelFits) counts characters. Letting
+ * the two disagree is how a form accepts wording the server then refuses,
+ * which is exactly what happened while this counted UTF-16 units and the
+ * handler counted bytes. Spreading the string counts code points, which is
+ * the same number both sides now hold the label to.
+ */
+export function buttonLabelLength(label: string): number {
+  return [...label].length
+}
+
+/**
  * The Confirm and Cancel wording suggested for each language on offer.
  *
  * The buttons live inside the template, so Meta approves them once, in one
@@ -137,7 +151,9 @@ export function validateDraft(
     problems.buttons = 'Un mensaje admite como máximo tres botones.'
   } else if (draft.buttons.some((label) => !label.trim())) {
     problems.buttons = 'Cada botón necesita un texto.'
-  } else if (draft.buttons.some((label) => label.length > MAX_BUTTON_LABEL)) {
+  } else if (
+    draft.buttons.some((label) => buttonLabelLength(label) > MAX_BUTTON_LABEL)
+  ) {
     problems.buttons = 'El texto de un botón no puede pasar de 25 caracteres.'
   }
 

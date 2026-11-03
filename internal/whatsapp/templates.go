@@ -113,7 +113,7 @@ func createTemplate(client *meta.Client) func(*core.RequestEvent) error {
 			return e.BadRequestError("A template can carry at most three buttons.", nil)
 		}
 		for _, label := range draft.Buttons {
-			if strings.TrimSpace(label) == "" || len(label) > meta.MaxReplyButtonLabel {
+			if strings.TrimSpace(label) == "" || !meta.ReplyButtonLabelFits(label) {
 				return e.BadRequestError("Every button needs a label of 25 characters or fewer.", nil)
 			}
 		}

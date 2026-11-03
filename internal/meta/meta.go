@@ -29,6 +29,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // GraphBaseURL is the production Graph API host. Tests point Client.BaseURL at
@@ -485,12 +486,30 @@ type Button struct {
 const (
 	MaxReplyButtons = 3
 
-	// MaxReplyButtonLabel is how long one button's text may be. Checked
-	// with len, so it is counted in bytes and an accented Spanish label
-	// runs out sooner than its reader would expect — which errs towards
-	// refusing early rather than discovering the limit from Meta.
+	// MaxReplyButtonLabel is how long one button's text may be, counted in
+	// characters — see ReplyButtonLabelFits for why that unit and not bytes.
 	MaxReplyButtonLabel = 25
 )
+
+// ReplyButtonLabelFits reports whether a button's text is short enough to
+// submit, counting characters rather than bytes.
+//
+// len counts "Confirmación de la visita" as 26 and the person who typed it
+// counts 25, so a label Meta's own documented limit allows was refused — in
+// a product whose entire interface is Spanish, which makes accented labels
+// the normal case rather than the exotic one. Worse than the refusal, the
+// browser counts the same label with String.length and accepts it, so the
+// form said the wording was fine and the handler then rejected it. One
+// rule, counted one way on both sides, is the point of this function.
+//
+// Meta documents the limit as 25 characters but does not say what it counts,
+// and no live submission has settled it. Characters is the reading its own
+// wording supports; were it to count something stricter, the cost is the
+// Graph rejection this check usually spares the person, not a wrong message
+// reaching a patient.
+func ReplyButtonLabelFits(label string) bool {
+	return utf8.RuneCountInString(label) <= MaxReplyButtonLabel
+}
 
 type interactiveBody struct {
 	// Type is "button" for reply buttons — not the button's own type, which

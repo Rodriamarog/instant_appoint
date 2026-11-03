@@ -143,4 +143,18 @@ test('a button Meta would refuse is caught before the review clock starts', () =
   ).toEqual({
     buttons: 'Un mensaje admite como máximo tres botones.',
   })
+
+  // 25 characters, 26 bytes. Accepted here and, since both sides count
+  // characters, accepted by the handler too — it used to count the bytes and
+  // refuse wording this form had just told the person was fine.
+  expect(
+    validateDraft({ ...draft, buttons: ['Confirmación de la visita'] }),
+  ).toEqual({})
+
+  // One character longer is refused on both sides.
+  expect(
+    validateDraft({ ...draft, buttons: ['Confirmación de la visitas'] }),
+  ).toEqual({
+    buttons: 'El texto de un botón no puede pasar de 25 caracteres.',
+  })
 })
