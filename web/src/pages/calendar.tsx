@@ -7,20 +7,26 @@ import { EventDialog } from '@/components/calendar/event-dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   listAppointmentsBetween,
-  type CalendarEvent,
-} from '@/lib/calendar-events'
+  type Appointment,
+} from '@/lib/appointments'
 import { errorMessage } from '@/lib/errors'
 import { isoMillis } from '@/lib/iso-time'
 
 const localizer = momentLocalizer(moment)
 
-/** What react-big-calendar wants: two Dates, plus the row behind them. */
+/**
+ * What react-big-calendar wants: two Dates, plus the row behind them.
+ *
+ * title is the library's own accessor name rather than this app's — it is
+ * what the grid prints on a slot. Renaming it to client_name along with the
+ * column would leave every appointment in the month view blank.
+ */
 interface SlotEvent {
   id: string
   title: string
   start: Date
   end: Date
-  resource: CalendarEvent
+  resource: Appointment
 }
 
 /**
@@ -41,7 +47,7 @@ export function CalendarPage() {
   const [appointments, setAppointments] = useState<SlotEvent[]>([])
   const [date, setDate] = useState(() => new Date())
   const [view, setView] = useState<View>('month')
-  const [selected, setSelected] = useState<CalendarEvent | null>(null)
+  const [selected, setSelected] = useState<Appointment | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create')
   const [error, setError] = useState<string | null>(null)
@@ -59,7 +65,7 @@ export function CalendarPage() {
       setAppointments(
         rows.map((row) => ({
           id: row.id,
-          title: row.title,
+          title: row.client_name,
           start: new Date(row.start_time),
           end: new Date(row.end_time),
           resource: row,
@@ -104,7 +110,7 @@ export function CalendarPage() {
             setSelected({
               id: '',
               user_id: '',
-              title: '',
+              client_name: '',
               // Through isoMillis like every other writer, not
               // toISOString directly. The two agree today; the point of the
               // module is that no call site decides that for itself, because

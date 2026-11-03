@@ -1,11 +1,12 @@
 import { pb } from '@/lib/pocketbase'
 
 /**
- * How a person's reminders are configured: how far ahead they go out, whether
- * they go out at all, and the approved template and zone they are written in.
+ * One business's settings: how far ahead its reminders go out, whether they
+ * go out at all, the approved template they are written in, and the zone the
+ * business keeps time in.
  *
  * This module is the only place that knows the collection is called
- * reminder_settings, that there is exactly one row per person, and what to
+ * business_settings, that there is exactly one row per person, and what to
  * show somebody who has never opened the settings dialog.
  *
  * There is no server-side handler behind it: the SPA reaches PocketBase
@@ -14,10 +15,10 @@ import { pb } from '@/lib/pocketbase'
  * as an argument — the create rule compares the submitted user_id against the
  * caller and runs before any hook, so a value from anywhere else is a 400.
  */
-export const COLLECTION = 'reminder_settings'
+export const COLLECTION = 'business_settings'
 
-/** One person's reminder configuration. */
-export interface ReminderSettings {
+/** One business's settings. */
+export interface BusinessSettings {
   /** Absent until the first save. */
   id?: string
   /** How many minutes before the appointment the reminder goes out. */
@@ -37,7 +38,7 @@ export interface ReminderSettings {
  * where the language and the zone are create-time field defaults, so a row
  * written by anything that skips them matches what the page would have shown.
  */
-export const DEFAULT_SETTINGS: ReminderSettings = {
+export const DEFAULT_SETTINGS: BusinessSettings = {
   timing_minutes: 1440,
   is_active: true,
   template_name: '',
@@ -83,13 +84,13 @@ function isNotFound(error: unknown): boolean {
 }
 
 /** The signed-in person's row, or null if they have never saved one. */
-async function findOwn(): Promise<ReminderSettings | null> {
+async function findOwn(): Promise<BusinessSettings | null> {
   const owner = pb.authStore.record?.id ?? ''
 
   try {
     return await pb
       .collection(COLLECTION)
-      .getFirstListItem<ReminderSettings>(
+      .getFirstListItem<BusinessSettings>(
         // The list rule already scopes this to the caller; naming the owner
         // as well keeps the query honest about what it expects back, and is
         // what makes a duplicate row impossible to reach rather than merely
@@ -113,7 +114,7 @@ async function findOwn(): Promise<ReminderSettings | null> {
  * else's configuration back to them as their own, and the next save would
  * overwrite the real row with it.
  */
-export async function loadReminderSettings(): Promise<ReminderSettings> {
+export async function loadBusinessSettings(): Promise<BusinessSettings> {
   return (await findOwn()) ?? DEFAULT_SETTINGS
 }
 
@@ -126,9 +127,9 @@ export async function loadReminderSettings(): Promise<ReminderSettings> {
  * saves still race, the collection's unique index refuses the second create
  * loudly instead of leaving two rows for one person.
  */
-export async function saveReminderSettings(
-  settings: ReminderSettings,
-): Promise<ReminderSettings> {
+export async function saveBusinessSettings(
+  settings: BusinessSettings,
+): Promise<BusinessSettings> {
   const { timing_minutes, is_active, template_name, template_language, timezone } =
     settings
 
@@ -144,7 +145,7 @@ export async function saveReminderSettings(
 
   const existing = await findOwn()
   if (existing?.id) {
-    return pb.collection(COLLECTION).update<ReminderSettings>(existing.id, body)
+    return pb.collection(COLLECTION).update<BusinessSettings>(existing.id, body)
   }
 
   const owner = pb.authStore.record?.id
@@ -152,7 +153,7 @@ export async function saveReminderSettings(
     throw new Error('Your session has expired. Sign in again to save this.')
   }
 
-  return pb.collection(COLLECTION).create<ReminderSettings>({
+  return pb.collection(COLLECTION).create<BusinessSettings>({
     ...body,
     user_id: owner,
   })

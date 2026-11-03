@@ -19,8 +19,8 @@ import {
   createAppointment,
   deleteAppointment,
   updateAppointment,
-  type CalendarEvent,
-} from '@/lib/calendar-events'
+  type Appointment,
+} from '@/lib/appointments'
 import {
   localDateInput,
   localInputsToIso,
@@ -31,7 +31,7 @@ interface EventDialogProps {
   open: boolean
   mode: 'create' | 'edit'
   /** The appointment being edited, or the blank slot that was selected. */
-  event: CalendarEvent | null
+  event: Appointment | null
   onClose: () => void
   /** Called after a successful save or delete, so the calendar can reload. */
   onSaved: () => void
@@ -97,7 +97,7 @@ export function EventDialog({
     }
 
     const { countryCode: code, digits } = splitPhone(event.client_phone || '')
-    setClientName(event.title || '')
+    setClientName(event.client_name || '')
     setCountryCode(code)
     setPhoneNumber(digits)
     setLocation(event.location || '')
@@ -139,7 +139,7 @@ export function EventDialog({
     }
 
     const draft = {
-      title: clientName,
+      client_name: clientName,
       client_phone: phoneNumber.trim()
         ? `${countryCode}${phoneNumber.replace(/\D/g, '')}`
         : '',

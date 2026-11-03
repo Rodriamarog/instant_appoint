@@ -13,8 +13,8 @@ import { errorMessage } from '@/lib/errors'
 import {
   TIMEZONE_OPTIONS,
   TIMING_OPTIONS,
-  type ReminderSettings,
-} from '@/lib/reminder-settings'
+  type BusinessSettings,
+} from '@/lib/business-settings'
 import {
   listTemplates,
   placeholders,
@@ -54,8 +54,8 @@ export function ReminderSettingsDialog({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  settings: ReminderSettings
-  onSave: (settings: ReminderSettings) => Promise<void>
+  settings: BusinessSettings
+  onSave: (settings: BusinessSettings) => Promise<void>
 }) {
   // Edited locally so Cancel really cancels, and so the upcoming list does
   // not lurch about while somebody is still deciding.

@@ -6,12 +6,19 @@ import (
 	"github.com/pocketbase/pocketbase/tools/types"
 )
 
-// ReminderSettingsCollection is the one row per person that says when their
-// appointment reminders go out, and whether they go out at all. The id is
-// pinned to the one the legacy JS migration used so a database carried over
-// from the Next.js stack keeps its rows.
+// reminderSettingsCollection is the one row per person that says when their
+// appointment reminders go out, whether they go out at all, and which zone
+// the business keeps time in — which is why 1793232006 renames it to
+// business_settings. The old name is unexported and stays here rather than
+// being corrected in place: an already-applied migration that is edited is
+// not re-run, so a database created before that rename would never hear
+// about it.
+//
+// The id is pinned to the one the legacy JS migration used so a database
+// carried over from the Next.js stack keeps its rows, and the rename finds
+// the collection by it.
 const (
-	ReminderSettingsCollection = "reminder_settings"
+	reminderSettingsCollection = "reminder_settings"
 	reminderSettingsID         = "pbc_reminder_settings"
 )
 
@@ -39,7 +46,7 @@ const reminderSettingsOwner = "user_id = @request.auth.id"
 
 func init() {
 	m.Register(func(app core.App) error {
-		settings := core.NewBaseCollection(ReminderSettingsCollection, reminderSettingsID)
+		settings := core.NewBaseCollection(reminderSettingsCollection, reminderSettingsID)
 
 		settings.Fields.Add(
 			&core.TextField{Name: "user_id", Required: true, Max: 255},
@@ -111,7 +118,7 @@ func init() {
 
 		return app.Save(settings)
 	}, func(app core.App) error {
-		settings, err := app.FindCollectionByNameOrId(ReminderSettingsCollection)
+		settings, err := app.FindCollectionByNameOrId(reminderSettingsCollection)
 		if err != nil {
 			return nil // already gone
 		}

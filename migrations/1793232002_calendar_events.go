@@ -6,16 +6,19 @@ import (
 	"github.com/pocketbase/pocketbase/tools/types"
 )
 
-// CalendarEventsCollection is the appointments table. The id is pinned to the
-// one the legacy JS migration used so a database carried over from the Next.js
-// stack keeps working, and so anything that references the collection by id
-// resolves the same way in every environment.
+// calendarEventsCollection is the appointments table under the name the
+// Next.js stack gave it. 1793232006 renames it to appointments; this name is
+// unexported, and stays here rather than being corrected in place, because an
+// already-applied migration that is edited is not re-run — a database created
+// before that rename would never hear about it.
 //
-// The name is exported for the same reason as the other four: a collection
-// name spelled a second time somewhere else is a collection name that can be
-// changed in one place and not the other.
+// The id is pinned to the one the legacy JS migration used so a database
+// carried over from the Next.js stack keeps working, and so anything that
+// references the collection by id resolves the same way in every environment.
+// The rename leans on that: it finds the collection by id, in both
+// directions.
 const (
-	CalendarEventsCollection = "calendar_events"
+	calendarEventsCollection = "calendar_events"
 	calendarEventsID         = "pbc_2544738948"
 )
 
@@ -37,7 +40,7 @@ const calendarEventsOwner = "user_id = @request.auth.id"
 
 func init() {
 	m.Register(func(app core.App) error {
-		events := core.NewBaseCollection(CalendarEventsCollection, calendarEventsID)
+		events := core.NewBaseCollection(calendarEventsCollection, calendarEventsID)
 
 		// Every field is text, including the two timestamps. The app stores
 		// ISO-8601 strings and the calendar window filters them with >= / <=,
@@ -72,7 +75,7 @@ func init() {
 
 		return app.Save(events)
 	}, func(app core.App) error {
-		events, err := app.FindCollectionByNameOrId(CalendarEventsCollection)
+		events, err := app.FindCollectionByNameOrId(calendarEventsCollection)
 		if err != nil {
 			return nil // already gone
 		}

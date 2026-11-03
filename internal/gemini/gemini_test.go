@@ -155,7 +155,7 @@ func sentInstruction(t *testing.T) string {
 
 // Nothing this package sends can book anything: the request carries no tools,
 // the response reader looks only at text, and the only code that ever writes
-// to calendar_events is the dialog a member of staff fills in. So an
+// to appointments is the dialog a member of staff fills in. So an
 // instruction telling the model to confirm or book leaves a customer holding
 // a promise that no row anywhere backs — which is what the prompt ported from
 // the TypeScript did.

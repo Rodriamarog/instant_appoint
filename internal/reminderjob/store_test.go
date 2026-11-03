@@ -21,11 +21,11 @@ func TestActiveSettingsReadsOnlyThePeopleWhoHaveRemindersSwitchedOn(t *testing.T
 	alice := newUser(t, app, "alice@instantappoint.test")
 	bob := newUser(t, app, "bob@instantappoint.test")
 
-	save(t, app, "reminder_settings", map[string]any{
+	save(t, app, "business_settings", map[string]any{
 		"user_id": alice, "timing_minutes": 90, "is_active": true,
 		"template_name": "appointment_reminder", "template_language": "es", "timezone": "America/Tijuana",
 	})
-	save(t, app, "reminder_settings", map[string]any{
+	save(t, app, "business_settings", map[string]any{
 		"user_id": bob, "timing_minutes": 30, "is_active": false,
 		"template_name": "appointment_reminder", "template_language": "es", "timezone": "America/Tijuana",
 	})
@@ -65,8 +65,8 @@ func TestTheWindowBoundsAreComparedAgainstTimestampsAsStored(t *testing.T) {
 	to := from.Add(2 * time.Hour)
 
 	appointmentAt := func(id, start string) {
-		save(t, app, "calendar_events", map[string]any{
-			"user_id": alice, "title": id, "client_phone": "5216641234567",
+		save(t, app, "appointments", map[string]any{
+			"user_id": alice, "client_name": id, "client_phone": "5216641234567",
 			"start_time": start, "end_time": start,
 		})
 	}
@@ -85,7 +85,7 @@ func TestTheWindowBoundsAreComparedAgainstTimestampsAsStored(t *testing.T) {
 
 	var titles []string
 	for _, appointment := range found {
-		titles = append(titles, appointment.Title)
+		titles = append(titles, appointment.ClientName)
 	}
 
 	want := []string{
@@ -108,8 +108,8 @@ func TestAnAppointmentCarriesWhatTheReminderNeeds(t *testing.T) {
 	app := newApp(t)
 	alice := newUser(t, app, "alice@instantappoint.test")
 
-	id := save(t, app, "calendar_events", map[string]any{
-		"user_id": alice, "title": "Ana Lopez", "client_phone": "5216641234567",
+	id := save(t, app, "appointments", map[string]any{
+		"user_id": alice, "client_name": "Ana Lopez", "client_phone": "5216641234567",
 		"start_time": "2026-11-03T16:30:00.000Z", "end_time": "2026-11-03T17:00:00.000Z",
 		"notes": "second filling",
 	})
@@ -129,7 +129,7 @@ func TestAnAppointmentCarriesWhatTheReminderNeeds(t *testing.T) {
 	}
 	// The event dialog puts the client's name in the title. The scheduler
 	// this replaces sent the notes field instead, verbatim.
-	if appointment.Title != "Ana Lopez" || appointment.ClientPhone != "5216641234567" {
+	if appointment.ClientName != "Ana Lopez" || appointment.ClientPhone != "5216641234567" {
 		t.Errorf("appointment = %+v, want the title as the client name", appointment)
 	}
 	if want := time.Date(2026, 11, 3, 16, 30, 0, 0, time.UTC); !appointment.StartTime.Equal(want) {

@@ -1,7 +1,7 @@
 // Package isotime is the single place this app turns an instant into the
 // timestamp string it stores.
 //
-// Every application timestamp — calendar_events.start_time and .end_time,
+// Every application timestamp — appointments.start_time and .end_time,
 // whatsapp_messages.sent_at, conversations.last_message_at — lives in a
 // PocketBase *text* column, and every ordering and range query over them is a
 // byte-by-byte comparison performed by SQLite. That only matches chronological

@@ -190,7 +190,7 @@ func (c *Client) baseURL() string {
 // It began as a verbatim port of lib/ai-conversation.ts, which told the model
 // to "confirm the appointment clearly" once a time was agreed. Nothing here
 // can create an appointment: the request below carries no tools, the response
-// reader looks only at text, and the one writer of calendar_events is the
+// reader looks only at text, and the one writer of appointments is the
 // dialog a member of staff fills in. So that line had the model telling
 // customers they were booked when no row existed anywhere, and the business
 // found out when someone turned up. The lines below leave the model able to do

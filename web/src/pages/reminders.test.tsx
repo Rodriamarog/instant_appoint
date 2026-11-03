@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
-import type { CalendarEvent } from '@/lib/calendar-events'
+import type { Appointment } from '@/lib/appointments'
 import { pb } from '@/lib/pocketbase'
 import { RemindersPage } from '@/pages/reminders'
 
@@ -23,18 +23,18 @@ const NOW = new Date('2026-11-02T12:00:00.000Z')
 const notFound = () =>
   Object.assign(new Error('The requested resource wasn’t found.'), { status: 404 })
 
-let appointments: CalendarEvent[] = []
+let appointments: Appointment[] = []
 let storedSettings: Record<string, unknown> | null = null
 let connectedAccount: Record<string, unknown> | null = null
 
 const createSettings = vi.fn()
 const updateSettings = vi.fn()
 
-function appointment(overrides: Partial<CalendarEvent>): CalendarEvent {
+function appointment(overrides: Partial<Appointment>): Appointment {
   return {
     id: 'evt1',
     user_id: signedInUser.id,
-    title: 'Ana Ruiz',
+    client_name: 'Ana Ruiz',
     client_phone: '5215512345678',
     notes: 'See you tomorrow.',
     start_time: '2026-11-03T17:00:00.000Z',
@@ -61,7 +61,7 @@ beforeEach(() => {
 
   vi.spyOn(pb, 'collection').mockImplementation((name: string) => {
     const stub = {
-      calendar_events: {
+      appointments: {
         getFullList: () => Promise.resolve(appointments),
       },
       whatsapp_messages: {
@@ -73,7 +73,7 @@ beforeEach(() => {
       whatsapp_accounts: {
         getFullList: () => Promise.resolve(connectedAccount ? [connectedAccount] : []),
       },
-      reminder_settings: {
+      business_settings: {
         getFirstListItem: () =>
           storedSettings ? Promise.resolve(storedSettings) : Promise.reject(notFound()),
         create: createSettings,

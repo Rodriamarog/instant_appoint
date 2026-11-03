@@ -5,7 +5,7 @@ import { pb } from '@/lib/pocketbase'
  * only place that knows the collection is called whatsapp_accounts and how a
  * connected Cloud API account is told apart from a retired QR one.
  *
- * Unlike calendar-events, nothing here writes: the collection's create,
+ * Unlike appointments, nothing here writes: the collection's create,
  * update and delete rules are nil, so a browser cannot touch a row at all. An
  * account is only ever written by the Go handler behind
  * POST /api/whatsapp/exchange-token, which has the Meta app secret the
