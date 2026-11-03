@@ -36,9 +36,42 @@ export interface Message {
   sent_at: string
   /** Where it went. Empty on an inbound message. */
   to_number: string
-  /** The appointment a reminder is about. Empty on everything else. */
+  /**
+   * The appointment the row is about: the one a reminder went out for, or
+   * the one a tap on its buttons moved. Empty on everything else.
+   */
   event_id: string
   status: string
+}
+
+/**
+ * The message_type the webhook writes when a patient taps Confirm or Cancel
+ * under a reminder instead of typing a reply.
+ *
+ * The two read the same in a thread — the row says "Cancelar" either way —
+ * and they are not the same thing. Only a tap is something this app acted
+ * on, and only a tap can have failed to find the appointment it was about.
+ * Spelled the same as webhook.KindTap on the Go side, which is what writes
+ * it.
+ */
+export const TAP = 'button'
+
+/**
+ * Whether this is a tap that moved nothing.
+ *
+ * A tap is matched to an appointment through the reminder it answers, and
+ * three things have to line up for that: the delivery has to say which
+ * message it answers, that message has to be a reminder this clinic sent,
+ * and the button has to be one the app can name. When they do not line up
+ * the row is written with no appointment against it rather than guessed at,
+ * the alternative being a cancellation applied to the wrong patient.
+ *
+ * An empty event_id on a tap is therefore not a missing value. It is the
+ * record that the patient pressed a button and the booking did not move —
+ * the one thing in a thread somebody has to go and do by hand.
+ */
+export function isUnmatchedTap(message: Message): boolean {
+  return message.message_type === TAP && message.event_id === ''
 }
 
 /**

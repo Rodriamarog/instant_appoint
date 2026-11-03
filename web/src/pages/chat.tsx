@@ -12,6 +12,7 @@ import { errorMessage } from '@/lib/errors'
 import type { Feed } from '@/lib/feed'
 import {
   formatTime,
+  isUnmatchedTap,
   liveMessages,
   sendReply,
   withMessage,
@@ -177,6 +178,21 @@ export function ChatPage({
                     }`}
                   >
                     <p className="whitespace-pre-wrap">{message.message_content}</p>
+
+                    {/*
+                      A tap that moved nothing looks exactly like one that
+                      worked: the bubble says "Cancelar" either way. Left
+                      unsaid, the clinic reads a cancellation that never
+                      happened and keeps the slot held for somebody who is
+                      not coming.
+                    */}
+                    {isUnmatchedTap(message) && (
+                      <p className="mt-1 text-xs font-medium text-destructive">
+                        No se pudo vincular con ninguna cita. Cámbiala a mano en
+                        el calendario.
+                      </p>
+                    )}
+
                     <p
                       className={`mt-1 text-xs ${
                         message.direction === 'outbound'

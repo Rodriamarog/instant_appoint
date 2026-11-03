@@ -321,3 +321,61 @@ test('the page works unchanged on the polling feed', async () => {
   const arrived = await screen.findByText('Tuesday at ten, please.')
   expect(arrived.closest('li')?.dataset.direction).toBe('inbound')
 })
+
+/**
+ * A tap on Confirm or Cancel is a turn in the thread like any other — the
+ * word the patient pressed, in the same bubble a typed one would be in.
+ */
+test('a tap on a reminder button reads as the message it was', async () => {
+  const tap = {
+    ...message('m3', 'inbound', 'Confirmar', '2026-10-29T18:31:00.000Z'),
+    message_type: 'button',
+    event_id: 'appointment1',
+  }
+  renderChat({
+    conversations: controllable<Conversation>([loud]).feed,
+    messages: staticMessages([tap]),
+  })
+
+  await userEvent.click(await screen.findByRole('button', { name: /5216642222222/ }))
+
+  expect(await screen.findByText('Confirmar')).toBeTruthy()
+  expect(screen.queryByText(/No se pudo vincular/)).toBeNull()
+})
+
+/**
+ * The one case the clinic has to act on itself. A tap nothing could be
+ * matched to changed no appointment, and a bubble that only says "Cancelar"
+ * reads as a cancellation that went through.
+ */
+test('a tap that matched no appointment says so in the thread', async () => {
+  const orphan = {
+    ...message('m3', 'inbound', 'Cancelar', '2026-10-29T18:31:00.000Z'),
+    message_type: 'button',
+    event_id: '',
+  }
+  renderChat({
+    conversations: controllable<Conversation>([loud]).feed,
+    messages: staticMessages([orphan]),
+  })
+
+  await userEvent.click(await screen.findByRole('button', { name: /5216642222222/ }))
+
+  const warning = await screen.findByText(/No se pudo vincular/)
+  expect(warning.closest('li')?.dataset.direction).toBe('inbound')
+})
+
+/** A typed "Cancelar" is not a tap, and must not be flagged as a failed one. */
+test('a typed message is never called out as an unmatched tap', async () => {
+  renderChat({
+    conversations: controllable<Conversation>([loud]).feed,
+    messages: staticMessages([
+      message('m3', 'inbound', 'Cancelar', '2026-10-29T18:31:00.000Z'),
+    ]),
+  })
+
+  await userEvent.click(await screen.findByRole('button', { name: /5216642222222/ }))
+
+  expect(await screen.findByText('Cancelar')).toBeTruthy()
+  expect(screen.queryByText(/No se pudo vincular/)).toBeNull()
+})

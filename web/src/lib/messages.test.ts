@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import { listConversations } from '@/lib/conversations'
 import {
+  isUnmatchedTap,
   listMessages,
   listSentReminders,
   remindedEventIds,
@@ -255,4 +256,24 @@ test('asking about no appointments asks the database nothing', async () => {
 
   expect(await remindedEventIds([])).toEqual(new Set())
   expect(getFullList).not.toHaveBeenCalled()
+})
+
+/**
+ * The one row the thread has to treat differently, and the three it must
+ * not. A typed "Cancelar" is a sentence; a reminder is not a tap at all;
+ * and a tap naming an appointment is one that worked.
+ */
+test('only a tap that moved nothing is read as unmatched', () => {
+  const tap = { ...message('m1', '2026-10-29T18:31:00.000Z'), message_type: 'button' }
+
+  expect(isUnmatchedTap(tap)).toBe(true)
+  expect(isUnmatchedTap({ ...tap, event_id: 'appointment1' })).toBe(false)
+  expect(isUnmatchedTap(message('m2', '2026-10-29T18:31:00.000Z'))).toBe(false)
+  expect(
+    isUnmatchedTap({
+      ...message('m3', '2026-10-29T18:31:00.000Z'),
+      message_type: 'reminder',
+      event_id: '',
+    }),
+  ).toBe(false)
 })

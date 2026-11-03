@@ -35,6 +35,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Rodriamarog/instant_appoint/internal/appointments"
 	"github.com/Rodriamarog/instant_appoint/internal/isotime"
 	"github.com/Rodriamarog/instant_appoint/internal/routersig"
 )
@@ -75,11 +76,39 @@ const (
 	RoleModel = "model"
 )
 
+// MessageKind is how a message was produced, which is the difference between
+// a patient typing "Confirmar" and a patient tapping a button that says it.
+// The two read the same in a thread and are not the same thing: only the
+// second is one this app acted on, and only the second can fail to find the
+// appointment it was about.
+type MessageKind string
+
+const (
+	// KindText is a message somebody typed. It is the zero value, so a caller
+	// written before taps existed keeps storing exactly what it stored before.
+	KindText MessageKind = ""
+
+	// KindTap is a tap on a quick-reply button.
+	KindTap MessageKind = "button"
+)
+
 // StoredMessage is one row of the conversation.
 type StoredMessage struct {
 	// MessageID is WhatsApp's own id for the message, which is what makes a
 	// redelivery recognisable.
 	MessageID string
+
+	// Kind is how the message was produced.
+	Kind MessageKind
+
+	// AppointmentID is the appointment a tap was matched to and moved, empty
+	// on everything else — including a tap nothing could be matched to.
+	//
+	// Empty on a tap is therefore not missing information: it is the record
+	// that this tap changed nothing, and it is what the thread reads to say
+	// so. Written only once the status change has gone through, so a row
+	// naming an appointment is a row that moved it.
+	AppointmentID string
 
 	ConversationID string
 
@@ -144,6 +173,25 @@ type Store interface {
 	// ConversationHistory returns every message of a conversation, oldest
 	// first.
 	ConversationHistory(ctx context.Context, conversationID string) ([]StoredMessage, error)
+
+	// AppointmentForReminder returns the appointment a sent reminder was
+	// about, given Meta's id for that reminder, or "" when this clinic has no
+	// reminder with that id.
+	//
+	// Not found is not an error: a tap can answer any message the business
+	// ever sent, and most of them are not reminders. The clinic is a
+	// parameter and not a convenience — a wamid matched across clinics would
+	// let one clinic's delivery move another clinic's appointment.
+	AppointmentForReminder(ctx context.Context, userID, reminderMessageID string) (string, error)
+
+	// SetAppointmentStatus moves an appointment and records who moved it and
+	// when, in the vocabulary of internal/appointments.
+	//
+	// It is called before the tap that caused it is stored, so that a failure
+	// here leaves the delivery retryable: once the tap is stored the handler
+	// treats a redelivery as a duplicate, and the status change would have
+	// nothing left to re-attempt it.
+	SetAppointmentStatus(ctx context.Context, appointmentID string, status appointments.Status, by appointments.Actor, at string) error
 }
 
 // Deps is everything the handler reaches outside itself.
@@ -229,7 +277,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for _, message := range extractTexts(payload) {
+	for _, message := range extractMessages(payload) {
 		if !h.claim(message.MessageID) {
 			continue
 		}
@@ -294,7 +342,7 @@ func (h *handler) release(messageID string) {
 // A returned error means the message was not stored and the delivery should be
 // retried. Everything else — an unknown number, a duplicate, a failed AI step
 // — returns nil, because retrying would not help.
-func (h *handler) process(ctx context.Context, message incomingText) error {
+func (h *handler) process(ctx context.Context, message incomingMessage) error {
 	store := h.deps.Store
 
 	stored, err := store.HasMessage(ctx, message.MessageID)
@@ -331,8 +379,28 @@ func (h *handler) process(ctx context.Context, message incomingText) error {
 		return fmt.Errorf("upsert the conversation for %s: %w", message.CustomerPhone, err)
 	}
 
+	// Acted on before it is stored, deliberately. The tap is the trigger and
+	// the row is the record of it, and once the row exists a redelivery is a
+	// duplicate the handler skips — so a status change attempted after the
+	// write and failing there would never be attempted again, leaving a
+	// patient who cancelled still booked and nothing anywhere saying so.
+	// This way a failure is a 500, the router redelivers, and setting the
+	// same status twice costs a restamped status_set_at.
+	//
+	// Only an inbound tap: an echo is the business's own message coming back,
+	// and a button in it was not pressed by the patient.
+	appointmentID := ""
+	if message.Kind == KindTap && message.Direction == Inbound {
+		appointmentID, err = h.applyTap(ctx, account.UserID, message, now)
+		if err != nil {
+			return err
+		}
+	}
+
 	err = store.SaveMessage(ctx, account.UserID, StoredMessage{
 		MessageID:      message.MessageID,
+		Kind:           message.Kind,
+		AppointmentID:  appointmentID,
 		ConversationID: conversationID,
 		CustomerPhone:  message.CustomerPhone,
 		Content:        message.Content,
@@ -347,6 +415,16 @@ func (h *handler) process(ctx context.Context, message incomingText) error {
 	// the whole conversation. Replying would mean the bot answering the
 	// business.
 	if message.Direction != Inbound {
+		return nil
+	}
+
+	// A tap is an answer, not a question. The patient has already been told
+	// what the reminder said and has pressed one of the two buttons under it;
+	// an assistant replying to that is a second conversation nobody asked
+	// for, and one that would have to describe a cancellation it did not
+	// make. The row is stored above, so the model sees the tap in the history
+	// next time the patient does write.
+	if message.Kind == KindTap {
 		return nil
 	}
 
@@ -386,8 +464,60 @@ func (h *handler) process(ctx context.Context, message incomingText) error {
 	return nil
 }
 
+// applyTap moves the appointment a tap was about and returns its id, or ""
+// when the tap moved nothing.
+//
+// Returning "" is an outcome, not a failure. Three things have to line up —
+// the delivery has to say which message the tap answers, that message has to
+// be a reminder this clinic sent, and the button has to be one this app can
+// name — and none of them is something this app controls. Every way they can
+// fail to line up is logged here and leaves the tap stored with no
+// appointment against it, which is what puts it in front of somebody in the
+// thread. The alternative, guessing at the appointment, is a cancellation
+// applied to the wrong patient.
+//
+// Only a real storage failure is returned, because only that is worth
+// redelivering.
+func (h *handler) applyTap(ctx context.Context, userID string, message incomingMessage, now string) (string, error) {
+	if message.RepliesTo == "" {
+		h.deps.Logger.Warn("a tap arrived naming no message it answers; no appointment was changed",
+			"message_id", message.MessageID, "content", message.Content)
+
+		return "", nil
+	}
+
+	appointmentID, err := h.deps.Store.AppointmentForReminder(ctx, userID, message.RepliesTo)
+	if err != nil {
+		return "", fmt.Errorf("look up the reminder %s a tap answers: %w", message.RepliesTo, err)
+	}
+	if appointmentID == "" {
+		h.deps.Logger.Warn("a tap answers a message that is not a reminder this clinic sent; no appointment was changed",
+			"message_id", message.MessageID, "replies_to", message.RepliesTo)
+
+		return "", nil
+	}
+
+	action, ok := resolveTap(message.TapChoices)
+	if !ok {
+		h.deps.Logger.Warn("a tap named a button this app does not offer; no appointment was changed",
+			"message_id", message.MessageID, "appointment_id", appointmentID, "content", message.Content)
+
+		return "", nil
+	}
+
+	err = h.deps.Store.SetAppointmentStatus(ctx, appointmentID, action.Status(), appointments.Patient, now)
+	if err != nil {
+		return "", fmt.Errorf("record the patient's tap against appointment %s: %w", appointmentID, err)
+	}
+
+	h.deps.Logger.Info("a patient's tap moved an appointment",
+		"message_id", message.MessageID, "appointment_id", appointmentID, "status", string(action.Status()))
+
+	return appointmentID, nil
+}
+
 // reply generates, sends and stores the answer to one inbound message.
-func (h *handler) reply(ctx context.Context, account Account, conversationID string, message incomingText) error {
+func (h *handler) reply(ctx context.Context, account Account, conversationID string, message incomingMessage) error {
 	stored, err := h.deps.Store.ConversationHistory(ctx, conversationID)
 	if err != nil {
 		return fmt.Errorf("read the conversation history: %w", err)

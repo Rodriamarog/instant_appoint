@@ -604,3 +604,59 @@ func TestTheRunIsScheduledOnceAMinute(t *testing.T) {
 		t.Error("the cron is running outside serve")
 	}
 }
+
+// The two halves of the match a patient's tap depends on, proved against one
+// database: this package writes the row and internal/pbstore reads it back.
+//
+// Neither package may import the other, so "message_type = 'reminder'" is
+// spelled out in both, and a disagreement between those two spellings breaks
+// nothing that compiles or runs — it quietly matches no tap to any
+// appointment, forever. This is the only thing that notices.
+func TestASentRemindersMessageIdLeadsBackToItsAppointment(t *testing.T) {
+	app := newApp(t)
+	alice := newUser(t, app, "alice@instantappoint.test")
+	accountID := connectNumber(t, app, alice)
+	store := reminderjob.NewStore(app)
+	at := time.Date(2026, 11, 3, 16, 5, 0, 0, time.UTC)
+
+	claimID, err := store.Claim(context.Background(), claimFor("evt1", alice, accountID, at))
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if err := store.MarkSent(context.Background(), claimID, "wamid.HBgLNTIx"); err != nil {
+		t.Fatalf("MarkSent: %v", err)
+	}
+
+	got, err := pbstore.NewWebhookStore(app).
+		AppointmentForReminder(context.Background(), alice, "wamid.HBgLNTIx")
+	if err != nil {
+		t.Fatalf("AppointmentForReminder: %v", err)
+	}
+	if got != "evt1" {
+		t.Errorf("appointment = %q, want evt1 — the appointment the reminder went out about", got)
+	}
+}
+
+// A reminder claimed but never confirmed by Meta carries no message id, and
+// the index that keeps those rows from colliding is predicated on the id
+// being non-empty. A tap arriving with no reply context must not match one of
+// them by both being blank.
+func TestAReminderThatNeverReachedMetaMatchesNoTap(t *testing.T) {
+	app := newApp(t)
+	alice := newUser(t, app, "alice@instantappoint.test")
+	accountID := connectNumber(t, app, alice)
+	store := reminderjob.NewStore(app)
+	at := time.Date(2026, 11, 3, 16, 5, 0, 0, time.UTC)
+
+	if _, err := store.Claim(context.Background(), claimFor("evt1", alice, accountID, at)); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+
+	got, err := pbstore.NewWebhookStore(app).AppointmentForReminder(context.Background(), alice, "")
+	if err != nil {
+		t.Fatalf("AppointmentForReminder: %v", err)
+	}
+	if got != "" {
+		t.Errorf("appointment = %q, want nothing", got)
+	}
+}
