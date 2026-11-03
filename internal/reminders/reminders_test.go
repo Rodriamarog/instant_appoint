@@ -79,7 +79,7 @@ func TestADueReminderIsClaimedThenSentWithNameDateAndTime(t *testing.T) {
 	if sent.template != "appointment_reminder" || sent.language != "es" {
 		t.Errorf("template = %q/%q, want appointment_reminder/es", sent.template, sent.language)
 	}
-	want := []string{"Ana Lopez", "03/11/2026", "08:30"}
+	want := []string{"Ana Lopez", "3 de noviembre de 2026", "08:30"}
 	if len(sent.parameters) != 3 {
 		t.Fatalf("parameters = %v, want 3 of them", sent.parameters)
 	}
