@@ -16,6 +16,7 @@ import { pb } from '@/lib/pocketbase'
 const create = vi.fn()
 const update = vi.fn()
 const remove = vi.fn()
+const getFullList = vi.fn()
 
 const signedInUser = {
   id: 'user123',
@@ -35,11 +36,13 @@ beforeEach(() => {
   create.mockReset().mockResolvedValue({ id: 'new123' })
   update.mockReset().mockResolvedValue({ id: 'evt123' })
   remove.mockReset().mockResolvedValue(true)
+  getFullList.mockReset().mockResolvedValue([])
 
   vi.spyOn(pb, 'collection').mockReturnValue({
     create,
     update,
     delete: remove,
+    getFullList,
   } as unknown as ReturnType<typeof pb.collection>)
 
   // A real session, because the dialog reads both the owner id it has to
@@ -444,4 +447,59 @@ test('a rejected save is reported rather than swallowed', async () => {
     /failed to create record/i,
   )
   expect(onSaved).not.toHaveBeenCalled()
+})
+
+// --- proposals and the conversation behind them ---------------------------
+
+test('a proposal becomes a real appointment in one action', async () => {
+  // The proposal is the assistant saying it read an agreement but is not
+  // certain. Turning it into a booking is one person deciding one thing, so
+  // it is one button — not "edit the appointment, change the status, save".
+  const user = userEvent.setup()
+  const { onSaved } = renderDialog({
+    event: savedEvent({ status: 'proposed', status_set_by: 'assistant', created_by: 'assistant' }),
+  })
+
+  await user.click(screen.getByRole('button', { name: 'Aceptar la cita' }))
+
+  await waitFor(() => expect(update).toHaveBeenCalled())
+  expect(update.mock.calls[0][0]).toBe('evt123')
+  expect(update.mock.calls[0][1]).toMatchObject({
+    // Pending, not confirmed: accepting a proposal says the appointment is
+    // real, and nobody has asked the patient anything yet.
+    status: 'pending',
+    status_set_by: 'staff',
+  })
+  expect(onSaved).toHaveBeenCalled()
+})
+
+test('an appointment that is already real is not offered the accept action', () => {
+  renderDialog({ event: savedEvent({ status: 'pending' }) })
+
+  expect(screen.queryByRole('button', { name: 'Aceptar la cita' })).toBeNull()
+})
+
+test('the conversation an appointment came out of is one click away', async () => {
+  // "Why does this exist?" is the question a proposal provokes, and the only
+  // answer is the thread it was read out of. A link to a page elsewhere
+  // would be a second question; this is the answer in place.
+  const user = userEvent.setup()
+  getFullList.mockResolvedValue([
+    { id: 'm1', direction: 'inbound', message_content: '¿Tienen lugar el viernes?', sent_at: '2026-11-02T17:00:00.000Z' },
+    { id: 'm2', direction: 'outbound', message_content: 'Sí, a las 3 de la tarde.', sent_at: '2026-11-02T17:01:00.000Z' },
+  ])
+  renderDialog({
+    event: savedEvent({ status: 'proposed', created_by: 'assistant', conversation_id: 'conv1' }),
+  })
+
+  await user.click(screen.getByRole('button', { name: /ver la conversación/i }))
+
+  expect(await screen.findByText('¿Tienen lugar el viernes?')).toBeDefined()
+  expect(screen.getByText('Sí, a las 3 de la tarde.')).toBeDefined()
+})
+
+test('an appointment booked at the desk has no conversation to offer', () => {
+  renderDialog({ event: savedEvent({ conversation_id: '' }) })
+
+  expect(screen.queryByRole('button', { name: /ver la conversación/i })).toBeNull()
 })

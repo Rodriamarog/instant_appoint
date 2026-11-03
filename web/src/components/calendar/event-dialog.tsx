@@ -1,6 +1,7 @@
 import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { ConversationTranscript } from '@/components/calendar/conversation-transcript'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -105,10 +106,14 @@ export function EventDialog({
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [settingStatus, setSettingStatus] = useState(false)
+  const [showConversation, setShowConversation] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     setError(null)
+    // Collapsed again whenever another appointment is opened in the same
+    // dialog, so the thread on screen is never the previous one's.
+    setShowConversation(false)
 
     if (!event) {
       const now = new Date()
@@ -266,6 +271,23 @@ export function EventDialog({
                 <p className="text-sm">{statusLine(event)}</p>
                 <div className="flex flex-wrap gap-2">
                   {/*
+                    Turning a proposal into a real appointment, which is one
+                    person deciding one thing and so is one button rather
+                    than an edit-change-save. Pending and not confirmed:
+                    accepting says the appointment is real, and nobody has
+                    asked the patient anything yet.
+                  */}
+                  {event.status === 'proposed' && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => handleStatus('pending')}
+                      disabled={busy}
+                    >
+                      Aceptar la cita
+                    </Button>
+                  )}
+                  {/*
                     Only the moves that change something. Proposed is not
                     offered at all: it is the assistant saying it is unsure,
                     and a person at the desk is never unsure in that way.
@@ -293,6 +315,32 @@ export function EventDialog({
                     </Button>
                   )}
                 </div>
+
+                {/*
+                  "Why does this exist?" in one click. Only an appointment
+                  that came out of a WhatsApp thread has an answer; one
+                  booked at the desk has nothing to show and is offered
+                  nothing. The thread is loaded when it is asked for, so
+                  opening an ordinary appointment costs no request.
+                */}
+                {event.conversation_id && (
+                  <div className="space-y-2 border-t border-border pt-3">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="px-0"
+                      onClick={() => setShowConversation((shown) => !shown)}
+                    >
+                      {showConversation
+                        ? 'Ocultar la conversación'
+                        : 'Ver la conversación'}
+                    </Button>
+                    {showConversation && (
+                      <ConversationTranscript conversationId={event.conversation_id} />
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
