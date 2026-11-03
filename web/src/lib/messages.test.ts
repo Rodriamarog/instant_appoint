@@ -6,8 +6,6 @@ import {
   listMessages,
   listSentReminders,
   remindedEventIds,
-  sendReply,
-  withMessage,
   type Message,
 } from '@/lib/messages'
 import { pb } from '@/lib/pocketbase'
@@ -96,82 +94,6 @@ test('conversations are asked for most recent activity first', async () => {
   expect(pb.collection).toHaveBeenCalledWith('conversations')
   const [options] = getFullList.mock.calls[0] ?? []
   expect(options?.sort).toBe('-last_message_at')
-})
-
-test('sending a reply posts it to the server with the session token', async () => {
-  const stored = message('msg1', '2026-10-29T12:00:00.000Z')
-  const fetchStub = vi.fn((_url: string, _init?: RequestInit) =>
-    Promise.resolve({ ok: true, json: () => Promise.resolve(stored) } as Response),
-  )
-  vi.stubGlobal('fetch', fetchStub)
-
-  const sent = await sendReply('conv1', 'On my way.')
-
-  expect(sent).toEqual(stored)
-  const [url, init] = fetchStub.mock.calls[0] ?? []
-  expect(url).toBe('/api/chat/send')
-  expect(init?.method).toBe('POST')
-  expect((init?.headers as Record<string, string>).Authorization).toBe(
-    'Bearer the-session-token',
-  )
-  expect(JSON.parse(init?.body as string)).toEqual({
-    conversation_id: 'conv1',
-    message: 'On my way.',
-  })
-})
-
-test('a refused send surfaces the sentence the server wrote', async () => {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(() =>
-      Promise.resolve({
-        ok: false,
-        json: () =>
-          Promise.resolve({
-            message: 'WhatsApp rejected the message: more than 24 hours have passed.',
-            status: 500,
-          }),
-      } as Response),
-    ),
-  )
-
-  await expect(sendReply('conv1', 'Still there?')).rejects.toThrow(
-    'more than 24 hours have passed',
-  )
-})
-
-test('a send that fails without a readable answer still says something', async () => {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(() =>
-      Promise.resolve({
-        ok: false,
-        json: () => Promise.reject(new Error('not json')),
-      } as unknown as Response),
-    ),
-  )
-
-  await expect(sendReply('conv1', 'Hello?')).rejects.toThrow(
-    'No se pudo enviar el mensaje',
-  )
-})
-
-/**
- * A sent reply arrives twice: once as the send's own answer, once over the
- * live connection. They are the same row, so the thread must end up with one
- * of it.
- */
-test('a message merged into a thread lands in order and never twice', () => {
-  const thread = [
-    message('a', '2026-10-29T12:00:00.000Z'),
-    message('c', '2026-10-29T12:00:02.000Z'),
-  ]
-
-  const withNew = withMessage(thread, message('b', '2026-10-29T12:00:01.000Z'))
-  expect(withNew.map((item) => item.id)).toEqual(['a', 'b', 'c'])
-
-  const again = withMessage(withNew, message('b', '2026-10-29T12:00:01.000Z'))
-  expect(again.map((item) => item.id)).toEqual(['a', 'b', 'c'])
 })
 
 /**

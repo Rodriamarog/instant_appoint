@@ -33,7 +33,7 @@ export function WhatsAppPage() {
   return (
     <section className="space-y-5">
       <div>
-        <h1 className="font-heading text-2xl font-semibold">WhatsApp</h1>
+        <h2 className="font-heading text-xl font-semibold">WhatsApp</h2>
         <p className="text-muted-foreground">
           Conecta el número de WhatsApp Business desde el que salen los
           recordatorios de las citas y las respuestas.

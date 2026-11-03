@@ -4,7 +4,7 @@ import { liveFeed, pollingFeed, type Feed } from '@/lib/feed'
 import { pb } from '@/lib/pocketbase'
 
 /**
- * A feed is the seam the chat page reads through. Both implementations have to
+ * A feed is the seam a list page reads through. Both implementations have to
  * behave the same way from the outside, because swapping one for the other is
  * the whole point of the seam existing.
  */
