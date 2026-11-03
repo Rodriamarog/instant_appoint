@@ -41,11 +41,11 @@ func (a TapAction) Status() appointments.Status {
 // created.
 //
 // That is why this is a table of every language rather than a comparison
-// against two Spanish words. The template is approved in one language and a
-// send cannot swap it for the recipient's, so a clinic serving English
-// patients has an English template and its taps say "Confirm". Matching only
-// the Spanish pair would read those as unrecognised and silently leave every
-// English patient's appointment untouched.
+// against two Spanish words. Each appointment carries the variant its
+// reminder is written in, so one clinic sends Spanish to one patient and
+// English to the next, and both sets of taps arrive here. Matching only the
+// Spanish pair would read half of them as unrecognised and silently leave
+// every English patient's appointment untouched.
 //
 // It mirrors QUICK_REPLIES in web/src/lib/templates.ts, which is what the
 // create form offers. A label added there and not here does not fail
