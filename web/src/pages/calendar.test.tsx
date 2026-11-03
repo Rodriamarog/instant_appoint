@@ -153,9 +153,10 @@ test('clicking an appointment opens it for editing', async () => {
   expect((within(dialog).getByLabelText(/client name/i) as HTMLInputElement).value).toBe(
     'Ana Ruiz',
   )
-  // Its saved reminder, not a freshly generated one.
+  // Opening an appointment is how its notes are read, so the stored text has
+  // to be on screen rather than only in the row.
   expect(
-    (within(dialog).getByLabelText(/reminder message/i) as HTMLTextAreaElement).value,
+    (within(dialog).getByLabelText(/notes/i) as HTMLTextAreaElement).value,
   ).toBe('See you at the back entrance, Ana.')
 })
 
