@@ -5,11 +5,10 @@ import { pb } from '@/lib/pocketbase'
 /**
  * How a page keeps a list up to date without knowing how that happens.
  *
- * This is the seam the chat page reads through. The page opens a feed, is
- * handed a list, and is handed a fresh one whenever there may be a new one; it
- * never learns whether that came from a live connection or from asking again
- * on a timer. Swapping the two is a one-line change in the module that owns
- * the collection, not a change to the page.
+ * A page opens a feed, is handed a list, and is handed a fresh one whenever
+ * there may be a new one; it never learns whether that came from a live
+ * connection or from asking again on a timer. Swapping the two is a one-line
+ * change in the module that owns the collection, not a change to the page.
  *
  * The seam exists because the live path is only proven locally. A long-lived
  * server-sent-events stream is exactly what an idle timeout on a proxy in
@@ -162,9 +161,8 @@ export function liveFeed<T>(
 /**
  * A feed that asks again on a timer.
  *
- * This is what the chat page did before, at 5 seconds for the conversation
- * list and 3 for the open thread. It is kept as the fallback for a deployment
- * where the live connection cannot be held open.
+ * It is the fallback for a deployment where the live connection cannot be
+ * held open.
  */
 export function pollingFeed<T>(source: Source<T> & { everyMs: number }): Feed<T> {
   return (onItems, onProblem) => {

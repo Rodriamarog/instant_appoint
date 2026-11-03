@@ -1,4 +1,3 @@
-import { call } from '@/lib/api'
 import { spellTime } from '@/lib/dates'
 import { liveFeed, pollingFeed, type Feed } from '@/lib/feed'
 import { pb } from '@/lib/pocketbase'
@@ -7,20 +6,19 @@ import { pb } from '@/lib/pocketbase'
  * whatsapp_messages: the one module that knows this collection's name, its
  * shape and its filters.
  *
- * It is a shared log. A chat reply, an inbound message and an appointment
- * reminder are all rows in it, told apart by message_type — which is why the
- * reminders page's reads live here too rather than in a second module with a
- * second name for the same collection and a second shape for the same rows.
+ * It is a shared log. A patient's message, the assistant's answer and an
+ * appointment reminder are all rows in it, told apart by message_type — which
+ * is why the reminders page's reads live here too rather than in a second
+ * module with a second name for the same collection and a second shape for
+ * the same rows.
  *
- * Reading is the browser talking to PocketBase directly: whatsapp_messages is
- * owner-read, so the access rules scope the thread to the person asking, and
- * a message belonging to someone else's conversation is not returned however
- * it is asked for.
- *
- * Sending is not. The collection is closed to writes from the browser, and the
- * reply itself goes out through Meta with the connected account's access token
- * — a credential the page must never hold. Both of those make the send a Go
- * route, which is why this is the one module here that posts to the server.
+ * Reading is all this module does, and it is the browser talking to
+ * PocketBase directly: whatsapp_messages is owner-read, so the access rules
+ * scope the thread to the person asking, and a message belonging to someone
+ * else's conversation is not returned however it is asked for. Nothing here
+ * writes. Every row in the collection is put there by the webhook or by the
+ * reminder job, both of them server-side, and the collection is closed to
+ * writes from the browser besides.
  */
 export const COLLECTION = 'whatsapp_messages'
 
@@ -158,43 +156,6 @@ export const liveMessages: MessageFeed = (conversationId) =>
 export function polledMessages(everyMs = 3000): MessageFeed {
   return (conversationId) =>
     pollingFeed({ load: () => listMessages(conversationId), everyMs })
-}
-
-/**
- * Sends a reply and returns the message that was stored.
- *
- * The server answers in PocketBase's {message, status, data} shape, and its
- * message is written for a person — it quotes WhatsApp's own explanation where
- * there was one, which is what says that a customer has to write first before
- * the business can.
- */
-export async function sendReply(
-  conversationId: string,
-  text: string,
-): Promise<Message> {
-  return call<Message>(
-    '/api/chat/send',
-    {
-      method: 'POST',
-      body: JSON.stringify({ conversation_id: conversationId, message: text }),
-    },
-    'No se pudo enviar el mensaje. Inténtalo de nuevo.',
-  )
-}
-
-/**
- * Puts a message into a thread, replacing any copy of it already there.
- *
- * A sent reply arrives twice — once as the send's own answer, once over the
- * live connection — and the two are the same row. Merging by id means the
- * reply shows the moment it is sent without appearing twice when the
- * connection catches up.
- */
-export function withMessage(thread: Message[], message: Message): Message[] {
-  const merged = thread.filter((existing) => existing.id !== message.id)
-  merged.push(message)
-
-  return merged.sort((a, b) => a.sent_at.localeCompare(b.sent_at))
 }
 
 /**

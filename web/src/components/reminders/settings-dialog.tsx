@@ -1,7 +1,6 @@
 import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
-import { AIModeField } from '@/components/settings/ai-mode-field'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -143,17 +142,6 @@ export function ReminderSettingsDialog({
         </DialogHeader>
 
         <div className="space-y-5 pt-2">
-          {/*
-            Here because this is the only settings surface the app has. #26
-            describes the switch as living in Configuración, which #21 is
-            still to build; when it does, this element moves there unchanged
-            and this file goes back to being about reminders alone.
-          */}
-          <AIModeField
-            value={draft.ai_mode}
-            onChange={(ai_mode) => setDraft((d) => ({ ...d, ai_mode }))}
-          />
-
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">Enviar recordatorios</span>
             <button
@@ -252,8 +240,8 @@ export function ReminderSettingsDialog({
 
             {templates !== null && templates.length === 0 && !templatesError && (
               <p className="text-xs text-muted-foreground">
-                Aún no tienes plantillas aprobadas. Crea una en la página de
-                Plantillas y espera a que Meta la apruebe.
+                Aún no tienes plantillas aprobadas. Crea una en Configuración
+                › Plantillas y espera a que Meta la apruebe.
               </p>
             )}
 

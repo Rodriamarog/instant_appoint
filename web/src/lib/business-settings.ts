@@ -40,7 +40,7 @@ export const AI_MODE_OPTIONS: { mode: AIMode; label: string; help: string }[] = 
   {
     mode: 'off',
     label: 'Apagado',
-    help: 'El asistente no responde ni escribe nada. Los mensajes de tus pacientes se siguen guardando y los ves en Chat.',
+    help: 'El asistente no responde ni escribe nada. Los mensajes de tus pacientes se siguen guardando.',
   },
   {
     mode: 'observer',
