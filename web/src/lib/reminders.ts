@@ -22,6 +22,19 @@ export const HORIZON_DAYS = 30
 const MINUTE = 60 * 1000
 const DAY = 24 * 60 * MINUTE
 
+/**
+ * Whether a reminder will go out for an appointment in this state.
+ *
+ * It restates the rule in internal/appointments rather than deriving it,
+ * because the two are on opposite sides of a network boundary. The job is
+ * the one that decides; this one only has to agree with it, and listing an
+ * appointment here that the job will silently skip is a promise to the
+ * clinic that nothing ever keeps.
+ */
+function allowsReminders(status: Appointment['status']): boolean {
+  return status === 'pending' || status === 'confirmed'
+}
+
 /** An appointment with a reminder still to go out. */
 export interface UpcomingReminder {
   event: Appointment
@@ -76,7 +89,12 @@ export async function listUpcomingReminders(
   const alreadyReminded = await remindedEventIds(appointments.map((event) => event.id))
 
   return appointments
-    .filter((event) => Boolean(event.client_phone) && !alreadyReminded.has(event.id))
+    .filter(
+      (event) =>
+        allowsReminders(event.status) &&
+        Boolean(event.client_phone) &&
+        !alreadyReminded.has(event.id),
+    )
     .map((event) => {
       const reminderAt = new Date(
         new Date(event.start_time).getTime() - leadTimeMinutes * MINUTE,

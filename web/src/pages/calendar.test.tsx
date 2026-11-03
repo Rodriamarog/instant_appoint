@@ -25,6 +25,7 @@ function appointment(overrides: Record<string, unknown> = {}) {
     start_time: isoMillis(new Date(2026, 10, 12, 10, 0)),
     end_time: isoMillis(new Date(2026, 10, 12, 11, 0)),
     location: 'Suite 2',
+    status: 'pending',
     ...overrides,
   }
 }
@@ -71,6 +72,37 @@ test('the appointments in view are rendered', async () => {
   render(<CalendarPage />)
 
   expect(await screen.findByText('Ana Ruiz')).toBeDefined()
+})
+
+test('an appointment the assistant only proposed is marked as such on the grid', async () => {
+  // A proposal is not a commitment, and a month view is read at a glance.
+  // One that looked like every other slot is a clinic holding an
+  // appointment nobody ever agreed to.
+  getFullList.mockResolvedValue([appointment({ status: 'proposed' })])
+
+  render(<CalendarPage />)
+
+  expect(await screen.findByText('Ana Ruiz')).toBeDefined()
+  expect(screen.getByText('Propuesta')).toBeDefined()
+})
+
+test('a cancelled appointment is marked as such on the grid', async () => {
+  // Cancelling leaves the booking in place — that is the point of it — so
+  // the slot stays on the calendar and has to say that nobody is coming.
+  getFullList.mockResolvedValue([appointment({ status: 'cancelled' })])
+
+  render(<CalendarPage />)
+
+  expect(await screen.findByText('Cancelada')).toBeDefined()
+})
+
+test('an ordinary booking carries no label at all', async () => {
+  // Pending is what nearly every appointment is. Labelling it would make
+  // the two labels that matter invisible among the noise.
+  render(<CalendarPage />)
+
+  await screen.findByText('Ana Ruiz')
+  expect(screen.queryByText('Pendiente')).toBeNull()
 })
 
 test('the query covers the displayed month with a week of slack either side', async () => {

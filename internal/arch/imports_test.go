@@ -30,7 +30,11 @@ const forbidden = "github.com/pocketbase/"
 //
 // reminders belongs to ticket #9 and may not exist yet. It is listed now so
 // that it is covered the moment it does, rather than after someone notices.
-var pure = []string{"webhook", "routersig", "reminders"}
+//
+// appointments is listed for a different reason: reminders imports it, so it
+// is already bound by the rule transitively. Naming it here makes the whole
+// sentence fail on the file that broke it rather than on its importer.
+var pure = []string{"webhook", "routersig", "reminders", "appointments"}
 
 // The rule holds for test files too. A test that reaches for PocketBase to set
 // up a fixture is how the dependency comes back: the package still compiles

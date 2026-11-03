@@ -28,6 +28,15 @@ const theRenameMigration = "1793232006_domain_names.go"
 func newAppBeforeTheRename(t *testing.T) core.App {
 	t.Helper()
 
+	return newAppBefore(t, theRenameMigration)
+}
+
+// newAppBefore returns a bootstrapped app with every migration applied except
+// the named one and everything after it — the database as it stood the moment
+// before that migration shipped.
+func newAppBefore(t *testing.T, migration string) core.App {
+	t.Helper()
+
 	app := pocketbase.NewWithConfig(pocketbase.Config{
 		DefaultDataDir:  t.TempDir(),
 		HideStartBanner: true,
@@ -44,18 +53,35 @@ func newAppBeforeTheRename(t *testing.T) core.App {
 
 	earlier := core.MigrationsList{}
 	earlier.Copy(core.SystemMigrations)
-	for _, migration := range core.AppMigrations.Items() {
-		if migration.File >= theRenameMigration {
+	for _, item := range core.AppMigrations.Items() {
+		if item.File >= migration {
 			continue
 		}
-		earlier.Register(migration.Up, migration.Down, migration.File)
+		earlier.Register(item.Up, item.Down, item.File)
 	}
 
 	if _, err := core.NewMigrationsRunner(app, earlier).Up(); err != nil {
-		t.Fatalf("apply the migrations before the rename: %v", err)
+		t.Fatalf("apply the migrations before %s: %v", migration, err)
 	}
 
 	return app
+}
+
+// migrationsFrom counts the migrations at and after the named one, which is
+// the number Down() has to be given to revert it.
+//
+// Down takes a count of steps back from the end, so a literal here would be
+// right only until the next migration is written — and would then silently
+// revert that one instead, while still passing.
+func migrationsFrom(migration string) int {
+	count := 0
+	for _, item := range core.AppMigrations.Items() {
+		if item.File >= migration {
+			count++
+		}
+	}
+
+	return count
 }
 
 // saveUnder writes a row directly into a collection by name, which is how a
@@ -272,7 +298,7 @@ func TestRollingTheRenameBackRestoresTheOldNamesAndTheirRows(t *testing.T) {
 	full := core.MigrationsList{}
 	full.Copy(core.SystemMigrations)
 	full.Copy(core.AppMigrations)
-	if _, err := core.NewMigrationsRunner(app, full).Down(1); err != nil {
+	if _, err := core.NewMigrationsRunner(app, full).Down(migrationsFrom(theRenameMigration)); err != nil {
 		t.Fatalf("revert the rename: %v", err)
 	}
 

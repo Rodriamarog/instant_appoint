@@ -39,6 +39,7 @@ function appointment(overrides: Partial<Appointment>): Appointment {
     notes: 'See you tomorrow.',
     start_time: '2026-11-03T17:00:00.000Z',
     end_time: '2026-11-03T18:00:00.000Z',
+    status: 'pending',
     ...overrides,
   }
 }

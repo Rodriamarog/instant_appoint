@@ -69,6 +69,12 @@ function savedEvent(overrides: Partial<Appointment> = {}): Appointment {
     start_time: '2026-11-02T17:00:00.000Z',
     end_time: '2026-11-02T18:00:00.000Z',
     location: 'Suite 2',
+    status: 'pending',
+    status_set_by: 'staff',
+    // Built off a local clock, so the moment the dialog prints is the same
+    // wherever this suite runs.
+    status_set_at: new Date(2026, 10, 2, 9, 30).toISOString(),
+    created_by: 'staff',
     ...overrides,
   }
 }
@@ -98,6 +104,7 @@ const newSlot: Appointment = {
   client_name: '',
   start_time: '2026-11-09T17:00:00.000Z',
   end_time: '2026-11-09T18:00:00.000Z',
+  status: 'pending',
 }
 
 test('the dialog offers no reminder message to write', () => {
@@ -312,6 +319,117 @@ test('a new appointment offers no Delete button', () => {
   renderDialog({ mode: 'create', event: newSlot })
 
   expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull()
+})
+
+// --- status and provenance ------------------------------------------------
+
+test('an appointment opened for editing says where it stands, who put it there and when', async () => {
+  // "Who said so" is the first thing asked of a screen that says cancelled,
+  // and the three possible answers mean very different things: staff
+  // cancelling is a decision, the patient cancelling is news.
+  renderDialog({
+    event: savedEvent({
+      status: 'cancelled',
+      status_set_by: 'patient',
+      status_set_at: new Date(2026, 10, 2, 9, 30).toISOString(),
+    }),
+  })
+
+  const shown = await screen.findByText(/Cancelada/)
+  expect(shown.textContent).toMatch(/por el paciente/)
+  expect(shown.textContent).toContain('2 de noviembre de 2026, 09:30')
+})
+
+test('an appointment the assistant only proposed says so rather than looking booked', async () => {
+  // A proposal is the assistant's reading of a conversation, not a
+  // commitment. Showing it like any other appointment is how a clinic ends
+  // up holding a slot nobody agreed to.
+  renderDialog({
+    event: savedEvent({ status: 'proposed', status_set_by: 'assistant' }),
+  })
+
+  const shown = await screen.findByText(/Propuesta/)
+  expect(shown.textContent).toMatch(/por el asistente/)
+})
+
+test('staff can confirm an appointment from the dialog', async () => {
+  const user = userEvent.setup()
+  const { onSaved } = renderDialog()
+
+  await user.click(screen.getByRole('button', { name: 'Marcar confirmada' }))
+
+  await waitFor(() => expect(update).toHaveBeenCalled())
+  expect(update.mock.calls[0][0]).toBe('evt123')
+  expect(update.mock.calls[0][1]).toMatchObject({
+    status: 'confirmed',
+    status_set_by: 'staff',
+  })
+  expect(onSaved).toHaveBeenCalled()
+})
+
+test('staff can cancel an appointment from the dialog', async () => {
+  // Cancelling is not deleting. The booking, the phone number and the
+  // history stay; what changes is that nobody is coming, and no reminder
+  // goes out.
+  const user = userEvent.setup()
+  renderDialog()
+
+  await user.click(screen.getByRole('button', { name: 'Marcar cancelada' }))
+
+  await waitFor(() => expect(update).toHaveBeenCalled())
+  expect(update.mock.calls[0][1]).toMatchObject({
+    status: 'cancelled',
+    status_set_by: 'staff',
+  })
+  expect(remove).not.toHaveBeenCalled()
+})
+
+test('a status change carries nothing but the status and who set it', async () => {
+  // Deciding something about the appointment is not editing it. A status
+  // button that posted the whole form would save half-typed changes the
+  // person had not pressed Save on.
+  const user = userEvent.setup()
+  renderDialog()
+
+  await user.type(screen.getByLabelText(/client name/i), ' (typed but not saved)')
+  await user.click(screen.getByRole('button', { name: 'Marcar confirmada' }))
+
+  await waitFor(() => expect(update).toHaveBeenCalled())
+  expect(Object.keys(update.mock.calls[0][1]).sort()).toEqual([
+    'status',
+    'status_set_at',
+    'status_set_by',
+  ])
+})
+
+test('an appointment already cancelled is not offered a second cancel', async () => {
+  renderDialog({ event: savedEvent({ status: 'cancelled' }) })
+
+  expect(screen.queryByRole('button', { name: 'Marcar cancelada' })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Marcar confirmada' })).toBeDefined()
+})
+
+test('a new appointment has no status to show or set yet', () => {
+  // It is not an appointment until it is saved, and it will be pending when
+  // it is. Offering Confirm on something that does not exist would write a
+  // status against an empty id.
+  renderDialog({ mode: 'create', event: newSlot })
+
+  expect(screen.queryByRole('button', { name: 'Marcar confirmada' })).toBeNull()
+  expect(screen.queryByText(/Estado/)).toBeNull()
+})
+
+test('a rejected status change is reported rather than swallowed', async () => {
+  const user = userEvent.setup()
+  update.mockRejectedValue(new Error('Failed to update record.'))
+  const { onSaved } = renderDialog()
+
+  await user.click(screen.getByRole('button', { name: 'Marcar confirmada' }))
+
+  expect((await screen.findByRole('alert')).textContent).toMatch(
+    /failed to update record/i,
+  )
+  expect(onSaved).not.toHaveBeenCalled()
 })
 
 test('a rejected save is reported rather than swallowed', async () => {
