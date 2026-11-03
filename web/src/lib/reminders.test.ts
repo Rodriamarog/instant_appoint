@@ -37,6 +37,7 @@ function appointment(overrides: Partial<Appointment>): Appointment {
     notes: 'See you tomorrow.',
     start_time: '2026-11-03T17:00:00.000Z',
     end_time: '2026-11-03T18:00:00.000Z',
+    status: 'pending',
     ...overrides,
   }
 }
@@ -116,6 +117,22 @@ test('an appointment with no phone number gets no reminder', async () => {
   const upcoming = await listUpcomingReminders(1440, NOW)
 
   expect(upcoming.map((r) => r.event.id)).toEqual(['withPhone'])
+})
+
+test('an appointment that is not a live booking gets no reminder', async () => {
+  // The Go scheduler sends only for pending and confirmed. A page that
+  // listed the other two as "upcoming" would be promising a message that is
+  // never going to arrive, and the clinic would find out from the patient.
+  appointments = [
+    appointment({ id: 'pending' }),
+    appointment({ id: 'confirmed', status: 'confirmed' }),
+    appointment({ id: 'proposed', status: 'proposed' }),
+    appointment({ id: 'cancelled', status: 'cancelled' }),
+  ]
+
+  const upcoming = await listUpcomingReminders(1440, NOW)
+
+  expect(upcoming.map((r) => r.event.id).sort()).toEqual(['confirmed', 'pending'])
 })
 
 test('a reminder that already went out drops off the list', async () => {

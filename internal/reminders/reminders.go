@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/Rodriamarog/instant_appoint/internal/appointments"
 )
 
 // ErrAlreadyClaimed is what a Store returns when the reminder row it was
@@ -63,6 +65,14 @@ type Appointment struct {
 	ClientPhone string
 
 	StartTime time.Time
+
+	// Status decides whether a reminder is owed at all — see
+	// appointments.Status.AllowsReminders. A Store that leaves it blank gets
+	// nothing sent for that appointment: the column it comes from has a
+	// create-time default, so a blank here means something wrote a state
+	// this package has never been told how to read, and guessing at it is
+	// how a patient is told to come to an appointment that is not happening.
+	Status appointments.Status
 }
 
 // Account is the connected WhatsApp number a reminder is sent from.
@@ -203,6 +213,12 @@ type Summary struct {
 	NoAccount   int
 	NoTemplate  int
 	BadTimezone int
+
+	// NotRemindable counts the appointments whose status rules a reminder
+	// out: a proposal nobody has agreed to, and a booking that has been
+	// cancelled. It is its own counter rather than part of Skipped because
+	// it is the one reason a clinic may want to go and look at.
+	NotRemindable int
 
 	// GaveUp counts reminders past MaxAttempts.
 	GaveUp int
@@ -369,6 +385,15 @@ func Run(ctx context.Context, store Store, sender Sender, now time.Time) (Summar
 
 		settings := byUser[appointment.UserID]
 		attempt := attempts[appointment.ID]
+
+		// Asked before anything else about this appointment, because it is
+		// the only question whose answer is "this is not a reminder that
+		// should ever exist". Everything below is about a reminder that is
+		// owed and may not be due, already gone, or undeliverable.
+		if !appointment.Status.AllowsReminders() {
+			summary.NotRemindable++
+			continue
+		}
 
 		// An abandoned claim reads as sent and is not: it is a crash caught
 		// mid-send, and letting it through here is what stops one dead
