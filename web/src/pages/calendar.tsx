@@ -78,19 +78,19 @@ const MESSAGES = {
   date: 'Fecha',
   time: 'Hora',
   event: 'Cita',
-  allDay: 'Todo el dÃ­a',
+  allDay: 'Todo el día',
   week: 'Semana',
   work_week: 'Semana laboral',
-  day: 'DÃ­a',
+  day: 'Día',
   month: 'Mes',
   previous: 'Anterior',
   next: 'Siguiente',
   yesterday: 'Ayer',
-  tomorrow: 'MaÃ±ana',
+  tomorrow: 'Mañana',
   today: 'Hoy',
   agenda: 'Agenda',
   noEventsInRange: 'No hay citas en estas fechas.',
-  showMore: (total: number) => `+${total} mÃ¡s`,
+  showMore: (total: number) => `+${total} más`,
 }
 
 const localizer = momentLocalizer(moment)
@@ -199,9 +199,9 @@ function storedPane(): Pane {
 /**
  * The grid's navigation, without the view switcher it ships with.
  *
- * react-big-calendar's own toolbar offers Mes, Semana and DÃ­a. Left in
+ * react-big-calendar's own toolbar offers Mes, Semana and Día. Left in
  * place it would be a second control for the choice the segmented control
- * above already makes, and its DÃ­a button would hand back the day grid this
+ * above already makes, and its Día button would hand back the day grid this
  * page deliberately replaced with a list. Its today button is named for the
  * span it jumps to so that it does not read as a second Hoy.
  */
