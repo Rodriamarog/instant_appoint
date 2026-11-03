@@ -47,9 +47,23 @@ type stack struct {
 	// test changing the AI mode has to name.
 	userID string
 
-	meta  *recorder
-	ai    *recorder
+	meta *recorder
+
+	// Two recorders for one stubbed service. One inbound message now
+	// produces two different calls to Gemini — one that writes the reply and
+	// one that reads the conversation for an appointment — and a count of
+	// both together could not tell "it answered the patient" from "it read
+	// the thread". They are told apart here by the tools the request
+	// declares, which is what distinguishes them on the wire too.
+	ai      *recorder
+	reading *recorder
+
 	reply string
+
+	// recorded is the function call the stubbed model makes when it reads a
+	// conversation. Nil is a conversation it found no appointment in, which
+	// is what most of this file wants.
+	recorded map[string]any
 }
 
 // recorder counts calls to a stubbed service and keeps the last body it saw.
@@ -60,31 +74,63 @@ type recorder struct {
 }
 
 func (r *recorder) record(req *http.Request) {
-	r.calls++
-	r.paths = append(r.paths, req.URL.Path)
-
 	raw, _ := io.ReadAll(req.Body)
-	r.last = map[string]any{}
-	_ = json.Unmarshal(raw, &r.last)
+	body := map[string]any{}
+	_ = json.Unmarshal(raw, &body)
+
+	r.recorded(req.URL.Path, body)
+}
+
+// recorded is the half of record that takes a body somebody else has already
+// read — which the Gemini stub has to, because what it answers depends on
+// what the request asked for.
+func (r *recorder) recorded(path string, body map[string]any) {
+	r.calls++
+	r.paths = append(r.paths, path)
+	r.last = body
 }
 
 func newStack(t *testing.T) *stack {
 	t.Helper()
 
-	s := &stack{app: newApp(t), meta: &recorder{}, ai: &recorder{}, reply: "¿Te viene bien el martes a las 10?"}
+	s := &stack{
+		app:     newApp(t),
+		meta:    &recorder{},
+		ai:      &recorder{},
+		reading: &recorder{},
+		reply:   "¿Te viene bien el martes a las 10?",
+	}
 	s.userID = connectAccount(t, s.app, "555000111", nil)
 	// On autopilot, which is the only mode that sends anything and so the
 	// only one in which the rest of this file has something to assert. The
 	// clinic that has not switched the assistant on is the last test here.
 	setAIMode(t, s.app, s.userID, "autopilot")
 
-	// Gemini, answering with one candidate.
+	// Gemini, answering with one candidate. Which of the two calls this is
+	// is decided by the one thing that differs on the wire: the reading
+	// declares a tool and the reply declares none.
 	geminiStub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		s.ai.record(req)
+		raw, _ := io.ReadAll(req.Body)
+		sent := map[string]any{}
+		_ = json.Unmarshal(raw, &sent)
+
+		part := map[string]any{"text": s.reply}
+		if sent["tools"] != nil {
+			s.reading.recorded(req.URL.Path, sent)
+			if s.recorded != nil {
+				part = map[string]any{"functionCall": map[string]any{
+					"name": "record_appointment",
+					"args": s.recorded,
+				}}
+			}
+		} else {
+			s.ai.recorded(req.URL.Path, sent)
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"candidates": []any{map[string]any{
-				"content":      map[string]any{"role": "model", "parts": []any{map[string]any{"text": s.reply}}},
+				"content":      map[string]any{"role": "model", "parts": []any{part}},
 				"finishReason": "STOP",
 			}},
 		})
@@ -120,7 +166,25 @@ func newStack(t *testing.T) *stack {
 			return ai.GenerateReply(ctx, turns, text)
 		},
 		SendMessage: whatsApp.SendText,
-		Logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		ExtractAppointment: func(ctx context.Context, history []webhook.ConversationMessage) (*webhook.ExtractedAppointment, error) {
+			turns := make([]gemini.Message, 0, len(history))
+			for _, turn := range history {
+				turns = append(turns, gemini.Message{Role: turn.Role, Content: turn.Content})
+			}
+
+			read, err := ai.ExtractAppointment(ctx, turns)
+			if read == nil || err != nil {
+				return nil, err
+			}
+
+			return &webhook.ExtractedAppointment{
+				ClientName: read.ClientName,
+				StartsAt:   read.StartsAt,
+				Certain:    read.Certain,
+				Summary:    read.Summary,
+			}, nil
+		},
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 
 	r := router.NewRouter(func(w http.ResponseWriter, req *http.Request) (*core.RequestEvent, router.EventCleanupFunc) {
@@ -442,33 +506,96 @@ func TestAFailingAIStepStillAcknowledgesTheDelivery(t *testing.T) {
 }
 
 // The switch, through the whole assembled stack rather than against a fake.
-// A clinic that has not turned the assistant on gets its patient's message
-// stored and nothing sent — and the proof that nothing was sent is that
-// neither Gemini nor Meta was called at all.
-func TestADeliveryToAClinicWithTheAssistantOffIsStoredAndUnanswered(t *testing.T) {
-	for _, mode := range []string{"off", "observer"} {
-		s := newStack(t)
-		setAIMode(t, s.app, s.userID, mode)
-		now := time.Now()
+//
+// Off is the position that costs nothing and does nothing: the patient's
+// message is stored, because the clinic still reads its own conversations,
+// and the proof that nothing else happened is that neither Gemini nor Meta
+// was called at all. Observer is a different silence — it reads — and it has
+// its own case below.
+func TestADeliveryToAClinicWithTheAssistantOffIsStoredAndUntouched(t *testing.T) {
+	s := newStack(t)
+	setAIMode(t, s.app, s.userID, "off")
+	now := time.Now()
 
-		status := s.deliver(t, "/api/webhook", deliveryBody("wamid.1", "5215511111111", "hola", now), routerSecret, now)
-		if status != http.StatusOK {
-			t.Fatalf("in %q the status was %d, want 200", mode, status)
-		}
+	status := s.deliver(t, "/api/webhook", deliveryBody("wamid.1", "5215511111111", "hola", now), routerSecret, now)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
 
-		// Stored, because the clinic still reads its own conversations.
-		if got := s.count(t, "whatsapp_messages"); got != 1 {
-			t.Errorf("in %q there are %d messages, want only the customer's", mode, got)
-		}
-		if got := s.count(t, "conversations"); got != 1 {
-			t.Errorf("in %q there are %d conversations, want 1", mode, got)
-		}
+	if got := s.count(t, "whatsapp_messages"); got != 1 {
+		t.Errorf("there are %d messages, want only the customer's", got)
+	}
+	if got := s.count(t, "conversations"); got != 1 {
+		t.Errorf("there are %d conversations, want 1", got)
+	}
+	if s.ai.calls != 0 || s.reading.calls != 0 {
+		t.Errorf("the model was called %d times to answer and %d to read, want none of either",
+			s.ai.calls, s.reading.calls)
+	}
+	if s.meta.calls != 0 {
+		t.Errorf("WhatsApp was called %d times, want none", s.meta.calls)
+	}
+	if got := s.count(t, "appointments"); got != 0 {
+		t.Errorf("%d appointments were written with the assistant off, want none", got)
+	}
+}
 
-		if s.ai.calls != 0 {
-			t.Errorf("in %q the model was called %d times, want none", mode, s.ai.calls)
+// Observer, end to end: the clinic is holding the conversation itself, the
+// patient hears nothing from this app, and the agreement reaches the
+// calendar anyway. Until this ticket observer and off were the same thing.
+func TestObserverWritesTheAppointmentThroughTheWholeStack(t *testing.T) {
+	s := newStack(t)
+	setAIMode(t, s.app, s.userID, "observer")
+	s.recorded = map[string]any{
+		"client_name": "Ana Ruiz",
+		"starts_at":   "2026-10-30T15:00",
+		"certain":     true,
+		"summary":     "Limpieza dental",
+	}
+	now := time.Now()
+
+	status := s.deliver(t, "/api/webhook", deliveryBody("wamid.1", "5215511111111", "el viernes a las 3", now), routerSecret, now)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+
+	if s.ai.calls != 0 {
+		t.Errorf("the model was asked for %d replies in observer mode, want none", s.ai.calls)
+	}
+	if s.meta.calls != 0 {
+		t.Errorf("WhatsApp was called %d times in observer mode, want none", s.meta.calls)
+	}
+
+	records, err := s.app.FindRecordsByFilter("appointments", "1=1", "", 0, 0)
+	if err != nil {
+		t.Fatalf("read the appointments back: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("stored %d appointments, want one", len(records))
+	}
+
+	for _, field := range []struct{ name, want string }{
+		{"client_name", "Ana Ruiz"},
+		{"client_phone", "5215511111111"},
+		// 15:00 in Tijuana, written in the shape the rest of the app sorts
+		// timestamps as.
+		{"start_time", "2026-10-30T22:00:00.000Z"},
+		{"status", "pending"},
+		{"created_by", "assistant"},
+	} {
+		if got := records[0].GetString(field.name); got != field.want {
+			t.Errorf("%s = %q, want %q", field.name, got, field.want)
 		}
-		if s.meta.calls != 0 {
-			t.Errorf("in %q WhatsApp was called %d times, want none", mode, s.meta.calls)
-		}
+	}
+
+	// The conversation it came out of, which is what answers "why does this
+	// exist?" from the appointment itself.
+	conversations, err := s.app.FindRecordsByFilter("conversations", "1=1", "", 0, 0)
+	if err != nil {
+		t.Fatalf("read the conversations back: %v", err)
+	}
+	if len(conversations) != 1 || records[0].GetString("conversation_id") != conversations[0].Id {
+		t.Errorf("conversation_id = %q, want the conversation the message arrived in",
+			records[0].GetString("conversation_id"))
 	}
 }

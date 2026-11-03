@@ -5,19 +5,20 @@ package webhook
 // business_settings and read in internal/pbstore.
 //
 // It lives in this package rather than next to the collection it is stored on
-// because the only decision it drives is the one below, and that decision has
-// to stay answerable with no database — see internal/arch for why.
+// because the only decisions it drives are the two below, and they have to
+// stay answerable with no database — see internal/arch for why.
 type Mode string
 
 const (
-	// ModeOff is the assistant switched off: it neither replies nor writes.
-	// Inbound messages are still stored, so the dashboard shows the whole
-	// conversation.
+	// ModeOff is the assistant switched off: it neither replies nor writes,
+	// and it does not even read. Inbound messages are still stored, so the
+	// dashboard shows the whole conversation.
 	ModeOff Mode = "off"
 
 	// ModeObserver is the assistant watching a conversation the clinic is
-	// handling itself. It does not reply. What it writes for the clinic to
-	// read is #27 and is deliberately not this package's business yet.
+	// holding itself, from the WhatsApp Business app on somebody's phone. It
+	// never replies, but it does read: an agreement reached in that
+	// conversation becomes an appointment without anyone retyping it.
 	ModeObserver Mode = "observer"
 
 	// ModeAutopilot is the assistant answering the customer itself.
@@ -34,4 +35,20 @@ const (
 // that has already spoken to a patient is not.
 func (m Mode) RepliesAutomatically() bool {
 	return m == ModeAutopilot
+}
+
+// RecordsAppointments reports whether a clinic in this mode has its
+// conversations read for appointments to write.
+//
+// This is the line between off and observer, which were behaviourally
+// identical until the write path existed: both are silent, and only one of
+// them is watching. Autopilot does the same reading — the extraction is the
+// same in both, and the mode decides only whether the assistant is also
+// talking.
+//
+// An allow-list for the same reason as above, in the other direction: a
+// position this build has never heard of writes nothing into a clinic's
+// calendar.
+func (m Mode) RecordsAppointments() bool {
+	return m == ModeObserver || m == ModeAutopilot
 }

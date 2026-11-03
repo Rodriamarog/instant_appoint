@@ -156,6 +156,29 @@ func inboundWebhook(app core.App, client *meta.Client) http.Handler {
 			return ai.GenerateReply(ctx, turns, text)
 		},
 		SendMessage: client.SendText,
-		Logger:      app.Logger(),
+		ExtractAppointment: func(ctx context.Context, history []webhook.ConversationMessage) (*webhook.ExtractedAppointment, error) {
+			turns := make([]gemini.Message, 0, len(history))
+			for _, turn := range history {
+				turns = append(turns, gemini.Message{Role: turn.Role, Content: turn.Content})
+			}
+
+			read, err := ai.ExtractAppointment(ctx, turns)
+			if read == nil || err != nil {
+				return nil, err
+			}
+
+			// Copied field by field rather than passed through as one
+			// shared type, for the same reason as the roles above: what an
+			// agreement in a conversation means is the handler's decision,
+			// and it stays answerable with no database and no Gemini
+			// precisely because neither package imports the other.
+			return &webhook.ExtractedAppointment{
+				ClientName: read.ClientName,
+				StartsAt:   read.StartsAt,
+				Certain:    read.Certain,
+				Summary:    read.Summary,
+			}, nil
+		},
+		Logger: app.Logger(),
 	})
 }
