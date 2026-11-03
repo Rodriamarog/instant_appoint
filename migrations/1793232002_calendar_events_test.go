@@ -16,7 +16,7 @@ import (
 	_ "github.com/Rodriamarog/instant_appoint/migrations"
 )
 
-// The calendar_events access rules are the only thing standing between one
+// The appointments access rules are the only thing standing between one
 // user's appointments and another's: the SPA talks to PocketBase directly, so
 // there is no server-side handler left to check ownership. Everything below
 // goes through the real HTTP API — the same surface a browser or a curl
@@ -119,10 +119,10 @@ func call(t *testing.T, mux http.Handler, token, method, url string, body any) (
 }
 
 // appointment is the body the SPA sends, minus the owner.
-func appointment(owner string, title string) map[string]any {
+func appointment(owner string, clientName string) map[string]any {
 	return map[string]any{
 		"user_id":      owner,
-		"title":        title,
+		"client_name":  clientName,
 		"client_phone": "16197612314",
 		"notes":        "Hello, just a reminder about your appointment tomorrow.",
 		"start_time":   "2026-11-02T17:00:00.000Z",
@@ -133,16 +133,16 @@ func appointment(owner string, title string) map[string]any {
 
 // saveAppointment writes a row directly, bypassing the API, so a test can set
 // up another person's data without relying on the rules it is about to probe.
-func saveAppointment(t *testing.T, app core.App, owner, title string) string {
+func saveAppointment(t *testing.T, app core.App, owner, clientName string) string {
 	t.Helper()
 
-	collection, err := app.FindCollectionByNameOrId("calendar_events")
+	collection, err := app.FindCollectionByNameOrId("appointments")
 	if err != nil {
-		t.Fatalf("FindCollectionByNameOrId(calendar_events): %v", err)
+		t.Fatalf("FindCollectionByNameOrId(appointments): %v", err)
 	}
 
 	record := core.NewRecord(collection)
-	for key, value := range appointment(owner, title) {
+	for key, value := range appointment(owner, clientName) {
 		record.Set(key, value)
 	}
 	if err := app.Save(record); err != nil {
@@ -157,7 +157,7 @@ func TestAnAppointmentIsCreatedAndReadBackByItsOwner(t *testing.T) {
 	alice := newPerson(t, app, "alice@instantappoint.test")
 
 	status, created := call(t, mux, alice.token, http.MethodPost,
-		"/api/collections/calendar_events/records", appointment(alice.id, "Alice's haircut"))
+		"/api/collections/appointments/records", appointment(alice.id, "Alice's haircut"))
 	if status != http.StatusOK {
 		t.Fatalf("create: status %d, want 200 (body %v)", status, created)
 	}
@@ -168,11 +168,11 @@ func TestAnAppointmentIsCreatedAndReadBackByItsOwner(t *testing.T) {
 	}
 
 	status, read := call(t, mux, alice.token, http.MethodGet,
-		"/api/collections/calendar_events/records/"+id, nil)
+		"/api/collections/appointments/records/"+id, nil)
 	if status != http.StatusOK {
 		t.Fatalf("view own record: status %d, want 200 (body %v)", status, read)
 	}
-	for _, field := range []string{"title", "client_phone", "notes", "start_time", "end_time", "location"} {
+	for _, field := range []string{"client_name", "client_phone", "notes", "start_time", "end_time", "location"} {
 		if _, ok := read[field]; !ok {
 			t.Errorf("field %q is missing from the stored record; the dialog writes it", field)
 		}
@@ -191,7 +191,7 @@ func TestListingShowsOnlyYourOwnAppointments(t *testing.T) {
 	saveAppointment(t, app, bob.id, "Bob's root canal")
 
 	status, listed := call(t, mux, alice.token, http.MethodGet,
-		"/api/collections/calendar_events/records?perPage=200", nil)
+		"/api/collections/appointments/records?perPage=200", nil)
 	if status != http.StatusOK {
 		t.Fatalf("list: status %d, want 200 (body %v)", status, listed)
 	}
@@ -201,8 +201,8 @@ func TestListingShowsOnlyYourOwnAppointments(t *testing.T) {
 		t.Fatalf("Alice sees %d appointments, want 1 (body %v)", len(items), listed)
 	}
 	first, _ := items[0].(map[string]any)
-	if first["title"] != "Alice's haircut" {
-		t.Errorf("Alice sees %v, want her own appointment", first["title"])
+	if first["client_name"] != "Alice's haircut" {
+		t.Errorf("Alice sees %v, want her own appointment", first["client_name"])
 	}
 }
 
@@ -212,7 +212,7 @@ func TestAnUnauthenticatedVisitorSeesNothingAndCanWriteNothing(t *testing.T) {
 	id := saveAppointment(t, app, alice.id, "Alice's haircut")
 
 	status, listed := call(t, mux, "", http.MethodGet,
-		"/api/collections/calendar_events/records", nil)
+		"/api/collections/appointments/records", nil)
 	if status == http.StatusOK {
 		if items, _ := listed["items"].([]any); len(items) != 0 {
 			t.Errorf("a logged-out list returned %d records, want none", len(items))
@@ -220,13 +220,13 @@ func TestAnUnauthenticatedVisitorSeesNothingAndCanWriteNothing(t *testing.T) {
 	}
 
 	status, _ = call(t, mux, "", http.MethodGet,
-		"/api/collections/calendar_events/records/"+id, nil)
+		"/api/collections/appointments/records/"+id, nil)
 	if status == http.StatusOK {
 		t.Error("a logged-out visitor could view an appointment")
 	}
 
 	status, body := call(t, mux, "", http.MethodPost,
-		"/api/collections/calendar_events/records", appointment(alice.id, "Forged by nobody"))
+		"/api/collections/appointments/records", appointment(alice.id, "Forged by nobody"))
 	if status == http.StatusOK {
 		t.Errorf("a logged-out visitor created an appointment: %v", body)
 	}
@@ -245,7 +245,7 @@ func TestAPersonCannotTouchSomeoneElsesAppointment(t *testing.T) {
 		before := countEvents(t, app)
 
 		status, body := call(t, mux, bob.token, http.MethodPost,
-			"/api/collections/calendar_events/records", appointment(alice.id, "Forged by Bob"))
+			"/api/collections/appointments/records", appointment(alice.id, "Forged by Bob"))
 
 		if status == http.StatusOK {
 			t.Errorf("Bob created an appointment owned by Alice: %v", body)
@@ -258,7 +258,7 @@ func TestAPersonCannotTouchSomeoneElsesAppointment(t *testing.T) {
 
 	t.Run("read someone else's appointment", func(t *testing.T) {
 		status, body := call(t, mux, bob.token, http.MethodGet,
-			"/api/collections/calendar_events/records/"+aliceEvent, nil)
+			"/api/collections/appointments/records/"+aliceEvent, nil)
 		if status == http.StatusOK {
 			t.Errorf("Bob viewed Alice's appointment: %v", body)
 		}
@@ -267,19 +267,19 @@ func TestAPersonCannotTouchSomeoneElsesAppointment(t *testing.T) {
 
 	t.Run("edit someone else's appointment", func(t *testing.T) {
 		status, body := call(t, mux, bob.token, http.MethodPatch,
-			"/api/collections/calendar_events/records/"+aliceEvent,
-			map[string]any{"title": "Bob was here"})
+			"/api/collections/appointments/records/"+aliceEvent,
+			map[string]any{"client_name": "Bob was here"})
 		if status == http.StatusOK {
 			t.Errorf("Bob edited Alice's appointment: %v", body)
 		}
 		t.Logf("cross-user update: status %d", status)
 
-		record, err := app.FindRecordById("calendar_events", aliceEvent)
+		record, err := app.FindRecordById("appointments", aliceEvent)
 		if err != nil {
 			t.Fatalf("FindRecordById: %v", err)
 		}
-		if got := record.GetString("title"); got != "Alice's haircut" {
-			t.Errorf("title is now %q; Bob's edit landed", got)
+		if got := record.GetString("client_name"); got != "Alice's haircut" {
+			t.Errorf("client_name is now %q; Bob's edit landed", got)
 		}
 	})
 
@@ -287,7 +287,7 @@ func TestAPersonCannotTouchSomeoneElsesAppointment(t *testing.T) {
 		// The other half of update: not changing the contents, but
 		// reassigning the owner so it shows up on Bob's calendar.
 		status, body := call(t, mux, bob.token, http.MethodPatch,
-			"/api/collections/calendar_events/records/"+aliceEvent,
+			"/api/collections/appointments/records/"+aliceEvent,
 			map[string]any{"user_id": bob.id})
 		if status == http.StatusOK {
 			t.Errorf("Bob reassigned Alice's appointment to himself: %v", body)
@@ -297,13 +297,13 @@ func TestAPersonCannotTouchSomeoneElsesAppointment(t *testing.T) {
 
 	t.Run("delete someone else's appointment", func(t *testing.T) {
 		status, body := call(t, mux, bob.token, http.MethodDelete,
-			"/api/collections/calendar_events/records/"+aliceEvent, nil)
+			"/api/collections/appointments/records/"+aliceEvent, nil)
 		if status == http.StatusOK || status == http.StatusNoContent {
 			t.Errorf("Bob deleted Alice's appointment: status %d, %v", status, body)
 		}
 		t.Logf("cross-user delete: status %d", status)
 
-		if _, err := app.FindRecordById("calendar_events", aliceEvent); err != nil {
+		if _, err := app.FindRecordById("appointments", aliceEvent); err != nil {
 			t.Errorf("Alice's appointment is gone: %v", err)
 		}
 	})
@@ -317,21 +317,21 @@ func TestTheOwnerCanStillEditAndDeleteTheirOwnAppointment(t *testing.T) {
 	id := saveAppointment(t, app, alice.id, "Alice's haircut")
 
 	status, body := call(t, mux, alice.token, http.MethodPatch,
-		"/api/collections/calendar_events/records/"+id,
-		map[string]any{"title": "Alice's trim", "location": "Suite 3"})
+		"/api/collections/appointments/records/"+id,
+		map[string]any{"client_name": "Alice's trim", "location": "Suite 3"})
 	if status != http.StatusOK {
 		t.Fatalf("owner update: status %d, want 200 (body %v)", status, body)
 	}
-	if body["title"] != "Alice's trim" || body["location"] != "Suite 3" {
+	if body["client_name"] != "Alice's trim" || body["location"] != "Suite 3" {
 		t.Errorf("update did not persist both fields: %v", body)
 	}
 
 	status, body = call(t, mux, alice.token, http.MethodDelete,
-		"/api/collections/calendar_events/records/"+id, nil)
+		"/api/collections/appointments/records/"+id, nil)
 	if status != http.StatusNoContent && status != http.StatusOK {
 		t.Fatalf("owner delete: status %d, want 204 (body %v)", status, body)
 	}
-	if _, err := app.FindRecordById("calendar_events", id); err == nil {
+	if _, err := app.FindRecordById("appointments", id); err == nil {
 		t.Error("the record survived its owner's delete")
 	}
 }
@@ -343,49 +343,49 @@ func TestTheMonthWindowFilterSelectsOverlappingAppointments(t *testing.T) {
 	app, mux := newAPI(t)
 	alice := newPerson(t, app, "alice@instantappoint.test")
 
-	collection, err := app.FindCollectionByNameOrId("calendar_events")
+	collection, err := app.FindCollectionByNameOrId("appointments")
 	if err != nil {
 		t.Fatalf("FindCollectionByNameOrId: %v", err)
 	}
-	for _, slot := range []struct{ title, start, end string }{
+	for _, slot := range []struct{ clientName, start, end string }{
 		{"last month", "2026-10-05T17:00:00.000Z", "2026-10-05T18:00:00.000Z"},
 		{"this month", "2026-11-12T17:00:00.000Z", "2026-11-12T18:00:00.000Z"},
 		{"next month", "2026-12-20T17:00:00.000Z", "2026-12-20T18:00:00.000Z"},
 	} {
 		record := core.NewRecord(collection)
 		record.Set("user_id", alice.id)
-		record.Set("title", slot.title)
+		record.Set("client_name", slot.clientName)
 		record.Set("start_time", slot.start)
 		record.Set("end_time", slot.end)
 		if err := app.Save(record); err != nil {
-			t.Fatalf("save %s: %v", slot.title, err)
+			t.Fatalf("save %s: %v", slot.clientName, err)
 		}
 	}
 
 	filter := `end_time >= "2026-10-25T00:00:00.000Z" && start_time <= "2026-12-07T00:00:00.000Z"`
 	status, listed := call(t, mux, alice.token, http.MethodGet,
-		"/api/collections/calendar_events/records?perPage=200&sort=start_time&filter="+url.QueryEscape(filter), nil)
+		"/api/collections/appointments/records?perPage=200&sort=start_time&filter="+url.QueryEscape(filter), nil)
 	if status != http.StatusOK {
 		t.Fatalf("filtered list: status %d, want 200 (body %v)", status, listed)
 	}
 
 	items, _ := listed["items"].([]any)
-	var titles []string
+	var names []string
 	for _, item := range items {
 		m, _ := item.(map[string]any)
-		titles = append(titles, fmt.Sprint(m["title"]))
+		names = append(names, fmt.Sprint(m["client_name"]))
 	}
 
 	want := []string{"this month"}
-	if len(titles) != len(want) || titles[0] != want[0] {
-		t.Errorf("window returned %v, want %v", titles, want)
+	if len(names) != len(want) || names[0] != want[0] {
+		t.Errorf("window returned %v, want %v", names, want)
 	}
 }
 
 func countEvents(t *testing.T, app core.App) int {
 	t.Helper()
 
-	records, err := app.FindAllRecords("calendar_events")
+	records, err := app.FindAllRecords("appointments")
 	if err != nil {
 		t.Fatalf("FindAllRecords: %v", err)
 	}

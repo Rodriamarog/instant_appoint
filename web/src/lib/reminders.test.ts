@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
-import type { CalendarEvent } from '@/lib/calendar-events'
+import type { Appointment } from '@/lib/appointments'
 import { pb } from '@/lib/pocketbase'
 import { HORIZON_DAYS, listUpcomingReminders, upcomingWindow } from '@/lib/reminders'
 
@@ -19,7 +19,7 @@ const signedInUser = {
 /** Fixed so every expectation below is an arithmetic fact, not a race. */
 const NOW = new Date('2026-11-02T12:00:00.000Z')
 
-let appointments: CalendarEvent[] = []
+let appointments: Appointment[] = []
 let sentMessages: { event_id: string }[] = []
 /** Every filter string the appointment query was given. */
 let appointmentFilters: string[] = []
@@ -28,11 +28,11 @@ let messageFilters: string[] = []
 /** How many rows one page of the message log returns, at most. */
 let messagePageSize = Infinity
 
-function appointment(overrides: Partial<CalendarEvent>): CalendarEvent {
+function appointment(overrides: Partial<Appointment>): Appointment {
   return {
     id: 'evt1',
     user_id: signedInUser.id,
-    title: 'Ana Ruiz',
+    client_name: 'Ana Ruiz',
     client_phone: '5215512345678',
     notes: 'See you tomorrow.',
     start_time: '2026-11-03T17:00:00.000Z',
@@ -49,7 +49,7 @@ beforeEach(() => {
   messagePageSize = Infinity
 
   vi.spyOn(pb, 'collection').mockImplementation((name: string) => {
-    if (name === 'calendar_events') {
+    if (name === 'appointments') {
       return {
         getFullList: (options: { filter?: string }) => {
           appointmentFilters.push(options?.filter ?? '')

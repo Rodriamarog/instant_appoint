@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import { ReminderSettingsDialog } from '@/components/reminders/settings-dialog'
-import { DEFAULT_SETTINGS, type ReminderSettings } from '@/lib/reminder-settings'
+import { DEFAULT_SETTINGS, type BusinessSettings } from '@/lib/business-settings'
 
 /**
  * The seam is the templates endpoint, stubbed, plus the onSave the page
@@ -56,7 +56,7 @@ function stubTemplates(templates: unknown[], ok = true) {
 
 const onSave = vi.fn(() => Promise.resolve())
 
-function show(settings: Partial<ReminderSettings> = {}) {
+function show(settings: Partial<BusinessSettings> = {}) {
   render(
     <ReminderSettingsDialog
       open

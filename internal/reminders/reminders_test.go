@@ -27,7 +27,7 @@ func appointment(id, user, title, phone string, start time.Time) reminders.Appoi
 	return reminders.Appointment{
 		ID:          id,
 		UserID:      user,
-		Title:       title,
+		ClientName:  title,
 		ClientPhone: phone,
 		StartTime:   start,
 	}

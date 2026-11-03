@@ -1,4 +1,4 @@
-import { listAppointmentsBetween, type CalendarEvent } from '@/lib/calendar-events'
+import { listAppointmentsBetween, type Appointment } from '@/lib/appointments'
 import { remindedEventIds } from '@/lib/messages'
 
 /**
@@ -24,7 +24,7 @@ const DAY = 24 * 60 * MINUTE
 
 /** An appointment with a reminder still to go out. */
 export interface UpcomingReminder {
-  event: CalendarEvent
+  event: Appointment
   /** When the reminder is due to be sent: a lead time before the start. */
   reminderAt: Date
   /** True once that moment has passed and the reminder has still not gone. */

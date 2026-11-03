@@ -7,7 +7,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 )
 
-// reminder_settings is written and read by the browser through PocketBase's
+// business_settings is written and read by the browser through PocketBase's
 // own record API, so every check here goes over real HTTP with a real auth
 // token. That is the layer the access rules are evaluated at, and the rules
 // are the only thing keeping one person's reminder configuration away from
@@ -15,7 +15,7 @@ import (
 //
 // newAPI, newPerson and call live in 1793232002_calendar_events_test.go.
 
-const reminderSettings = "reminder_settings"
+const businessSettings = "business_settings"
 
 // settings is the body the settings dialog sends.
 func settings(owner string, minutes float64) map[string]any {
@@ -34,9 +34,9 @@ func settings(owner string, minutes float64) map[string]any {
 func saveSettings(t *testing.T, app core.App, owner string, minutes float64) string {
 	t.Helper()
 
-	collection, err := app.FindCollectionByNameOrId(reminderSettings)
+	collection, err := app.FindCollectionByNameOrId(businessSettings)
 	if err != nil {
-		t.Fatalf("FindCollectionByNameOrId(%s): %v", reminderSettings, err)
+		t.Fatalf("FindCollectionByNameOrId(%s): %v", businessSettings, err)
 	}
 
 	record := core.NewRecord(collection)
@@ -50,12 +50,12 @@ func saveSettings(t *testing.T, app core.App, owner string, minutes float64) str
 	return record.Id
 }
 
-func TestReminderSettingsStoreEveryFieldThePageSets(t *testing.T) {
+func TestBusinessSettingsStoreEveryFieldThePageSets(t *testing.T) {
 	app, mux := newAPI(t)
 	alice := newPerson(t, app, "alice@instantappoint.test")
 
 	status, created := call(t, mux, alice.token, http.MethodPost,
-		"/api/collections/reminder_settings/records", settings(alice.id, 120))
+		"/api/collections/business_settings/records", settings(alice.id, 120))
 	if status != http.StatusOK {
 		t.Fatalf("create: status %d, want 200 (body %v)", status, created)
 	}
@@ -66,7 +66,7 @@ func TestReminderSettingsStoreEveryFieldThePageSets(t *testing.T) {
 	}
 
 	status, read := call(t, mux, alice.token, http.MethodGet,
-		"/api/collections/reminder_settings/records/"+id, nil)
+		"/api/collections/business_settings/records/"+id, nil)
 	if status != http.StatusOK {
 		t.Fatalf("view own settings: status %d, want 200 (body %v)", status, read)
 	}
@@ -88,12 +88,12 @@ func TestReminderSettingsStoreEveryFieldThePageSets(t *testing.T) {
 // A row written by anything that does not know about the two new fields — an
 // older client, a script, the scheduler — still has to come back with a
 // template language and a zone, because #9 formats a date with them.
-func TestReminderSettingsAreBornWithALanguageAndAZone(t *testing.T) {
+func TestBusinessSettingsAreBornWithALanguageAndAZone(t *testing.T) {
 	app, mux := newAPI(t)
 	alice := newPerson(t, app, "alice@instantappoint.test")
 
 	status, created := call(t, mux, alice.token, http.MethodPost,
-		"/api/collections/reminder_settings/records", map[string]any{
+		"/api/collections/business_settings/records", map[string]any{
 			"user_id":        alice.id,
 			"timing_minutes": 60,
 			"is_active":      true,
@@ -123,19 +123,19 @@ func TestAPersonCannotEndUpWithTwoSetsOfSettings(t *testing.T) {
 	alice := newPerson(t, app, "alice@instantappoint.test")
 
 	status, first := call(t, mux, alice.token, http.MethodPost,
-		"/api/collections/reminder_settings/records", settings(alice.id, 60))
+		"/api/collections/business_settings/records", settings(alice.id, 60))
 	if status != http.StatusOK {
 		t.Fatalf("first create: status %d, want 200 (body %v)", status, first)
 	}
 
 	status, second := call(t, mux, alice.token, http.MethodPost,
-		"/api/collections/reminder_settings/records", settings(alice.id, 1440))
+		"/api/collections/business_settings/records", settings(alice.id, 1440))
 	if status == http.StatusOK {
 		t.Fatalf("a second settings row was accepted: %v", second)
 	}
 	t.Logf("duplicate create: status %d, body %v", status, second)
 
-	rows, err := app.FindAllRecords(reminderSettings)
+	rows, err := app.FindAllRecords(businessSettings)
 	if err != nil {
 		t.Fatalf("FindAllRecords: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestAPersonCannotEndUpWithTwoSetsOfSettings(t *testing.T) {
 	// the index must not be unique on nothing in particular.
 	bob := newPerson(t, app, "bob@instantappoint.test")
 	status, bobs := call(t, mux, bob.token, http.MethodPost,
-		"/api/collections/reminder_settings/records", settings(bob.id, 30))
+		"/api/collections/business_settings/records", settings(bob.id, 30))
 	if status != http.StatusOK {
 		t.Fatalf("Bob could not save his own settings: status %d (body %v)", status, bobs)
 	}
@@ -156,7 +156,7 @@ func TestAPersonCannotEndUpWithTwoSetsOfSettings(t *testing.T) {
 // The acceptance criterion "a person sees only their own settings", put to
 // the direct API call that attempts exactly what the rules must forbid, for
 // every verb.
-func TestAPersonCannotTouchSomeoneElsesReminderSettings(t *testing.T) {
+func TestAPersonCannotTouchSomeoneElsesBusinessSettings(t *testing.T) {
 	app, mux := newAPI(t)
 	alice := newPerson(t, app, "alice@instantappoint.test")
 	bob := newPerson(t, app, "bob@instantappoint.test")
@@ -167,7 +167,7 @@ func TestAPersonCannotTouchSomeoneElsesReminderSettings(t *testing.T) {
 		saveSettings(t, app, bob.id, 30)
 
 		status, listed := call(t, mux, bob.token, http.MethodGet,
-			"/api/collections/reminder_settings/records?perPage=200", nil)
+			"/api/collections/business_settings/records?perPage=200", nil)
 		if status != http.StatusOK {
 			t.Fatalf("list: status %d, want 200 (body %v)", status, listed)
 		}
@@ -184,7 +184,7 @@ func TestAPersonCannotTouchSomeoneElsesReminderSettings(t *testing.T) {
 
 	t.Run("view", func(t *testing.T) {
 		status, body := call(t, mux, bob.token, http.MethodGet,
-			"/api/collections/reminder_settings/records/"+aliceSettings, nil)
+			"/api/collections/business_settings/records/"+aliceSettings, nil)
 		if status == http.StatusOK {
 			t.Errorf("Bob read Alice's settings: %v", body)
 		}
@@ -193,7 +193,7 @@ func TestAPersonCannotTouchSomeoneElsesReminderSettings(t *testing.T) {
 
 	t.Run("create in someone else's name", func(t *testing.T) {
 		status, body := call(t, mux, bob.token, http.MethodPost,
-			"/api/collections/reminder_settings/records", settings(alice.id, 15))
+			"/api/collections/business_settings/records", settings(alice.id, 15))
 		if status == http.StatusOK {
 			t.Errorf("Bob created settings owned by Alice: %v", body)
 		}
@@ -202,14 +202,14 @@ func TestAPersonCannotTouchSomeoneElsesReminderSettings(t *testing.T) {
 
 	t.Run("edit", func(t *testing.T) {
 		status, body := call(t, mux, bob.token, http.MethodPatch,
-			"/api/collections/reminder_settings/records/"+aliceSettings,
+			"/api/collections/business_settings/records/"+aliceSettings,
 			map[string]any{"is_active": false})
 		if status == http.StatusOK {
 			t.Errorf("Bob switched Alice's reminders off: %v", body)
 		}
 		t.Logf("cross-user update: status %d", status)
 
-		record, err := app.FindRecordById(reminderSettings, aliceSettings)
+		record, err := app.FindRecordById(businessSettings, aliceSettings)
 		if err != nil {
 			t.Fatalf("FindRecordById: %v", err)
 		}
@@ -220,25 +220,25 @@ func TestAPersonCannotTouchSomeoneElsesReminderSettings(t *testing.T) {
 
 	t.Run("delete", func(t *testing.T) {
 		status, body := call(t, mux, bob.token, http.MethodDelete,
-			"/api/collections/reminder_settings/records/"+aliceSettings, nil)
+			"/api/collections/business_settings/records/"+aliceSettings, nil)
 		if status == http.StatusOK || status == http.StatusNoContent {
 			t.Errorf("Bob deleted Alice's settings: status %d, %v", status, body)
 		}
 		t.Logf("cross-user delete: status %d", status)
 
-		if _, err := app.FindRecordById(reminderSettings, aliceSettings); err != nil {
+		if _, err := app.FindRecordById(businessSettings, aliceSettings); err != nil {
 			t.Errorf("Alice's settings are gone: %v", err)
 		}
 	})
 }
 
-func TestAnUnauthenticatedVisitorSeesNoReminderSettings(t *testing.T) {
+func TestAnUnauthenticatedVisitorSeesNoBusinessSettings(t *testing.T) {
 	app, mux := newAPI(t)
 	alice := newPerson(t, app, "alice@instantappoint.test")
 	id := saveSettings(t, app, alice.id, 1440)
 
 	status, listed := call(t, mux, "", http.MethodGet,
-		"/api/collections/reminder_settings/records", nil)
+		"/api/collections/business_settings/records", nil)
 	if status == http.StatusOK {
 		if items, _ := listed["items"].([]any); len(items) != 0 {
 			t.Errorf("a logged-out list returned %d rows, want none", len(items))
@@ -246,13 +246,13 @@ func TestAnUnauthenticatedVisitorSeesNoReminderSettings(t *testing.T) {
 	}
 
 	status, _ = call(t, mux, "", http.MethodGet,
-		"/api/collections/reminder_settings/records/"+id, nil)
+		"/api/collections/business_settings/records/"+id, nil)
 	if status == http.StatusOK {
 		t.Error("a logged-out visitor read someone's reminder settings")
 	}
 
 	status, body := call(t, mux, "", http.MethodPost,
-		"/api/collections/reminder_settings/records", settings(alice.id, 15))
+		"/api/collections/business_settings/records", settings(alice.id, 15))
 	if status == http.StatusOK {
 		t.Errorf("a logged-out visitor created settings: %v", body)
 	}
@@ -266,7 +266,7 @@ func TestTheOwnerCanChangeAndSwitchOffTheirOwnReminders(t *testing.T) {
 	id := saveSettings(t, app, alice.id, 1440)
 
 	status, body := call(t, mux, alice.token, http.MethodPatch,
-		"/api/collections/reminder_settings/records/"+id,
+		"/api/collections/business_settings/records/"+id,
 		map[string]any{"timing_minutes": 120, "is_active": false})
 	if status != http.StatusOK {
 		t.Fatalf("owner update: status %d, want 200 (body %v)", status, body)
@@ -285,7 +285,7 @@ func TestALeadTimeMustBeAWholeNumberOfMinutesInTheFuture(t *testing.T) {
 
 	for _, minutes := range []float64{0, -30, 1.5} {
 		status, body := call(t, mux, alice.token, http.MethodPost,
-			"/api/collections/reminder_settings/records", settings(alice.id, minutes))
+			"/api/collections/business_settings/records", settings(alice.id, minutes))
 		if status == http.StatusOK {
 			t.Errorf("timing_minutes %v was accepted: %v", minutes, body)
 		}

@@ -50,13 +50,14 @@ type Settings struct {
 	Timezone string
 }
 
-// Appointment is a calendar event a reminder may be due for.
+// Appointment is a booking a reminder may be due for.
 type Appointment struct {
 	ID     string
 	UserID string
 
-	// Title is the client's name. The event dialog puts it there.
-	Title string
+	// ClientName is who the booking is with. It goes out as the template's
+	// {{1}}, which the customer reads as their own name.
+	ClientName string
 
 	// ClientPhone is where the reminder goes, in Meta's digits-only form.
 	ClientPhone string
@@ -401,7 +402,7 @@ func Run(ctx context.Context, store Store, sender Sender, now time.Time) (Summar
 func bodyParameters(appointment Appointment, location *time.Location) []string {
 	local := appointment.StartTime.In(location)
 
-	return []string{appointment.Title, local.Format(dateLayout), local.Format(timeLayout)}
+	return []string{appointment.ClientName, local.Format(dateLayout), local.Format(timeLayout)}
 }
 
 // content renders what was sent, for the stored row and the reminders page.

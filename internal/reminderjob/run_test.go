@@ -69,12 +69,12 @@ func TestOneDueReminderSendsExactlyOneTemplateAndWritesExactlyOneRow(t *testing.
 	connectNumber(t, app, alice)
 
 	now := time.Date(2026, 11, 3, 16, 5, 0, 0, time.UTC)
-	save(t, app, "reminder_settings", map[string]any{
+	save(t, app, "business_settings", map[string]any{
 		"user_id": alice, "timing_minutes": 30, "is_active": true,
 		"template_name": "appointment_reminder", "template_language": "es", "timezone": "America/Tijuana",
 	})
-	eventID := save(t, app, "calendar_events", map[string]any{
-		"user_id": alice, "title": "Ana Lopez", "client_phone": "5216641234567",
+	eventID := save(t, app, "appointments", map[string]any{
+		"user_id": alice, "client_name": "Ana Lopez", "client_phone": "5216641234567",
 		"start_time": iso(now.Add(25 * time.Minute)), "end_time": iso(now.Add(55 * time.Minute)),
 	})
 
@@ -163,12 +163,12 @@ func TestNoTemplateChosenMeansMetaIsNeverCalled(t *testing.T) {
 	connectNumber(t, app, alice)
 
 	now := time.Date(2026, 11, 3, 16, 5, 0, 0, time.UTC)
-	save(t, app, "reminder_settings", map[string]any{
+	save(t, app, "business_settings", map[string]any{
 		"user_id": alice, "timing_minutes": 30, "is_active": true,
 		"template_language": "es", "timezone": "America/Tijuana",
 	})
-	eventID := save(t, app, "calendar_events", map[string]any{
-		"user_id": alice, "title": "Ana Lopez", "client_phone": "5216641234567",
+	eventID := save(t, app, "appointments", map[string]any{
+		"user_id": alice, "client_name": "Ana Lopez", "client_phone": "5216641234567",
 		"start_time": iso(now.Add(25 * time.Minute)), "end_time": iso(now.Add(55 * time.Minute)),
 	})
 
@@ -199,12 +199,12 @@ func TestASendMetaAlwaysRefusesIsTriedThreeTimesAndThenStops(t *testing.T) {
 	connectNumber(t, app, alice)
 
 	now := time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC)
-	save(t, app, "reminder_settings", map[string]any{
+	save(t, app, "business_settings", map[string]any{
 		"user_id": alice, "timing_minutes": 480, "is_active": true,
 		"template_name": "appointment_reminder", "template_language": "es", "timezone": "America/Tijuana",
 	})
-	eventID := save(t, app, "calendar_events", map[string]any{
-		"user_id": alice, "title": "Ana Lopez", "client_phone": "5216641234567",
+	eventID := save(t, app, "appointments", map[string]any{
+		"user_id": alice, "client_name": "Ana Lopez", "client_phone": "5216641234567",
 		"start_time": iso(now.Add(7 * time.Hour)), "end_time": iso(now.Add(8 * time.Hour)),
 	})
 
@@ -249,12 +249,12 @@ func TestASendThatRecoversGoesOut(t *testing.T) {
 	connectNumber(t, app, alice)
 
 	now := time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC)
-	save(t, app, "reminder_settings", map[string]any{
+	save(t, app, "business_settings", map[string]any{
 		"user_id": alice, "timing_minutes": 480, "is_active": true,
 		"template_name": "appointment_reminder", "template_language": "es", "timezone": "America/Tijuana",
 	})
-	eventID := save(t, app, "calendar_events", map[string]any{
-		"user_id": alice, "title": "Ana Lopez", "client_phone": "5216641234567",
+	eventID := save(t, app, "appointments", map[string]any{
+		"user_id": alice, "client_name": "Ana Lopez", "client_phone": "5216641234567",
 		"start_time": iso(now.Add(7 * time.Hour)), "end_time": iso(now.Add(8 * time.Hour)),
 	})
 

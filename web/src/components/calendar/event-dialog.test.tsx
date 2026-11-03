@@ -4,7 +4,7 @@ import type { ComponentProps } from 'react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import { EventDialog } from '@/components/calendar/event-dialog'
-import type { CalendarEvent } from '@/lib/calendar-events'
+import type { Appointment } from '@/lib/appointments'
 import { pb } from '@/lib/pocketbase'
 
 /**
@@ -59,11 +59,11 @@ afterEach(() => {
 })
 
 /** An appointment as PocketBase returns it, with a reminder the owner wrote. */
-function savedEvent(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
+function savedEvent(overrides: Partial<Appointment> = {}): Appointment {
   return {
     id: 'evt123',
     user_id: signedInUser.id,
-    title: 'Ana Ruiz',
+    client_name: 'Ana Ruiz',
     client_phone: '5215512345678',
     notes: 'See you at the back entrance, Ana.',
     start_time: '2026-11-02T17:00:00.000Z',
@@ -92,10 +92,10 @@ function renderDialog(props: Partial<ComponentProps<typeof EventDialog>> = {}) {
 }
 
 /** A blank slot, as selecting a range on the calendar produces one. */
-const newSlot: CalendarEvent = {
+const newSlot: Appointment = {
   id: '',
   user_id: '',
-  title: '',
+  client_name: '',
   start_time: '2026-11-09T17:00:00.000Z',
   end_time: '2026-11-09T18:00:00.000Z',
 }
@@ -162,7 +162,7 @@ test('a new appointment is created for the signed-in person', async () => {
   // The collection's create rule compares user_id against the caller's id, so
   // a create that omits it is rejected outright.
   expect(body.user_id).toBe(signedInUser.id)
-  expect(body.title).toBe('Ana Ruiz')
+  expect(body.client_name).toBe('Ana Ruiz')
   expect(body.location).toBe('Suite 2')
   expect(onSaved).toHaveBeenCalled()
 })
@@ -259,7 +259,7 @@ test('editing an existing appointment updates it rather than creating another', 
 
   await waitFor(() => expect(update).toHaveBeenCalled())
   expect(update.mock.calls[0][0]).toBe('evt123')
-  expect(update.mock.calls[0][1]).toMatchObject({ title: 'Ana Ruiz-Moreno' })
+  expect(update.mock.calls[0][1]).toMatchObject({ client_name: 'Ana Ruiz-Moreno' })
   expect(create).not.toHaveBeenCalled()
   expect(onSaved).toHaveBeenCalled()
 })

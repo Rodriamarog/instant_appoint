@@ -3,7 +3,7 @@ import { pb } from '@/lib/pocketbase'
 
 /**
  * Appointments, as the app talks about them. This module is the only place
- * that knows the collection is called calendar_events, how the month window
+ * that knows the collection is called appointments, how the month window
  * is expressed as a filter, and that a create has to carry its owner.
  *
  * There is no server-side handler behind it: the SPA reaches PocketBase
@@ -13,13 +13,13 @@ import { pb } from '@/lib/pocketbase'
  * rule compares the submitted user_id against the caller, so a value from
  * anywhere else is rejected with a 400 anyway.
  */
-export const COLLECTION = 'calendar_events'
+export const COLLECTION = 'appointments'
 
 /** An appointment row. */
-export interface CalendarEvent {
+export interface Appointment {
   id: string
   user_id: string
-  title: string
+  client_name: string
   client_phone?: string
   notes?: string
   start_time: string
@@ -28,7 +28,7 @@ export interface CalendarEvent {
 }
 
 /** Everything the dialog can set. The id and the owner are not its business. */
-export type AppointmentDraft = Omit<CalendarEvent, 'id' | 'user_id'>
+export type AppointmentDraft = Omit<Appointment, 'id' | 'user_id'>
 
 /**
  * Every appointment that overlaps the window, oldest first.
@@ -40,13 +40,13 @@ export type AppointmentDraft = Omit<CalendarEvent, 'id' | 'user_id'>
 export async function listAppointmentsBetween(
   from: Date,
   to: Date,
-): Promise<CalendarEvent[]> {
+): Promise<Appointment[]> {
   const filter = pb.filter('end_time >= {:from} && start_time <= {:to}', {
     from: isoMillis(from),
     to: isoMillis(to),
   })
 
-  return pb.collection(COLLECTION).getFullList<CalendarEvent>({
+  return pb.collection(COLLECTION).getFullList<Appointment>({
     filter,
     sort: 'start_time',
   })
@@ -55,13 +55,13 @@ export async function listAppointmentsBetween(
 /** Writes a new appointment, owned by whoever is signed in. */
 export async function createAppointment(
   draft: AppointmentDraft,
-): Promise<CalendarEvent> {
+): Promise<Appointment> {
   const owner = pb.authStore.record?.id
   if (!owner) {
     throw new Error('Your session has expired. Sign in again to save this.')
   }
 
-  return pb.collection(COLLECTION).create<CalendarEvent>({
+  return pb.collection(COLLECTION).create<Appointment>({
     ...draft,
     user_id: owner,
   })
@@ -76,8 +76,8 @@ export async function createAppointment(
 export async function updateAppointment(
   id: string,
   draft: AppointmentDraft,
-): Promise<CalendarEvent> {
-  return pb.collection(COLLECTION).update<CalendarEvent>(id, draft)
+): Promise<Appointment> {
+  return pb.collection(COLLECTION).update<Appointment>(id, draft)
 }
 
 /** Removes an appointment. */

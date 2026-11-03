@@ -3,9 +3,9 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { pb } from '@/lib/pocketbase'
 import {
   DEFAULT_SETTINGS,
-  loadReminderSettings,
-  saveReminderSettings,
-} from '@/lib/reminder-settings'
+  loadBusinessSettings,
+  saveBusinessSettings,
+} from '@/lib/business-settings'
 
 /**
  * The seam is the PocketBase SDK. What this module is for is the three
@@ -64,7 +64,7 @@ afterEach(() => {
 test('somebody who has never opened the dialog gets a working default', async () => {
   getFirstListItem.mockRejectedValue(notFound())
 
-  await expect(loadReminderSettings()).resolves.toEqual(DEFAULT_SETTINGS)
+  await expect(loadBusinessSettings()).resolves.toEqual(DEFAULT_SETTINGS)
 })
 
 test('the default sends a reminder a day ahead, in Spanish, Tijuana time', async () => {
@@ -80,7 +80,7 @@ test('the default sends a reminder a day ahead, in Spanish, Tijuana time', async
 test('saved settings come back instead of the default', async () => {
   getFirstListItem.mockResolvedValue(stored)
 
-  await expect(loadReminderSettings()).resolves.toEqual(stored)
+  await expect(loadBusinessSettings()).resolves.toEqual(stored)
 })
 
 test('a failure that is not "nothing saved yet" is not mistaken for one', async () => {
@@ -90,13 +90,13 @@ test('a failure that is not "nothing saved yet" is not mistaken for one', async 
     Object.assign(new Error('Something went wrong'), { status: 500 }),
   )
 
-  await expect(loadReminderSettings()).rejects.toThrow()
+  await expect(loadBusinessSettings()).rejects.toThrow()
 })
 
 test('the first save creates a row stamped with its owner', async () => {
   getFirstListItem.mockRejectedValue(notFound())
 
-  await saveReminderSettings({ ...DEFAULT_SETTINGS, timing_minutes: 30 })
+  await saveBusinessSettings({ ...DEFAULT_SETTINGS, timing_minutes: 30 })
 
   expect(update).not.toHaveBeenCalled()
   expect(create).toHaveBeenCalledTimes(1)
@@ -109,7 +109,7 @@ test('the first save creates a row stamped with its owner', async () => {
 test('a later save edits the row that is already there', async () => {
   getFirstListItem.mockResolvedValue(stored)
 
-  await saveReminderSettings({ ...stored, timing_minutes: 720 })
+  await saveBusinessSettings({ ...stored, timing_minutes: 720 })
 
   expect(create).not.toHaveBeenCalled()
   expect(update).toHaveBeenCalledWith('set123', expect.objectContaining({ timing_minutes: 720 }))
@@ -120,7 +120,7 @@ test('an edit never tries to move the row to another owner', async () => {
   // a 400 for no gain.
   getFirstListItem.mockResolvedValue(stored)
 
-  await saveReminderSettings({ ...stored, is_active: false })
+  await saveBusinessSettings({ ...stored, is_active: false })
 
   expect(update.mock.calls[0][1]).not.toHaveProperty('user_id')
 })
@@ -129,6 +129,6 @@ test('saving without a session fails rather than writing an ownerless row', asyn
   pb.authStore.clear()
   getFirstListItem.mockRejectedValue(notFound())
 
-  await expect(saveReminderSettings(DEFAULT_SETTINGS)).rejects.toThrow()
+  await expect(saveBusinessSettings(DEFAULT_SETTINGS)).rejects.toThrow()
   expect(create).not.toHaveBeenCalled()
 })

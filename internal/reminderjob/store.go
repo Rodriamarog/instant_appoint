@@ -51,7 +51,7 @@ func NewStore(app core.App) *Store {
 // row up once per appointment, every minute.
 func (s *Store) ActiveSettings(context.Context) ([]reminders.Settings, error) {
 	records, err := s.app.FindRecordsByFilter(
-		migrations.ReminderSettingsCollection, "is_active = true", "", 0, 0)
+		migrations.BusinessSettingsCollection, "is_active = true", "", 0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func (s *Store) ActiveSettings(context.Context) ([]reminders.Settings, error) {
 // exclude every appointment in its own second.
 func (s *Store) AppointmentsStartingBetween(_ context.Context, from, to time.Time) ([]reminders.Appointment, error) {
 	records, err := s.app.FindRecordsByFilter(
-		migrations.CalendarEventsCollection,
+		migrations.AppointmentsCollection,
 		"start_time >= {:from} && start_time <= {:to}",
 		"start_time", 0, 0,
 		dbx.Params{"from": isotime.Format(from), "to": isotime.Format(to)},
@@ -104,7 +104,7 @@ func (s *Store) AppointmentsStartingBetween(_ context.Context, from, to time.Tim
 		appointments = append(appointments, reminders.Appointment{
 			ID:          record.Id,
 			UserID:      record.GetString("user_id"),
-			Title:       record.GetString("title"),
+			ClientName:  record.GetString("client_name"),
 			ClientPhone: record.GetString("client_phone"),
 			StartTime:   start,
 		})

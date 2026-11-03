@@ -12,13 +12,13 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { ReminderSettingsDialog } from '@/components/reminders/settings-dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { listSentReminders, type Message } from '@/lib/messages'
 import {
   DEFAULT_SETTINGS,
-  loadReminderSettings,
-  saveReminderSettings,
-  type ReminderSettings,
-} from '@/lib/reminder-settings'
+  loadBusinessSettings,
+  saveBusinessSettings,
+  type BusinessSettings,
+} from '@/lib/business-settings'
+import { listSentReminders, type Message } from '@/lib/messages'
 import { listUpcomingReminders, type UpcomingReminder } from '@/lib/reminders'
 import { listConnectedAccounts } from '@/lib/whatsapp-accounts'
 
@@ -78,7 +78,7 @@ function Empty({ icon: Icon, title, hint }: { icon: typeof Bell; title: string; 
  * message is #9, so the sent column stays empty until then.
  */
 export function RemindersPage() {
-  const [settings, setSettings] = useState<ReminderSettings | null>(null)
+  const [settings, setSettings] = useState<BusinessSettings | null>(null)
   const [upcoming, setUpcoming] = useState<UpcomingReminder[] | null>(null)
   const [sent, setSent] = useState<Message[]>([])
   // null while the answer is still unknown: an amber warning shown during a
@@ -89,7 +89,7 @@ export function RemindersPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
 
   useEffect(() => {
-    loadReminderSettings()
+    loadBusinessSettings()
       .then(setSettings)
       .catch(() => {
         // The page is still usable: the defaults are what an unsaved account
@@ -141,8 +141,8 @@ export function RemindersPage() {
     }
   }, [leadTime])
 
-  const save = useCallback(async (next: ReminderSettings) => {
-    setSettings(await saveReminderSettings(next))
+  const save = useCallback(async (next: BusinessSettings) => {
+    setSettings(await saveBusinessSettings(next))
     setError('')
   }, [])
 
@@ -223,12 +223,12 @@ export function RemindersPage() {
                   >
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
                       <span className="text-xs font-bold">
-                        {event.title.charAt(0).toUpperCase()}
+                        {event.client_name.charAt(0).toUpperCase()}
                       </span>
                     </div>
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-sm font-medium">{event.title}</p>
+                        <p className="truncate text-sm font-medium">{event.client_name}</p>
                         {isDue ? (
                           <Pill tone="due">Due</Pill>
                         ) : (

@@ -19,7 +19,7 @@ function appointment(overrides: Record<string, unknown> = {}) {
   return {
     id: 'evt123',
     user_id: 'user123',
-    title: 'Ana Ruiz',
+    client_name: 'Ana Ruiz',
     client_phone: '5215512345678',
     notes: 'See you at the back entrance, Ana.',
     start_time: isoMillis(new Date(2026, 10, 12, 10, 0)),
