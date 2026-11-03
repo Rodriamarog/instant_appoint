@@ -438,3 +438,57 @@ func TestCreateTemplateSurfacesMetasMessage(t *testing.T) {
 		t.Errorf("Message = %q", apiErr.Message)
 	}
 }
+
+// The creation receipt's exact shape on the wire.
+//
+// It is an interactive message and not a template, which is only possible
+// inside the 24-hour window the patient's own message opens — and it is the
+// only send this app makes that can carry a payload of its own on a button,
+// because a template's buttons belong to the template and not to the send.
+func TestSendButtonsPostsAnInteractiveMessageWithReplyButtons(t *testing.T) {
+	stub := newGraphStub(t, ok(`{"messages":[{"id":"wamid.HBgNNTIx"}]}`))
+
+	id, err := stub.client().SendButtons(
+		context.Background(), "555000111", "the-token", "5215511111111",
+		"Tu cita quedó registrada. ¿Es correcto?",
+		[]meta.Button{{ID: "confirm", Title: "Confirmar"}, {ID: "cancel", Title: "Cancelar"}},
+	)
+	if err != nil {
+		t.Fatalf("SendButtons: %v", err)
+	}
+	if id != "wamid.HBgNNTIx" {
+		t.Errorf("id = %q", id)
+	}
+
+	call := stub.only(t)
+	if call.path != "/v21.0/555000111/messages" {
+		t.Errorf("path = %q, want /v21.0/555000111/messages", call.path)
+	}
+
+	want := `{"messaging_product":"whatsapp","to":"5215511111111","type":"interactive",` +
+		`"interactive":{"type":"button","body":{"text":"Tu cita quedó registrada. ¿Es correcto?"},` +
+		`"action":{"buttons":[` +
+		`{"type":"reply","reply":{"id":"confirm","title":"Confirmar"}},` +
+		`{"type":"reply","reply":{"id":"cancel","title":"Cancelar"}}]}}}`
+	if call.body != want {
+		t.Errorf("body  = %s\nwant = %s", call.body, want)
+	}
+}
+
+// Meta accepts at most three reply buttons and refuses the whole message
+// otherwise. Refusing here costs the patient a receipt; sending it costs a
+// 400 that reads as a transport failure.
+func TestSendButtonsRefusesMoreButtonsThanMetaAccepts(t *testing.T) {
+	stub := newGraphStub(t, ok(`{"messages":[{"id":"wamid.A"}]}`))
+
+	_, err := stub.client().SendButtons(
+		context.Background(), "555000111", "tok", "5215511111111", "pick one",
+		[]meta.Button{{ID: "a", Title: "A"}, {ID: "b", Title: "B"}, {ID: "c", Title: "C"}, {ID: "d", Title: "D"}},
+	)
+	if err == nil {
+		t.Fatal("SendButtons accepted four buttons, want it refused before reaching Meta")
+	}
+	if len(stub.calls) != 0 {
+		t.Errorf("made %d calls to Meta, want none", len(stub.calls))
+	}
+}

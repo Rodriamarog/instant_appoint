@@ -431,11 +431,12 @@ func messageID(body []byte) (string, error) {
 // these are the exact requests the working implementation sends, and keeping
 // them byte-identical removes one variable from debugging a live failure.
 type sendRequest struct {
-	MessagingProduct string        `json:"messaging_product"`
-	To               string        `json:"to"`
-	Type             string        `json:"type"`
-	Text             *textBody     `json:"text,omitempty"`
-	Template         *templateBody `json:"template,omitempty"`
+	MessagingProduct string           `json:"messaging_product"`
+	To               string           `json:"to"`
+	Type             string           `json:"type"`
+	Text             *textBody        `json:"text,omitempty"`
+	Template         *templateBody    `json:"template,omitempty"`
+	Interactive      *interactiveBody `json:"interactive,omitempty"`
 }
 
 type textBody struct {
@@ -458,6 +459,88 @@ type templateComponent struct {
 type templateParameter struct {
 	Type string `json:"type"`
 	Text string `json:"text"`
+}
+
+// Button is one reply button under an interactive message.
+//
+// ID is a payload the sender chooses and Meta hands back untouched when the
+// button is tapped; Title is what the patient reads. A template's quick
+// replies can carry neither — the template is one object shared by every
+// send — which is the whole reason the creation receipt is an interactive
+// message.
+type Button struct {
+	ID    string
+	Title string
+}
+
+// MaxReplyButtons is how many reply buttons Meta accepts on one interactive
+// message. A fourth is not truncated: the whole message is refused.
+const MaxReplyButtons = 3
+
+type interactiveBody struct {
+	// Type is "button" for reply buttons — not the button's own type, which
+	// is "reply" below. Meta spells the two differently.
+	Type string `json:"type"`
+
+	// Not textBody: a text message spells its content "body" and an
+	// interactive message spells it "text", inside a key already called
+	// body. Sharing the type sends {"body":{"body":...}}, which Meta
+	// rejects as a malformed interactive message.
+	Body   interactiveText   `json:"body"`
+	Action interactiveAction `json:"action"`
+}
+
+type interactiveText struct {
+	Text string `json:"text"`
+}
+
+type interactiveAction struct {
+	Buttons []interactiveButton `json:"buttons"`
+}
+
+type interactiveButton struct {
+	Type  string                 `json:"type"`
+	Reply interactiveReplyButton `json:"reply"`
+}
+
+type interactiveReplyButton struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+// SendButtons sends a free-form message with reply buttons under it and
+// returns its WhatsApp message id.
+//
+// Free-form, so Meta delivers it only inside the 24-hour window a
+// customer's own message opens. That is not a limitation for its one
+// caller: the creation receipt goes out seconds after the conversation that
+// produced it.
+func (c *Client) SendButtons(ctx context.Context, phoneNumberID, accessToken, to, body string, buttons []Button) (string, error) {
+	// Checked here rather than left to Meta, because Meta refuses the whole
+	// message and the refusal reads like any other transport failure.
+	if len(buttons) == 0 || len(buttons) > MaxReplyButtons {
+		return "", fmt.Errorf("meta: an interactive message carries 1 to %d reply buttons, not %d", MaxReplyButtons, len(buttons))
+	}
+
+	interactive := &interactiveBody{Type: "button", Body: interactiveText{Text: body}}
+	for _, button := range buttons {
+		interactive.Action.Buttons = append(interactive.Action.Buttons, interactiveButton{
+			Type:  "reply",
+			Reply: interactiveReplyButton{ID: button.ID, Title: button.Title},
+		})
+	}
+
+	raw, err := c.post(ctx, "v21.0", phoneNumberID+"/messages", sendRequest{
+		MessagingProduct: "whatsapp",
+		To:               to,
+		Type:             "interactive",
+		Interactive:      interactive,
+	}, accessToken)
+	if err != nil {
+		return "", err
+	}
+
+	return messageID(raw)
 }
 
 // SendText sends a plain text message and returns its WhatsApp message id.

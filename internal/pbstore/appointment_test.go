@@ -25,6 +25,7 @@ var anAppointment = webhook.Appointment{
 	StatusSetAt:    "2026-10-28T19:36:00.000Z",
 	ConversationID: "conv-1",
 	Notes:          "Limpieza dental",
+	Language:       "en_US",
 }
 
 // Every column, read back off the row rather than off the struct that wrote
@@ -35,7 +36,7 @@ func TestWritesAnAppointmentWithItsProvenance(t *testing.T) {
 	app := newApp(t)
 	store := pbstore.NewWebhookStore(app)
 
-	if err := store.CreateAppointment(context.Background(), "user000000000001", anAppointment); err != nil {
+	if _, err := store.CreateAppointment(context.Background(), "user000000000001", anAppointment); err != nil {
 		t.Fatalf("CreateAppointment: %v", err)
 	}
 
@@ -62,6 +63,12 @@ func TestWritesAnAppointmentWithItsProvenance(t *testing.T) {
 		{"status_set_at", "2026-10-28T19:36:00.000Z"},
 		{"conversation_id", "conv-1"},
 		{"notes", "Limpieza dental"},
+
+		// The patient's own language and not the column's create-time
+		// default. An appointment born out of an English thread whose
+		// language says "es" sends that patient a Spanish receipt now and
+		// a Spanish reminder tomorrow.
+		{"language", "en_US"},
 	} {
 		if got := records[0].GetString(field.name); got != field.want {
 			t.Errorf("%s = %q, want %q", field.name, got, field.want)
@@ -77,7 +84,7 @@ func TestAnAppointmentFromAConversationIsFoundByThatConversation(t *testing.T) {
 	app := newApp(t)
 	store := pbstore.NewWebhookStore(app)
 
-	if err := store.CreateAppointment(context.Background(), "user000000000001", anAppointment); err != nil {
+	if _, err := store.CreateAppointment(context.Background(), "user000000000001", anAppointment); err != nil {
 		t.Fatalf("CreateAppointment: %v", err)
 	}
 
@@ -112,7 +119,7 @@ func TestAppointmentsBookedAtTheDeskAnswerForNoConversation(t *testing.T) {
 	atTheDesk := anAppointment
 	atTheDesk.ConversationID = ""
 	atTheDesk.CreatedBy = appointments.Staff
-	if err := store.CreateAppointment(context.Background(), "user000000000001", atTheDesk); err != nil {
+	if _, err := store.CreateAppointment(context.Background(), "user000000000001", atTheDesk); err != nil {
 		t.Fatalf("CreateAppointment: %v", err)
 	}
 
@@ -137,18 +144,27 @@ func TestASecondAppointmentFromOneConversationIsQuietlyRefused(t *testing.T) {
 	app := newApp(t)
 	store := pbstore.NewWebhookStore(app)
 
-	if err := store.CreateAppointment(context.Background(), "user000000000001", anAppointment); err != nil {
+	if _, err := store.CreateAppointment(context.Background(), "user000000000001", anAppointment); err != nil {
 		t.Fatalf("the first write: %v", err)
 	}
 
 	second := anAppointment
 	second.StartsAt = "2026-11-04T18:00:00.000Z"
-	if err := store.CreateAppointment(context.Background(), "user000000000001", second); err != nil {
+	id, err := store.CreateAppointment(context.Background(), "user000000000001", second)
+	if err != nil {
 		t.Errorf("the second write from the same conversation failed instead of being ignored: %v", err)
 	}
 
+	// No id, because no row of this one's was written. It is what tells the
+	// webhook that the appointment it is about to send the patient a
+	// receipt for is somebody else's — and a second receipt for one
+	// appointment is the duplicate message the receipt exists to prevent.
+	if id != "" {
+		t.Errorf("the refused write returned the id %q, want nothing", id)
+	}
+
 	var count int
-	err := app.DB().NewQuery("SELECT COUNT(*) FROM {{appointments}} WHERE [[conversation_id]] = {:id}").
+	err = app.DB().NewQuery("SELECT COUNT(*) FROM {{appointments}} WHERE [[conversation_id]] = {:id}").
 		Bind(dbx.Params{"id": "conv-1"}).Row(&count)
 	if err != nil {
 		t.Fatalf("count the appointments: %v", err)
@@ -167,10 +183,10 @@ func TestTwoAppointmentsWithNoConversationAreBothKept(t *testing.T) {
 
 	atTheDesk := anAppointment
 	atTheDesk.ConversationID = ""
-	if err := store.CreateAppointment(context.Background(), "user000000000001", atTheDesk); err != nil {
+	if _, err := store.CreateAppointment(context.Background(), "user000000000001", atTheDesk); err != nil {
 		t.Fatalf("the first write: %v", err)
 	}
-	if err := store.CreateAppointment(context.Background(), "user000000000001", atTheDesk); err != nil {
+	if _, err := store.CreateAppointment(context.Background(), "user000000000001", atTheDesk); err != nil {
 		t.Fatalf("the second write: %v", err)
 	}
 
@@ -180,5 +196,27 @@ func TestTwoAppointmentsWithNoConversationAreBothKept(t *testing.T) {
 	}
 	if len(records) != 2 {
 		t.Errorf("stored %d appointments, want both", len(records))
+	}
+}
+
+// The id is what the webhook sends a receipt about, so a write that
+// returned nothing for a row it did create would leave every patient
+// unconfirmed — and one that returned an id for a row it did not create
+// would send a second patient's receipt about the first one's appointment.
+func TestAWrittenAppointmentComesBackWithItsOwnID(t *testing.T) {
+	app := newApp(t)
+	store := pbstore.NewWebhookStore(app)
+
+	id, err := store.CreateAppointment(context.Background(), "user000000000001", anAppointment)
+	if err != nil {
+		t.Fatalf("CreateAppointment: %v", err)
+	}
+
+	record, err := app.FindRecordById(migrations.AppointmentsCollection, id)
+	if err != nil {
+		t.Fatalf("the returned id %q names no appointment: %v", id, err)
+	}
+	if record.GetString("conversation_id") != "conv-1" {
+		t.Errorf("the returned id names the appointment from %q, want conv-1", record.GetString("conversation_id"))
 	}
 }

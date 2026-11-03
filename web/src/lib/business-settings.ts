@@ -41,6 +41,11 @@ export type AIMode = 'off' | 'observer' | 'autopilot'
  * down are two different promises, and only the first is in the name of the
  * position — a clinic that chose Observador expecting a silent bystander
  * would find appointments nobody at the desk typed.
+ *
+ * Both also say that the patient is asked to confirm. Observador still does
+ * not answer anybody's message, but an appointment it writes produces one
+ * message of its own, and that is something a patient experiences and a
+ * clinic would not guess from the name.
  */
 export const AI_MODE_OPTIONS: { mode: AIMode; label: string; help: string }[] = [
   {
@@ -51,12 +56,12 @@ export const AI_MODE_OPTIONS: { mode: AIMode; label: string; help: string }[] = 
   {
     mode: 'observer',
     label: 'Observador',
-    help: 'El asistente no responde. Observa las conversaciones que atiende tu clínica y agenda las citas que se acuerdan en ellas.',
+    help: 'El asistente no responde. Observa las conversaciones que atiende tu clínica y agenda las citas que se acuerdan en ellas, y le pide al paciente que las confirme.',
   },
   {
     mode: 'autopilot',
     label: 'Piloto automático',
-    help: 'El asistente responde solo, por WhatsApp, a los mensajes recientes de tus pacientes, y agenda las citas que se acuerdan con ellos.',
+    help: 'El asistente responde solo, por WhatsApp, a los mensajes recientes de tus pacientes, agenda las citas que se acuerdan con ellos y les pide que las confirmen.',
   },
 ]
 

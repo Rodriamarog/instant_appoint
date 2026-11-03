@@ -56,6 +56,16 @@ var quickReplies = map[string]TapAction{
 	"Cancelar":  TapCancel,
 	"Confirm":   TapConfirm,
 	"Cancel":    TapCancel,
+
+	// The two ids this app sets on a creation receipt's buttons, which are
+	// not labels and are never shown. A receipt is a free-form message
+	// rather than a template, so unlike a reminder it can carry a payload
+	// this app chose — and a payload is the one part of a tap that does not
+	// change with the language the patient reads. The titles above are
+	// still matched, because the id is what Meta returns and not what it
+	// promises to return.
+	confirmButtonID: TapConfirm,
+	cancelButtonID:  TapCancel,
 }
 
 // resolveTap names the action a tap asked for, reporting false when it

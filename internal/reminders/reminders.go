@@ -353,6 +353,27 @@ func spellDate(local time.Time, lang language) string {
 	return fmt.Sprintf(chosen.date, local.Day(), chosen.months[local.Month()-1], local.Year())
 }
 
+// SpellMoment writes an instant the way the patient it is about reads it:
+// the date with its month as a word, and the time on a 24-hour clock, both
+// in the clinic's zone and in the variant asked for. ok is false for a
+// variant this build has no calendar vocabulary for.
+//
+// Exported because the creation receipt names the same appointment this
+// package will later remind about, and the two have to agree about what day
+// it is. A second month table would be a second answer to "what is 30/10?"
+// — which is the exact question the word-month spelling exists to settle —
+// and it would drift the first time one of them gained a language.
+func SpellMoment(at time.Time, location *time.Location, variant string) (date, clock string, ok bool) {
+	lang, ok := languageFor(variant)
+	if !ok {
+		return "", "", false
+	}
+
+	local := at.In(location)
+
+	return spellDate(local, lang), local.Format(timeLayout), true
+}
+
 // How a failing send is bounded.
 //
 // The reminder row's unique index is predicated on status='sent', so a failed

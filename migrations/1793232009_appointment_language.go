@@ -8,8 +8,8 @@ import (
 	m "github.com/pocketbase/pocketbase/migrations"
 )
 
-// The language the patient is written to in, on the appointment rather than
-// on the business.
+// LanguageField is the language the patient is written to in, on the
+// appointment rather than on the business.
 //
 // A Tijuana clinic treats people from both sides of the border, and until now
 // every reminder it sent went out in the single variant configured in
@@ -24,7 +24,7 @@ import (
 // one vocabulary here rather than two that can drift, and it is the same
 // spelling business_settings.template_language already uses, which is what
 // makes the backfill below a copy rather than a translation.
-const languageField = "language"
+const LanguageField = "language"
 
 func init() {
 	m.Register(func(app core.App) error {
@@ -47,7 +47,7 @@ func init() {
 		// appointment with an empty language, which the reminder job reads
 		// as one it cannot write a date for and holds back.
 		appointments.Fields.Add(&core.TextField{
-			Name:                languageField,
+			Name:                LanguageField,
 			Max:                 10,
 			AutogeneratePattern: DefaultTemplateLanguage,
 		})
@@ -81,7 +81,7 @@ func init() {
 			            WHERE {{%[2]s}}.[[user_id]] = {{%[1]s}}.[[user_id]]
 			       ), ''), {:fallback})
 			 WHERE [[%[3]s]] = '' OR [[%[3]s]] IS NULL
-		`, appointments.Name, settings.Name, languageField)
+		`, appointments.Name, settings.Name, LanguageField)
 
 		_, err = app.DB().NewQuery(backfill).
 			Bind(dbx.Params{"fallback": DefaultTemplateLanguage}).
@@ -94,7 +94,7 @@ func init() {
 			return nil // already gone
 		}
 
-		appointments.Fields.RemoveByName(languageField)
+		appointments.Fields.RemoveByName(LanguageField)
 
 		return app.Save(appointments)
 	})

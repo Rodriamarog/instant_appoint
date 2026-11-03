@@ -172,3 +172,44 @@ func TestTheStoredRowNamesTheVariantTheSendAskedFor(t *testing.T) {
 		t.Errorf("the stored row reads %q, want %q", got, want)
 	}
 }
+
+// The creation receipt names the same appointment this package will later
+// remind about, so it spells the date through this rather than through a
+// month table of its own: two tables are two answers to "what is 30/10?",
+// which is the question the word-month spelling exists to settle.
+func TestSpellMomentWritesTheDateAndTimeAPatientReads(t *testing.T) {
+	tijuana, err := time.LoadLocation("America/Tijuana")
+	if err != nil {
+		t.Fatalf("load the zone: %v", err)
+	}
+
+	// 22:00 UTC is 15:00 in Tijuana on this date. A receipt naming the UTC
+	// hour would send somebody in at ten at night.
+	moment := at(t, "2026-10-30T22:00:00Z")
+
+	for _, tc := range []struct {
+		variant   string
+		wantDate  string
+		wantClock string
+	}{
+		{"es", "30 de octubre de 2026", "15:00"},
+		{"en_US", "October 30, 2026", "15:00"},
+	} {
+		date, clock, ok := reminders.SpellMoment(moment, tijuana, tc.variant)
+		if !ok {
+			t.Fatalf("%s: SpellMoment reported no spelling", tc.variant)
+		}
+		if date != tc.wantDate || clock != tc.wantClock {
+			t.Errorf("%s: %q at %q, want %q at %q", tc.variant, date, clock, tc.wantDate, tc.wantClock)
+		}
+	}
+}
+
+// pt_BR is offered by the template form and has no row in the spelling
+// table. Falling back to Spanish would put a Spanish month inside
+// Portuguese wording; the caller holds the message back instead.
+func TestSpellMomentReportsALanguageItCannotWrite(t *testing.T) {
+	if _, _, ok := reminders.SpellMoment(at(t, "2026-10-30T22:00:00Z"), time.UTC, "pt_BR"); ok {
+		t.Error("SpellMoment claimed a spelling for pt_BR")
+	}
+}

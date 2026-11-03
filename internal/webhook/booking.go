@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"strings"
 	"time"
 
 	"github.com/Rodriamarog/instant_appoint/internal/appointments"
@@ -51,6 +52,18 @@ type Appointment struct {
 	StartsAt string
 	EndsAt   string
 
+	// Language is the Meta template variant this patient is written to in
+	// — "es", "en_US". It is the appointment's own and not the clinic's: a
+	// Tijuana clinic treats people from both sides of the border, and the
+	// reminder that goes out a day later reads this column.
+	//
+	// Guessed from the dialling prefix, which is right most of the time and
+	// wrong often enough that staff can change it afterwards. Writing
+	// nothing would be worse than guessing: the column's create-time
+	// default is Spanish, so a US patient's whole thread would be in
+	// English and both messages this app sends them would be in Spanish.
+	Language string
+
 	Status      appointments.Status
 	CreatedBy   appointments.Actor
 	StatusSetBy appointments.Actor
@@ -94,6 +107,7 @@ func (e ExtractedAppointment) Appointment(customerPhone, conversationID string, 
 		ClientPhone: customerPhone,
 		StartsAt:    isotime.Format(e.StartsAt),
 		EndsAt:      isotime.Format(e.StartsAt.Add(AppointmentLength)),
+		Language:    languageFor(customerPhone),
 		Status:      status,
 
 		// Both, and not only the status: an appointment that records who
@@ -107,4 +121,32 @@ func (e ExtractedAppointment) Appointment(customerPhone, conversationID string, 
 		ConversationID: conversationID,
 		Notes:          e.Summary,
 	}
+}
+
+// The language codes an appointment can be born with, as Meta spells a
+// template variant.
+const (
+	spanish = "es"
+	english = "en_US"
+)
+
+// languageFor guesses the language a patient reads from their number's
+// dialling prefix.
+//
+// It mirrors languageForCountryCode in web/src/lib/appointments.ts, which is
+// what the dialog applies when a member of staff types a number, so an
+// appointment the assistant writes and one typed at the desk for the same
+// patient come out the same. Both are a guess, and both are a stored column
+// staff can correct.
+//
+// Anything that is not a +1 number falls back to Spanish rather than being
+// read as English: the clinic is in Tijuana, Spanish is the one variant its
+// reminder template is certain to be approved in, and a wrong guess the
+// other way costs a reminder that Meta refuses to deliver at all.
+func languageFor(customerPhone string) string {
+	if strings.HasPrefix(customerPhone, "1") {
+		return english
+	}
+
+	return spanish
 }

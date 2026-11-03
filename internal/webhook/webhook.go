@@ -90,6 +90,17 @@ const (
 
 	// KindTap is a tap on a quick-reply button.
 	KindTap MessageKind = "button"
+
+	// KindReceipt is the message this app sends the moment the assistant
+	// writes an appointment, asking the patient to confirm it.
+	//
+	// It is a kind of its own and not a reminder, although it carries the
+	// same two buttons and the same appointment. internal/reminderjob
+	// counts a sent reminder row as the reminder having gone out, and
+	// reserves the send with a unique index predicated on that spelling —
+	// so a receipt filed as one would silently cancel the real reminder
+	// for that appointment.
+	KindReceipt MessageKind = "receipt"
 )
 
 // StoredMessage is one row of the conversation.
@@ -139,6 +150,23 @@ type Account struct {
 	// and the zero value is what that looks like here — which is not
 	// ModeAutopilot, so nothing is sent.
 	Mode Mode
+
+	// Timezone is the IANA zone the clinic keeps time in, which is the
+	// clock a message to a patient names an hour on. Appointments are
+	// stored as UTC instants, so a receipt written without it would send
+	// somebody in at ten at night.
+	Timezone string
+
+	// SendsReminders is whether a reminder will actually go out for this
+	// clinic's appointments: switched on and with a template chosen. Both
+	// halves, because either one missing means no reminder is ever sent and
+	// so no receipt of theirs may be held back in favour of one.
+	SendsReminders bool
+
+	// ReminderLeadTime is how far before an appointment that reminder falls
+	// due. An appointment booked inside it has its reminder due already,
+	// which is what suppresses the receipt — see handler.receiptIsOwed.
+	ReminderLeadTime time.Duration
 }
 
 // ConversationMessage is one turn of the history handed to the AI.
@@ -176,15 +204,20 @@ type Store interface {
 
 	AppointmentWriter
 
-	// AppointmentForReminder returns the appointment a sent reminder was
-	// about, given Meta's id for that reminder, or "" when this clinic has no
-	// reminder with that id.
+	// AppointmentForSentMessage returns the appointment a message this app
+	// sent was about, given Meta's id for that message, or "" when this
+	// clinic sent no such message.
+	//
+	// Two kinds of message qualify: a reminder, and the receipt that goes
+	// out the moment the assistant writes an appointment. Both ask the same
+	// question with the same two buttons, so a tap on either has to find
+	// its way back the same way.
 	//
 	// Not found is not an error: a tap can answer any message the business
-	// ever sent, and most of them are not reminders. The clinic is a
-	// parameter and not a convenience — a wamid matched across clinics would
-	// let one clinic's delivery move another clinic's appointment.
-	AppointmentForReminder(ctx context.Context, userID, reminderMessageID string) (string, error)
+	// ever sent, and most of them ask nothing. The clinic is a parameter
+	// and not a convenience — a wamid matched across clinics would let one
+	// clinic's delivery move another clinic's appointment.
+	AppointmentForSentMessage(ctx context.Context, userID, sentMessageID string) (string, error)
 
 	// SetAppointmentStatus moves an appointment and records who moved it and
 	// when, in the vocabulary of internal/appointments.
@@ -218,8 +251,18 @@ type AppointmentWriter interface {
 	// records this conversation as where it came from.
 	HasAppointmentFromConversation(ctx context.Context, conversationID string) (bool, error)
 
-	// CreateAppointment writes a new appointment for a clinic.
-	CreateAppointment(ctx context.Context, userID string, appointment Appointment) error
+	// CreateAppointment writes a new appointment for a clinic and returns
+	// its id.
+	//
+	// An empty id with a nil error means no row was written: the duplicate
+	// rule's unique index refused this one because another delivery of the
+	// same conversation got there first. That is an outcome and not a
+	// failure — the appointment that won is the right one — but the two
+	// have to be told apart here, because everything this handler does
+	// afterwards is about an appointment it just created. A receipt sent
+	// for somebody else's write is the duplicate message the receipt exists
+	// to prevent.
+	CreateAppointment(ctx context.Context, userID string, appointment Appointment) (string, error)
 }
 
 // Deps is everything the handler reaches outside itself.
@@ -240,6 +283,17 @@ type Deps struct {
 
 	// SendMessage sends text to the customer and returns WhatsApp's id for it.
 	SendMessage func(ctx context.Context, phoneNumberID, accessToken, to, text string) (string, error)
+
+	// SendButtons sends body to the customer with quick replies under it
+	// and returns WhatsApp's id for it.
+	//
+	// It is free-form and not a template, which is only possible because
+	// the conversation that produced the appointment has just happened:
+	// inside the 24-hour window a customer's own message opens, Meta
+	// delivers anything. A reminder a day later has no such window and must
+	// be a template Meta has approved, which is why the two paths do not
+	// share a send.
+	SendButtons func(ctx context.Context, phoneNumberID, accessToken, to, body string, buttons []Button) (string, error)
 
 	// ExtractAppointment reads a whole conversation and reports the
 	// appointment it agreed on, or nil when it agreed none.
@@ -475,9 +529,13 @@ func (h *handler) process(ctx context.Context, message incomingMessage) error {
 	// answer to a question this app asked, it has already been acted on
 	// above, and there is no agreement in it to read.
 	if message.Kind != KindTap && account.Mode.RecordsAppointments() {
-		if err := h.recordAppointment(ctx, h.deps.Store, *account, conversationID); err != nil {
+		created, err := h.recordAppointment(ctx, h.deps.Store, *account, conversationID)
+		if err != nil {
 			h.deps.Logger.Error("reading the conversation for an appointment failed; the message is stored and the delivery is acknowledged",
 				"conversation_id", conversationID, "error", err)
+		}
+		if created != nil {
+			h.checkWithThePatient(ctx, *account, message.PhoneNumberID, conversationID, *created)
 		}
 	}
 
@@ -541,12 +599,12 @@ func (h *handler) applyTap(ctx context.Context, userID string, message incomingM
 		return "", nil
 	}
 
-	appointmentID, err := h.deps.Store.AppointmentForReminder(ctx, userID, message.RepliesTo)
+	appointmentID, err := h.deps.Store.AppointmentForSentMessage(ctx, userID, message.RepliesTo)
 	if err != nil {
 		return "", fmt.Errorf("look up the reminder %s a tap answers: %w", message.RepliesTo, err)
 	}
 	if appointmentID == "" {
-		h.deps.Logger.Warn("a tap answers a message that is not a reminder this clinic sent; no appointment was changed",
+		h.deps.Logger.Warn("a tap answers a message this clinic never sent about an appointment; no appointment was changed",
 			"message_id", message.MessageID, "replies_to", message.RepliesTo)
 
 		return "", nil
@@ -571,15 +629,61 @@ func (h *handler) applyTap(ctx context.Context, userID string, message incomingM
 	return appointmentID, nil
 }
 
+// createdAppointment is an appointment this delivery itself wrote.
+//
+// It is what the receipt may be sent about and nothing else is: a write
+// refused by the duplicate rule belongs to another delivery, and that is
+// the one that speaks for it. Two deliveries both sending a receipt is the
+// duplicate message this whole feature exists to avoid.
+type createdAppointment struct {
+	ID string
+	Appointment
+}
+
+// checkWithThePatient sends the receipt for an appointment the assistant
+// has just written, unless it is owed none.
+//
+// Nothing here is returned. The appointment is written and the message that
+// produced it is stored, which are the two things that must not be lost; a
+// receipt that cannot be sent is a message the patient does not get, and
+// the reminder still arrives.
+func (h *handler) checkWithThePatient(
+	ctx context.Context,
+	account Account,
+	phoneNumberID, conversationID string,
+	created createdAppointment,
+) {
+	if reason := h.receiptIsOwed(account, created.Appointment); reason != "" {
+		h.deps.Logger.Info("no creation receipt: "+reason, "appointment_id", created.ID)
+
+		return
+	}
+
+	if err := h.sendReceipt(ctx, account, phoneNumberID, conversationID, created); err != nil {
+		h.deps.Logger.Error("the creation receipt failed; the appointment is written and kept",
+			"appointment_id", created.ID, "error", err)
+	}
+}
+
 // recordAppointment reads the conversation and writes the appointment it
-// agreed on, if it agreed one and has not already produced one.
+// agreed on, if it agreed one and has not already produced one, and returns
+// what it wrote.
+//
+// A nil return is every case where this delivery wrote nothing: no
+// agreement, one already written from this conversation, or the duplicate
+// rule refusing the write to another delivery that got there first.
 //
 // The writer is a parameter, narrowed to AppointmentWriter, rather than the
 // Store the handler already holds. That is the whole of the guarantee that
 // the assistant never moves or deletes an appointment: this function is
 // handed no method that could, so no reading of any conversation can reach
 // one.
-func (h *handler) recordAppointment(ctx context.Context, writer AppointmentWriter, account Account, conversationID string) error {
+func (h *handler) recordAppointment(
+	ctx context.Context,
+	writer AppointmentWriter,
+	account Account,
+	conversationID string,
+) (*createdAppointment, error) {
 	// The duplicate rule, and the first thing in the path rather than the
 	// last.
 	//
@@ -598,15 +702,15 @@ func (h *handler) recordAppointment(ctx context.Context, writer AppointmentWrite
 	// times.
 	already, err := writer.HasAppointmentFromConversation(ctx, conversationID)
 	if err != nil {
-		return fmt.Errorf("look for an appointment already written from this conversation: %w", err)
+		return nil, fmt.Errorf("look for an appointment already written from this conversation: %w", err)
 	}
 	if already {
-		return nil
+		return nil, nil
 	}
 
 	stored, err := h.deps.Store.ConversationHistory(ctx, conversationID)
 	if err != nil {
-		return fmt.Errorf("read the conversation history: %w", err)
+		return nil, fmt.Errorf("read the conversation history: %w", err)
 	}
 
 	// The whole conversation, newest turn included — unlike the reply, which
@@ -624,12 +728,12 @@ func (h *handler) recordAppointment(ctx context.Context, writer AppointmentWrite
 
 	extracted, err := h.deps.ExtractAppointment(ctx, history)
 	if err != nil {
-		return fmt.Errorf("read the conversation for an appointment: %w", err)
+		return nil, fmt.Errorf("read the conversation for an appointment: %w", err)
 	}
 	if extracted == nil {
 		// Most conversations are a question about the opening hours. None of
 		// them may leave an appointment behind.
-		return nil
+		return nil, nil
 	}
 
 	// The customer's number, taken from the conversation rather than from
@@ -641,14 +745,27 @@ func (h *handler) recordAppointment(ctx context.Context, writer AppointmentWrite
 	}
 
 	appointment := extracted.Appointment(customerPhone, conversationID, h.deps.Now())
-	if err := writer.CreateAppointment(ctx, account.UserID, appointment); err != nil {
-		return fmt.Errorf("write the appointment: %w", err)
+	appointmentID, err := writer.CreateAppointment(ctx, account.UserID, appointment)
+	if err != nil {
+		return nil, fmt.Errorf("write the appointment: %w", err)
+	}
+	if appointmentID == "" {
+		// The duplicate rule, settled by the database rather than by the
+		// check above: another delivery of this conversation wrote the
+		// appointment while this one was asking the model about it. The
+		// appointment that won is the right one, and the delivery that
+		// wrote it is the one that tells the patient.
+		h.deps.Logger.Info("another delivery had already written this conversation's appointment",
+			"conversation_id", conversationID)
+
+		return nil, nil
 	}
 
 	h.deps.Logger.Info("wrote an appointment out of a conversation",
-		"conversation_id", conversationID, "status", string(appointment.Status), "starts_at", appointment.StartsAt)
+		"conversation_id", conversationID, "appointment_id", appointmentID,
+		"status", string(appointment.Status), "starts_at", appointment.StartsAt)
 
-	return nil
+	return &createdAppointment{ID: appointmentID, Appointment: appointment}, nil
 }
 
 // reply generates, sends and stores the answer to one inbound message.
