@@ -1,4 +1,5 @@
 import { spellTime } from '@/lib/dates'
+import { isoMillis } from '@/lib/iso-time'
 import { liveFeed, pollingFeed, type Feed } from '@/lib/feed'
 import { pb } from '@/lib/pocketbase'
 
@@ -51,25 +52,50 @@ export interface Message {
  * on, and only a tap can have failed to find the appointment it was about.
  * Spelled the same as webhook.KindTap on the Go side, which is what writes
  * it.
+ *
+ * A tap carries the appointment it moved in event_id, and an empty one is
+ * not a missing value: three things have to line up for a tap to be matched
+ * — the delivery has to say which message it answers, that message has to be
+ * a reminder this clinic sent, and the button has to be one the app can name
+ * — and when they do not, the row is written with no appointment rather than
+ * guessed at, the alternative being a cancellation applied to the wrong
+ * patient.
  */
 export const TAP = 'button'
 
 /**
- * Whether this is a tap that moved nothing.
+ * How far back an unmatched tap is still worth putting in front of somebody.
  *
- * A tap is matched to an appointment through the reminder it answers, and
- * three things have to line up for that: the delivery has to say which
- * message it answers, that message has to be a reminder this clinic sent,
- * and the button has to be one the app can name. When they do not line up
- * the row is written with no appointment against it rather than guessed at,
- * the alternative being a cancellation applied to the wrong patient.
- *
- * An empty event_id on a tap is therefore not a missing value. It is the
- * record that the patient pressed a button and the booking did not move —
- * the one thing in a thread somebody has to go and do by hand.
+ * Nothing marks one of these as dealt with — there is no column for it and
+ * no screen to tick it off on — so an unbounded list would only ever grow
+ * into a warning nobody reads. A week is longer than any lead time the
+ * settings dialog offers, so a tap that drops off the end is one answering a
+ * reminder for an appointment that has already happened.
  */
-export function isUnmatchedTap(message: Message): boolean {
-  return message.message_type === TAP && message.event_id === ''
+export const UNMATCHED_TAP_DAYS = 7
+
+/**
+ * The taps that changed nothing, most recent first.
+ *
+ * Each one is a patient who pressed Confirm or Cancel and whose appointment
+ * did not move. Nothing else in the app says so: the booking looks exactly
+ * as it did before the reminder went out, which is why this is asked for
+ * rather than left in the log for somebody to find.
+ *
+ * The lower bound is compared against a text column, so it has to be
+ * written in the same fixed-width shape the stored values are in.
+ */
+export async function listUnmatchedTaps(now = new Date()): Promise<Message[]> {
+  const owner = pb.authStore.record?.id ?? ''
+  const since = new Date(now.getTime() - UNMATCHED_TAP_DAYS * 24 * 60 * 60 * 1000)
+
+  return pb.collection(COLLECTION).getFullList<Message>({
+    filter: pb.filter(
+      `user_id = {:userId} && message_type = "${TAP}" && event_id = "" && sent_at >= {:since}`,
+      { userId: owner, since: isoMillis(since) },
+    ),
+    sort: '-sent_at',
+  })
 }
 
 /**

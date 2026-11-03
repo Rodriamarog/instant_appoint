@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   Bell,
   BellOff,
   Calendar,
@@ -19,7 +20,11 @@ import {
   type BusinessSettings,
 } from '@/lib/business-settings'
 import { spellDateTime } from '@/lib/dates'
-import { listSentReminders, type Message } from '@/lib/messages'
+import {
+  listSentReminders,
+  listUnmatchedTaps,
+  type Message,
+} from '@/lib/messages'
 import { listUpcomingReminders, type UpcomingReminder } from '@/lib/reminders'
 import { listConnectedAccounts } from '@/lib/whatsapp-accounts'
 
@@ -69,6 +74,7 @@ export function RemindersPage() {
   const [settings, setSettings] = useState<BusinessSettings | null>(null)
   const [upcoming, setUpcoming] = useState<UpcomingReminder[] | null>(null)
   const [sent, setSent] = useState<Message[]>([])
+  const [unmatched, setUnmatched] = useState<Message[]>([])
   // null while the answer is still unknown: an amber warning shown during a
   // round trip is the bug this page is here to stop repeating.
   const [connected, setConnected] = useState<boolean | null>(null)
@@ -102,6 +108,14 @@ export function RemindersPage() {
     listSentReminders()
       .then(setSent)
       .catch(() => setSent([]))
+  }, [])
+
+  useEffect(() => {
+    // Swallowed like the sent column's: a page that cannot read one list is
+    // still worth showing for the three it can.
+    listUnmatchedTaps()
+      .then(setUnmatched)
+      .catch(() => setUnmatched([]))
   }, [])
 
   const leadTime = settings?.timing_minutes
@@ -174,6 +188,32 @@ export function RemindersPage() {
             recordatorio hasta que conectes un número de WhatsApp Business en la
             página de WhatsApp.
           </p>
+        </div>
+      )}
+
+      {/*
+        A patient pressed Confirm or Cancel and the booking did not move.
+        Nowhere else in the app says so — the appointment looks exactly as it
+        did before the reminder went out — and a cancellation nobody notices
+        is worse than never having offered the button.
+      */}
+      {unmatched.length > 0 && (
+        <div className="flex items-start gap-3 rounded-lg bg-amber-50 p-4 ring-1 ring-amber-200">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <div className="min-w-0 space-y-1 text-sm text-amber-800">
+            <p>
+              <strong>Respuestas sin vincular.</strong> No pudimos saber a qué
+              cita se referían. Cámbialas a mano en el calendario.
+            </p>
+            <ul className="space-y-0.5 text-xs">
+              {unmatched.map((tap) => (
+                <li key={tap.id}>
+                  +{tap.to_number} respondió «{tap.message_content}» el{' '}
+                  {spellDateTime(new Date(tap.sent_at))}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       )}
 
