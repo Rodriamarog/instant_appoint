@@ -189,31 +189,23 @@ test('a saved zone that is not one of the usual ones is kept', async () => {
 })
 
 /**
- * The AI mode switch lives here only until #21 builds the Configuración page
- * the issue names it for. What is asserted is that the dialog carries the
- * clinic's choice through to the save — the control's own behaviour is in
- * components/settings/ai-mode-field.test.tsx, which moves with it.
+ * The AI mode switch moved to Configuración with #21, but this dialog still
+ * saves the whole settings row. A save written field by field here would
+ * quietly switch a clinic's assistant off from a page that no longer even
+ * mentions it.
  */
-test('the assistant can be switched on from the settings that exist today', async () => {
+test('saving the reminders does not disturb the assistant', async () => {
   const user = userEvent.setup()
-  show({ ai_mode: 'off' })
+  show({ ai_mode: 'autopilot' })
 
-  await user.click(await screen.findByRole('radio', { name: /Piloto automático/ }))
+  expect(screen.queryByRole('radio', { name: /Piloto automático/ })).toBeNull()
+
+  await user.click(await screen.findByRole('button', { name: '2 horas' }))
   await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
   await waitFor(() =>
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ ai_mode: 'autopilot' })),
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ ai_mode: 'autopilot', timing_minutes: 120 }),
+    ),
   )
-})
-
-test('cancelling leaves the assistant where it was', async () => {
-  const user = userEvent.setup()
-  show({ ai_mode: 'off' })
-
-  await user.click(await screen.findByRole('radio', { name: /Piloto automático/ }))
-  await user.click(screen.getByRole('button', { name: 'Cancelar' }))
-
-  // The dialog edits a local draft so that Cancel really cancels. Switching
-  // the assistant on is not something to do by accident on the way out.
-  expect(onSave).not.toHaveBeenCalled()
 })

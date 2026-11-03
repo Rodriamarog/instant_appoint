@@ -3,10 +3,11 @@
 Appointment scheduling with WhatsApp reminders and an AI-answered WhatsApp inbox,
 for small service businesses.
 
-Create appointments in a calendar, let the app send each client a reminder over
-WhatsApp before their slot, and read and answer the replies in the app. A message
-that arrives with nobody watching gets an automatic reply from Gemini, which acts
-as a booking assistant for the business.
+Create appointments in a calendar and let the app send each client a reminder
+over WhatsApp before their slot. Clients answer on WhatsApp, and the staff
+answer them from the WhatsApp Business app on their own phone; a message that
+arrives with nobody watching gets an automatic reply from Gemini, which acts as
+a booking assistant for the business. Every message either way is recorded.
 
 ## The whole thing is one binary
 
@@ -103,7 +104,6 @@ spend a secret are handlers of our own:
 | `GET /api/whatsapp/templates` | lists the account's approved message templates |
 | `POST /api/whatsapp/templates/create` | submits a new template to Meta |
 | `POST /api/whatsapp/templates/send` | sends a template as a test |
-| `POST /api/chat/send` | sends a human reply, from the number the thread arrived on |
 | `POST /api/webhook` (and `/webhook`) | inbound deliveries from the Neurocrow router |
 
 ## Environment variables
@@ -192,7 +192,7 @@ If either warning shows up in a production log, treat it as an incident.
    can sign up. Note that the verification request reports success either way —
    it cannot be used to tell whether mail was actually delivered.
 3. Register a business account at `/register`, then connect a WhatsApp number on
-   the **WhatsApp** page via Meta Embedded Signup.
+   **Configuración › WhatsApp** via Meta Embedded Signup.
 4. Point the Neurocrow router's destination for this app at
    `https://<your-host>/api/webhook`, with `DEST_SECRET_INSTANTAPPOINT` equal to
    `NEUROCROW_ROUTER_SECRET`.
@@ -200,8 +200,8 @@ If either warning shows up in a production log, treat it as an incident.
 ### The seed command, for development
 
 A fresh database cannot be logged into until SMTP is configured. `seed` writes an
-already-verified test account, plus a fake connected WhatsApp account, straight
-to the collections:
+already-verified test account, a fake connected WhatsApp account and a settings
+row with the assistant on, straight to the collections:
 
 ```bash
 ./instantappoint seed
@@ -285,9 +285,9 @@ UI — not to stdout.
 
 A business can message a customer freely only within 24 hours of that customer's
 last message. Outside that window, only a **template approved by Meta** may be
-sent. That is why reminders are templates, chosen on the Reminders page from the
-account's approved list, and why there is a Templates page for submitting new
-ones.
+sent. That is why reminders are templates, chosen under **Configuración ›
+Recordatorios** from the account's approved list, and why **Configuración ›
+Plantillas** exists for submitting new ones.
 
 ### Phone number format
 

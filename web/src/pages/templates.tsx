@@ -95,11 +95,11 @@ export function TemplatesPage() {
   if (!hasAccount) {
     return (
       <div className="space-y-3">
-        <h2 className="font-heading text-2xl font-bold">Plantillas</h2>
+        <h2 className="font-heading text-xl font-semibold">Plantillas</h2>
         <p className="text-sm text-muted-foreground">
           Conecta un número de WhatsApp Business antes de crear plantillas.
         </p>
-        <Link to="/whatsapp" className="text-sm underline">
+        <Link to="/configuracion/whatsapp" className="text-sm underline">
           Ir a la conexión de WhatsApp
         </Link>
       </div>
@@ -109,7 +109,7 @@ export function TemplatesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-heading text-2xl font-bold">Plantillas</h2>
+        <h2 className="font-heading text-xl font-semibold">Plantillas</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Las plantillas de mensaje viven en Meta. Una nueva se queda en
           PENDING hasta que Meta la aprueba, y solo se puede enviar una

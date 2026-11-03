@@ -97,7 +97,7 @@ func TestRegisteringTwiceDoesNotPanic(t *testing.T) {
 		t.Fatalf("BuildMux: %v", err)
 	}
 
-	rec := get(t, mux, "/calendar")
+	rec := get(t, mux, "/inicio")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
@@ -148,8 +148,10 @@ func TestClientSideRoutesServeTheAppShell(t *testing.T) {
 	mux := newMux(t, testDist())
 
 	// A deep link and a refresh on it are the same GET as far as the server is
-	// concerned: no file exists at either path, yet both must render the app.
-	for _, path := range []string{"/calendar", "/calendar/123"} {
+	// concerned: no file exists at any of these paths, yet all must render
+	// the app. /chat is the one #21 deleted: the client-side 404 can only
+	// tell somebody their bookmark is stale if the shell reaches them first.
+	for _, path := range []string{"/inicio", "/configuracion/plantillas", "/chat"} {
 		rec := get(t, mux, path)
 
 		if rec.Code != http.StatusOK {
@@ -182,7 +184,7 @@ func TestTheAppShellLetsAPopupKeepItsOpener(t *testing.T) {
 	// connecting a number fails without a sign. The shell relaxes it to
 	// same-origin-allow-popups, which keeps the half that matters: no other
 	// window can get a reference into this one.
-	for _, path := range []string{"/", "/whatsapp", "/calendar/123"} {
+	for _, path := range []string{"/", "/configuracion/whatsapp", "/inicio"} {
 		rec := get(t, mux, path)
 
 		if got := rec.Header().Get("Cross-Origin-Opener-Policy"); got != "same-origin-allow-popups" {

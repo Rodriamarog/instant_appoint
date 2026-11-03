@@ -58,7 +58,7 @@ test('a refusal becomes an Error carrying the server’s own sentence', async ()
     { status: 500 },
   )
 
-  await expect(call('/api/chat/send', { method: 'POST' })).rejects.toThrow(
+  await expect(call('/api/whatsapp/templates/create', { method: 'POST' })).rejects.toThrow(
     'Message failed to send because more than 24 hours have passed',
   )
 })
@@ -69,7 +69,7 @@ test('a refusal that explains nothing falls back to the caller’s sentence', as
     vi.fn(() => Promise.resolve(new Response('<html>502</html>', { status: 502 }))),
   )
 
-  await expect(call('/api/chat/send', {}, 'The message could not be sent.')).rejects.toThrow(
+  await expect(call('/api/whatsapp/templates/create', {}, 'The message could not be sent.')).rejects.toThrow(
     'The message could not be sent.',
   )
 })

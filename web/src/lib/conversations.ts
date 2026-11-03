@@ -2,9 +2,8 @@ import { liveFeed, pollingFeed, type Feed } from '@/lib/feed'
 import { pb } from '@/lib/pocketbase'
 
 /**
- * Customer threads, as the chat page talks about them. This module is the only
- * place that knows the collection is called conversations and how "most recent
- * activity first" is expressed.
+ * Customer threads. This module is the only place that knows the collection
+ * is called conversations and how "most recent activity first" is expressed.
  *
  * There is no server-side handler in front of it. The collection is owner-read
  * — list and view are `user_id = @request.auth.id` — so the access rules are
@@ -12,8 +11,8 @@ import { pb } from '@/lib/pocketbase'
  * does not repeat that as a filter: a filter the browser sends is a filter the
  * browser can change, and adding one would suggest it was doing the work.
  *
- * Writes are closed to the browser entirely, which is why replying goes
- * through the Go route in lib/messages.ts rather than through a create here.
+ * Writes are closed to the browser entirely: every row is put there by the
+ * webhook, server-side. There is deliberately nothing here that creates one.
  */
 export const COLLECTION = 'conversations'
 
