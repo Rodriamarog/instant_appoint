@@ -199,7 +199,7 @@ test('the assistant can be switched on from the settings that exist today', asyn
   show({ ai_mode: 'off' })
 
   await user.click(await screen.findByRole('radio', { name: /Piloto automático/ }))
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
   await waitFor(() =>
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ ai_mode: 'autopilot' })),
@@ -211,7 +211,7 @@ test('cancelling leaves the assistant where it was', async () => {
   show({ ai_mode: 'off' })
 
   await user.click(await screen.findByRole('radio', { name: /Piloto automático/ }))
-  await user.click(screen.getByRole('button', { name: 'Cancel' }))
+  await user.click(screen.getByRole('button', { name: 'Cancelar' }))
 
   // The dialog edits a local draft so that Cancel really cancels. Switching
   // the assistant on is not something to do by accident on the way out.
