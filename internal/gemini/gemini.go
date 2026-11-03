@@ -124,7 +124,7 @@ func (c *Client) GenerateReply(ctx context.Context, history []Message, incoming 
 	}
 	contents = append(contents, content{Role: RoleUser, Parts: []part{{Text: incoming}}})
 
-	payload, err := json.Marshal(request{
+	body, err := c.generate(ctx, request{
 		// Both are sent empty rather than omitted, which is what the SDK did.
 		// They mean the same thing to the API; keeping the request identical
 		// removes a variable when a live call misbehaves.
@@ -139,15 +139,35 @@ func (c *Client) GenerateReply(ctx context.Context, history []Message, incoming 
 			Parts: []part{{Text: c.systemPrompt()}},
 		},
 		Contents: contents,
+		// Tools is deliberately left empty. The model that talks to a
+		// customer is not the model that writes an appointment — that is
+		// ExtractAppointment, which runs over the stored conversation — and
+		// a reply request carrying the write tool would let one answer both
+		// promise a time and book it, with nobody having read either.
 	})
 	if err != nil {
-		return "", fmt.Errorf("gemini: encode the request: %w", err)
+		return "", err
+	}
+
+	return replyText(body)
+}
+
+// generate posts one request and returns the raw response body.
+//
+// Both calls this package makes go through here, so the endpoint, the
+// credential, the timeout and the failure shape are decided in one place. A
+// second copy of this is how one of them quietly ends up on a different API
+// version or without the timeout.
+func (c *Client) generate(ctx context.Context, payload request) ([]byte, error) {
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("gemini: encode the request: %w", err)
 	}
 
 	url := fmt.Sprintf("%s/%s/models/%s:generateContent", strings.TrimSuffix(c.baseURL(), "/"), apiVersion, Model)
-	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(encoded))
 	if err != nil {
-		return "", fmt.Errorf("gemini: build the request: %w", err)
+		return nil, fmt.Errorf("gemini: build the request: %w", err)
 	}
 	httpRequest.Header.Set("Content-Type", "application/json")
 	// A header rather than ?key=, so the credential is not written into every
@@ -161,20 +181,20 @@ func (c *Client) GenerateReply(ctx context.Context, history []Message, incoming 
 
 	httpResponse, err := client.Do(httpRequest)
 	if err != nil {
-		return "", fmt.Errorf("gemini: %w", err)
+		return nil, fmt.Errorf("gemini: %w", err)
 	}
 	defer httpResponse.Body.Close() //nolint:errcheck // nothing useful to do with a close error on a read
 
 	body, err := io.ReadAll(httpResponse.Body)
 	if err != nil {
-		return "", fmt.Errorf("gemini: read the response: %w", err)
+		return nil, fmt.Errorf("gemini: read the response: %w", err)
 	}
 
 	if httpResponse.StatusCode >= http.StatusBadRequest {
-		return "", apiError(httpResponse.StatusCode, body)
+		return nil, apiError(httpResponse.StatusCode, body)
 	}
 
-	return replyText(body)
+	return body, nil
 }
 
 func (c *Client) baseURL() string {
@@ -188,15 +208,20 @@ func (c *Client) baseURL() string {
 // systemPrompt is the instruction the model answers under.
 //
 // It began as a verbatim port of lib/ai-conversation.ts, which told the model
-// to "confirm the appointment clearly" once a time was agreed. Nothing here
-// can create an appointment: the request below carries no tools, the response
-// reader looks only at text, and the one writer of appointments is the
-// dialog a member of staff fills in. So that line had the model telling
-// customers they were booked when no row existed anywhere, and the business
-// found out when someone turned up. The lines below leave the model able to do
-// everything it could already do — answer, gather, settle on a time — while
-// putting the booking itself on a person, which is where it happens until the
-// write path lands.
+// to "confirm the appointment clearly" once a time was agreed, at a point
+// when nothing in the app could create an appointment at all. It was then
+// rewritten to say flatly that the assistant cannot create one — true while
+// it was written, and no longer. ExtractAppointment reads the same
+// conversation and writes an appointment out of it, so an assistant telling
+// a customer it cannot take anything down now contradicts what the clinic
+// then sees on its own screen.
+//
+// What the assistant still cannot do is confirm. Nothing in the write path
+// stores confirmed: a clear agreement becomes pending, a hedged one becomes
+// a proposal, and only the patient answering or somebody at the desk moves
+// either of them on. That is the line the last two sentences hold, and it is
+// what a customer has to be told, because a customer who believes they are
+// confirmed stops reading the message that would have asked them.
 //
 // The blank line and the em dash are inherited from the original. The date is
 // the only variable and the only thing anchoring the model's sense of when
@@ -212,10 +237,9 @@ func (c *Client) systemPrompt() string {
 		"\n" +
 		"Your job is to help customers arrange appointments through natural conversation.\n" +
 		"Keep responses concise and conversational — this is WhatsApp, not email.\n" +
-		"You cannot create, change or cancel appointments, and nothing you say books one.\n" +
 		"Find out what the customer needs, their name, and the day and time that suits them.\n" +
-		"Once that is settled, repeat it back and tell them a member of staff will be in touch to confirm it.\n" +
-		"Never say or imply that the customer already has an appointment.\n" +
+		"Once that is settled, repeat the day and time back and tell them it is written down and a member of staff will confirm it.\n" +
+		"You cannot confirm, move or cancel an appointment yourself, and you must never tell a customer that theirs is already confirmed.\n" +
 		"Reply in the same language the customer uses."
 }
 
@@ -226,6 +250,11 @@ type request struct {
 	GenerationConfig  map[string]any `json:"generationConfig"`
 	SystemInstruction *content       `json:"systemInstruction,omitempty"`
 	Contents          []content      `json:"contents"`
+
+	// Tools is omitted when empty rather than sent as [], which keeps the
+	// reply request byte-identical to the one the SDK sent and the one every
+	// live conversation has been answered under.
+	Tools []tool `json:"tools,omitempty"`
 }
 
 type content struct {
@@ -237,11 +266,43 @@ type part struct {
 	Text string `json:"text"`
 }
 
+// tool is one group of functions offered to the model. The API takes a list
+// of these; this package declares exactly one group holding exactly one
+// function.
+type tool struct {
+	FunctionDeclarations []functionDeclaration `json:"functionDeclarations"`
+}
+
+type functionDeclaration struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Parameters  schema `json:"parameters"`
+}
+
+// schema is the subset of OpenAPI the API reads a parameter list as. Only
+// what this package declares is modelled: objects, strings and booleans.
+type schema struct {
+	Type        string            `json:"type"`
+	Description string            `json:"description,omitempty"`
+	Properties  map[string]schema `json:"properties,omitempty"`
+	Required    []string          `json:"required,omitempty"`
+}
+
 type response struct {
 	Candidates []struct {
 		Content struct {
 			Parts []struct {
 				Text string `json:"text"`
+
+				// A part is one or the other. Present here and not on the
+				// request's part type because nothing in this app ever sends
+				// a function call back to the model: it reads one and acts
+				// on it, and the conversation it is reading is stored
+				// messages rather than a tool-calling exchange.
+				FunctionCall *struct {
+					Name string          `json:"name"`
+					Args json.RawMessage `json:"args"`
+				} `json:"functionCall"`
 			} `json:"parts"`
 		} `json:"content"`
 		FinishReason string `json:"finishReason"`

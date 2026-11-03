@@ -35,6 +35,12 @@ export type AIMode = 'off' | 'observer' | 'autopilot'
  * because the difference between "no responde" and "no responde todavía" is
  * the whole decision somebody is making here, and it is not guessable from a
  * three-word label.
+ *
+ * Both active positions say that they put appointments in the calendar.
+ * Whether the assistant talks to the patient and whether it writes anything
+ * down are two different promises, and only the first is in the name of the
+ * position — a clinic that chose Observador expecting a silent bystander
+ * would find appointments nobody at the desk typed.
  */
 export const AI_MODE_OPTIONS: { mode: AIMode; label: string; help: string }[] = [
   {
@@ -45,12 +51,12 @@ export const AI_MODE_OPTIONS: { mode: AIMode; label: string; help: string }[] = 
   {
     mode: 'observer',
     label: 'Observador',
-    help: 'El asistente no responde. Solo observa las conversaciones que atiende tu clínica.',
+    help: 'El asistente no responde. Observa las conversaciones que atiende tu clínica y agenda las citas que se acuerdan en ellas.',
   },
   {
     mode: 'autopilot',
     label: 'Piloto automático',
-    help: 'El asistente responde solo, por WhatsApp, a los mensajes recientes de tus pacientes.',
+    help: 'El asistente responde solo, por WhatsApp, a los mensajes recientes de tus pacientes, y agenda las citas que se acuerdan con ellos.',
   },
 ]
 

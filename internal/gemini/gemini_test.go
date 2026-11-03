@@ -98,10 +98,9 @@ Today is 10/28/2026, 12:36:00 PM.
 
 Your job is to help customers arrange appointments through natural conversation.
 Keep responses concise and conversational — this is WhatsApp, not email.
-You cannot create, change or cancel appointments, and nothing you say books one.
 Find out what the customer needs, their name, and the day and time that suits them.
-Once that is settled, repeat it back and tell them a member of staff will be in touch to confirm it.
-Never say or imply that the customer already has an appointment.
+Once that is settled, repeat the day and time back and tell them it is written down and a member of staff will confirm it.
+You cannot confirm, move or cancel an appointment yourself, and you must never tell a customer that theirs is already confirmed.
 Reply in the same language the customer uses.`
 
 func TestSendsTheSystemPromptVerbatim(t *testing.T) {
@@ -153,44 +152,51 @@ func sentInstruction(t *testing.T) string {
 	return text
 }
 
-// Nothing this package sends can book anything: the request carries no tools,
-// the response reader looks only at text, and the only code that ever writes
-// to appointments is the dialog a member of staff fills in. So an
-// instruction telling the model to confirm or book leaves a customer holding
-// a promise that no row anywhere backs — which is what the prompt ported from
-// the TypeScript did.
+// The forbidden list is narrower than it was, and the line it has moved to
+// is the one thing the write path cannot do.
 //
-// The list below is the behaviour under test rather than a copy of the
-// prompt, so it keeps biting as the wording is reworked. The prompt may still
-// say "confirm": the forbidden thing is the model doing the confirming.
+// Until the extraction landed, nothing in this app could create an
+// appointment at all, so every booking claim in the prompt was a promise no
+// row backed. An appointment is now written out of an agreement — pending
+// when the conversation was clear, proposed when it was not — so the model
+// saying something was taken down is true.
+//
+// What is still never true is a confirmation. Nothing the assistant does
+// writes confirmed: only the patient answering, or somebody at the desk,
+// moves an appointment there. So a prompt that has the model declaring an
+// appointment confirmed is promising a state no row of its making will ever
+// hold, and the patient stops watching for the message that would have
+// asked them.
+//
+// The list is the behaviour under test rather than a copy of the prompt, so
+// it keeps biting as the wording is reworked. The prompt may still say
+// "confirm": the forbidden thing is the model doing the confirming.
 func TestNeverTellsTheModelToConfirmAnAppointmentItself(t *testing.T) {
 	prompt := strings.ToLower(sentInstruction(t))
 
 	for _, claim := range []string{
-		"confirm the appointment",
-		"confirm the booking",
-		"book the appointment",
-		"schedule the appointment",
 		"the appointment is confirmed",
-		"the appointment is booked",
 		"your appointment is confirmed",
+		"the booking is confirmed",
+		"consider it confirmed",
+		"confirm the appointment yourself",
 	} {
 		if strings.Contains(prompt, claim) {
-			t.Errorf("the prompt tells the model to %q, but nothing here can create an appointment:\n%s", claim, prompt)
+			t.Errorf("the prompt has the model saying %q, but nothing it does writes a confirmed appointment:\n%s", claim, prompt)
 		}
 	}
 }
 
-// The other half of the same fix. Dropping the booking claim without putting
-// anything in its place would leave a model that happily agrees to a time and
-// then says nothing about who turns it into an appointment, which reads to a
-// customer exactly like being booked.
+// The other half of the same fix. Dropping the confirmation claim without
+// putting anything in its place would leave a model that happily agrees to a
+// time and then says nothing about who confirms it, which reads to a
+// customer exactly like being confirmed.
 func TestTellsTheCustomerThatAPersonWillConfirm(t *testing.T) {
 	prompt := strings.ToLower(sentInstruction(t))
 
 	for _, required := range []string{
-		"cannot create",
-		"member of staff will be in touch to confirm",
+		"cannot confirm, move or cancel",
+		"a member of staff will confirm",
 	} {
 		if !strings.Contains(prompt, required) {
 			t.Errorf("the prompt never says %q, so the model is free to imply it booked the appointment itself:\n%s", required, prompt)

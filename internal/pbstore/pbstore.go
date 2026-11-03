@@ -303,6 +303,78 @@ func (s *WebhookStore) ConversationHistory(_ context.Context, conversationID str
 	return history, nil
 }
 
+// HasAppointmentFromConversation reports whether an appointment already
+// records this conversation as where it came from.
+//
+// An empty conversation id answers false without asking the database. Every
+// appointment booked at the desk carries one, so the query would match the
+// first of those and report that the conversation had already produced an
+// appointment — after which the assistant would never write another for
+// anybody.
+func (s *WebhookStore) HasAppointmentFromConversation(_ context.Context, conversationID string) (bool, error) {
+	if conversationID == "" {
+		return false, nil
+	}
+
+	_, err := s.app.FindFirstRecordByFilter(
+		migrations.AppointmentsCollection,
+		"conversation_id = {:conversationID}",
+		dbx.Params{"conversationID": conversationID},
+	)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return false, nil
+
+	case err != nil:
+		return false, err
+	}
+
+	return true, nil
+}
+
+// CreateAppointment writes a new appointment for a clinic.
+//
+// There is no sibling here that removes one, and the one that changes a
+// status is not reachable from the step that reads conversations — see
+// webhook.AppointmentWriter, which is the interface that step is handed.
+//
+// A second appointment from the same conversation is a no-op rather than an
+// error. The handler checks before it writes, but the check and the write
+// cannot be one operation in Go, and two deliveries of one conversation can
+// be in flight on two servers at once. The unique index is the only thing
+// that can see the other one, and the right answer to losing that race is
+// the appointment that won — not a failed delivery, which would have the
+// router redeliver a message that is already stored.
+func (s *WebhookStore) CreateAppointment(_ context.Context, userID string, appointment webhook.Appointment) error {
+	collection, err := s.app.FindCollectionByNameOrId(migrations.AppointmentsCollection)
+	if err != nil {
+		return err
+	}
+
+	record := core.NewRecord(collection)
+	record.Set("user_id", userID)
+	record.Set("client_name", appointment.ClientName)
+	record.Set("client_phone", appointment.ClientPhone)
+	record.Set("start_time", appointment.StartsAt)
+	record.Set("end_time", appointment.EndsAt)
+	record.Set("notes", appointment.Notes)
+	record.Set(migrations.StatusField, string(appointment.Status))
+	record.Set("created_by", string(appointment.CreatedBy))
+	record.Set(migrations.StatusSetByField, string(appointment.StatusSetBy))
+	record.Set(migrations.StatusSetAtField, appointment.StatusSetAt)
+	record.Set("conversation_id", appointment.ConversationID)
+
+	if err := s.app.Save(record); err != nil {
+		if appointment.ConversationID != "" && IsUniqueViolation(err) {
+			return nil
+		}
+
+		return err
+	}
+
+	return nil
+}
+
 // AppointmentForReminder returns the appointment a sent reminder was about,
 // given Meta's id for that reminder, or "" when this clinic has no reminder
 // with that id.

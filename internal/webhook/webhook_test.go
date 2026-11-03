@@ -61,6 +61,7 @@ type fakeStore struct {
 	accounts      map[string]webhook.Account
 	messages      []storedMessage
 	conversations []conversation
+	appointments  []writtenAppointment
 
 	// reminders maps a sent reminder to the appointment it was about, which
 	// is the join a tap on its buttons is matched through.
@@ -73,10 +74,12 @@ type fakeStore struct {
 
 	// Hooks for the failure cases. Each runs before the real behaviour and a
 	// non-nil error is returned instead of it.
-	failSave          error
-	failHasMessage    error
-	failSetStatus     error
-	onUpsertConversat func()
+	failSave              error
+	failHasMessage        error
+	failSetStatus         error
+	failCreateAppointment error
+	failAppointmentLookup error
+	onUpsertConversat     func()
 }
 
 // reminderKey is the pair a reminder is looked up by. The clinic is part of
@@ -180,6 +183,49 @@ func (s *fakeStore) SaveMessage(_ context.Context, userID string, m webhook.Stor
 	s.messages = append(s.messages, storedMessage{StoredMessage: m, userID: userID})
 
 	return nil
+}
+
+// writtenAppointment is one appointment the handler asked for, including the
+// clinic it was written for, which no field of webhook.Appointment carries.
+type writtenAppointment struct {
+	webhook.Appointment
+	userID string
+}
+
+func (s *fakeStore) HasAppointmentFromConversation(_ context.Context, conversationID string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.failAppointmentLookup != nil {
+		return false, s.failAppointmentLookup
+	}
+	for _, written := range s.appointments {
+		if written.ConversationID == conversationID {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (s *fakeStore) CreateAppointment(_ context.Context, userID string, appointment webhook.Appointment) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.failCreateAppointment != nil {
+		return s.failCreateAppointment
+	}
+	s.appointments = append(s.appointments, writtenAppointment{Appointment: appointment, userID: userID})
+
+	return nil
+}
+
+// written returns the appointments the fake holds, in write order.
+func (s *fakeStore) written() []writtenAppointment {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return append([]writtenAppointment{}, s.appointments...)
 }
 
 func (s *fakeStore) ConversationHistory(_ context.Context, conversationID string) ([]webhook.StoredMessage, error) {
@@ -312,6 +358,11 @@ type harness struct {
 	mu      sync.Mutex
 	sent    []send
 	history [][]webhook.ConversationMessage
+
+	// read is one conversation the handler asked the model to find an
+	// appointment in, which is a different call from the one that writes a
+	// reply and is counted separately.
+	read [][]webhook.ConversationMessage
 }
 
 type options struct {
@@ -319,6 +370,11 @@ type options struct {
 	store         webhook.Store
 	generateReply func(context.Context, []webhook.ConversationMessage, string) (string, error)
 	sendMessage   func(context.Context, string, string, string, string) (string, error)
+
+	// extract stands in for the model reading a conversation. The default
+	// finds no appointment, so only the cases that are about writing one
+	// have to say anything.
+	extract func(context.Context, []webhook.ConversationMessage) (*webhook.ExtractedAppointment, error)
 }
 
 func setup(opts options) *harness {
@@ -343,6 +399,13 @@ func setup(opts options) *harness {
 
 			return fmt.Sprintf("wamid.reply-%d", len(h.sent)), nil
 		},
+		ExtractAppointment: func(_ context.Context, history []webhook.ConversationMessage) (*webhook.ExtractedAppointment, error) {
+			h.mu.Lock()
+			h.read = append(h.read, history)
+			h.mu.Unlock()
+
+			return nil, nil
+		},
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
@@ -360,6 +423,16 @@ func setup(opts options) *harness {
 	}
 	if opts.sendMessage != nil {
 		deps.SendMessage = opts.sendMessage
+	}
+	if opts.extract != nil {
+		extract := opts.extract
+		deps.ExtractAppointment = func(ctx context.Context, history []webhook.ConversationMessage) (*webhook.ExtractedAppointment, error) {
+			h.mu.Lock()
+			h.read = append(h.read, history)
+			h.mu.Unlock()
+
+			return extract(ctx, history)
+		}
 	}
 
 	h.handler = webhook.New(deps)
@@ -380,6 +453,15 @@ func (h *harness) histories() [][]webhook.ConversationMessage {
 	defer h.mu.Unlock()
 
 	return append([][]webhook.ConversationMessage{}, h.history...)
+}
+
+// readings returns one entry per conversation the handler asked the model to
+// find an appointment in.
+func (h *harness) readings() [][]webhook.ConversationMessage {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	return append([][]webhook.ConversationMessage{}, h.read...)
 }
 
 func (h *harness) sentTo() []string {
@@ -459,10 +541,34 @@ func textMessage(id, from, body string, sentAt time.Time) map[string]any {
 	}
 }
 
+// echoMessage is a copy of something the business typed in the WhatsApp
+// Business app, which Meta delivers under a different change field and with
+// the customer named as the recipient rather than the sender.
+func echoMessage(id, to, body string, sentAt time.Time) map[string]any {
+	return map[string]any{
+		"id":        id,
+		"to":        to,
+		"type":      "text",
+		"text":      map[string]any{"body": body},
+		"timestamp": strconv.FormatInt(sentAt.Unix(), 10),
+	}
+}
+
 // messages is a "messages" change carrying the given inbound messages from the
 // default connected number.
 func messages(items ...map[string]any) change {
 	return messagesFrom(phoneNumberID, items...)
+}
+
+// echoes is an "smb_message_echoes" change from the default connected number.
+func echoes(items ...map[string]any) change {
+	return change{
+		"field": "smb_message_echoes",
+		"value": map[string]any{
+			"metadata":       map[string]any{"phone_number_id": phoneNumberID},
+			"message_echoes": items,
+		},
+	}
 }
 
 func messagesFrom(pid string, items ...map[string]any) change {
