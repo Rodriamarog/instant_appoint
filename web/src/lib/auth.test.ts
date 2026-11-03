@@ -64,7 +64,7 @@ test('an unverified account is refused, and the session it opened is cleared aga
   authWithPassword.mockImplementation(sessionFor(false))
 
   await expect(signIn('ana@instantappoint.test', 'devpassword123')).rejects.toThrow(
-    /verify your email/i,
+    /verifica tu correo/i,
   )
   expect(pb.authStore.record).toBeNull()
 })

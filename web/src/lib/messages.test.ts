@@ -151,7 +151,7 @@ test('a send that fails without a readable answer still says something', async (
   )
 
   await expect(sendReply('conv1', 'Hello?')).rejects.toThrow(
-    'could not be sent',
+    'No se pudo enviar el mensaje',
   )
 })
 

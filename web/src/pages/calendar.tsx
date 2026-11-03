@@ -9,8 +9,75 @@ import {
   listAppointmentsBetween,
   type Appointment,
 } from '@/lib/appointments'
+import {
+  MONTHS,
+  MONTHS_SHORT,
+  WEEKDAYS,
+  WEEKDAYS_MIN,
+  WEEKDAYS_SHORT,
+} from '@/lib/dates'
 import { errorMessage } from '@/lib/errors'
 import { isoMillis } from '@/lib/iso-time'
+
+/**
+ * The grid writes its own dates, and it writes them in whatever language
+ * moment is set to.
+ *
+ * Hence a locale defined here out of the app's own word tables rather than an
+ * import of moment/locale/es: the words are already written down once for the
+ * rest of the interface, and the alternative is two lists of month names that
+ * can disagree. LT is what react-big-calendar formats every clock face with,
+ * so pinning it to HH:mm is what keeps the time gutter off a 12-hour clock
+ * the rest of this app does not use.
+ */
+const LOCALE = 'es-instantappoint'
+
+moment.updateLocale(LOCALE, {
+  months: MONTHS,
+  monthsShort: MONTHS_SHORT,
+  weekdays: WEEKDAYS,
+  weekdaysShort: WEEKDAYS_SHORT,
+  weekdaysMin: WEEKDAYS_MIN,
+  // Monday, as a Spanish-language calendar is read.
+  week: { dow: 1, doy: 4 },
+  longDateFormat: {
+    LT: 'HH:mm',
+    LTS: 'HH:mm:ss',
+    L: 'DD/MM/YYYY',
+    LL: 'D [de] MMMM [de] YYYY',
+    LLL: 'D [de] MMMM [de] YYYY HH:mm',
+    LLLL: 'dddd, D [de] MMMM [de] YYYY HH:mm',
+  },
+})
+
+// Stated rather than left to updateLocale's own side effect, which is what
+// currently selects it: the grid reads the global locale at render time, and
+// nothing else in this app sets one.
+moment.locale(LOCALE)
+
+/**
+ * The toolbar's own words. These are the library's, not the dates': no locale
+ * reaches them, so an untranslated calendar keeps an English Today button
+ * above perfectly Spanish dates.
+ */
+const MESSAGES = {
+  date: 'Fecha',
+  time: 'Hora',
+  event: 'Cita',
+  allDay: 'Todo el día',
+  week: 'Semana',
+  work_week: 'Semana laboral',
+  day: 'Día',
+  month: 'Mes',
+  previous: 'Anterior',
+  next: 'Siguiente',
+  yesterday: 'Ayer',
+  tomorrow: 'Mañana',
+  today: 'Hoy',
+  agenda: 'Agenda',
+  noEventsInRange: 'No hay citas en estas fechas.',
+  showMore: (total: number) => `+${total} más`,
+}
 
 const localizer = momentLocalizer(moment)
 
@@ -74,7 +141,7 @@ export function CalendarPage() {
       setError(null)
     } catch (err) {
       setError(
-        errorMessage(err, 'Could not load your appointments.'),
+        errorMessage(err, 'No se pudieron cargar tus citas.'),
       )
     }
   }, [monthKey])
@@ -96,6 +163,8 @@ export function CalendarPage() {
       <div style={{ height: 'calc(100vh - 220px)', minHeight: '32rem' }}>
         <Calendar
           localizer={localizer}
+          messages={MESSAGES}
+          culture={LOCALE}
           events={appointments}
           startAccessor="start"
           endAccessor="end"

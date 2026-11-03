@@ -114,20 +114,24 @@ test('a connected number means no "not connected" warning', async () => {
 
   render(<RemindersPage />)
 
-  expect(await screen.findByText('Upcoming')).toBeDefined()
-  await waitFor(() => expect(screen.queryByText(/WhatsApp not connected/)).toBeNull())
+  expect(await screen.findByText('Próximos')).toBeDefined()
+  await waitFor(() =>
+    expect(screen.queryByText(/WhatsApp no está conectado/)).toBeNull(),
+  )
 })
 
 test('somebody with no connected number is told reminders will not send', async () => {
   render(<RemindersPage />)
 
-  expect(await screen.findByText(/WhatsApp not connected/)).toBeDefined()
+  expect(await screen.findByText(/WhatsApp no está conectado/)).toBeDefined()
 })
 
 test('the sent column says so while nothing has been sent', async () => {
   render(<RemindersPage />)
 
-  expect(await screen.findByText('No reminders sent yet')).toBeDefined()
+  expect(
+    await screen.findByText('Aún no se ha enviado ningún recordatorio'),
+  ).toBeDefined()
 })
 
 test('an appointment with a phone number is listed as a reminder to come', async () => {
@@ -142,7 +146,7 @@ test('an appointment with a phone number is listed as a reminder to come', async
 test('nothing to remind about reads as such rather than as an empty box', async () => {
   render(<RemindersPage />)
 
-  expect(await screen.findByText('No upcoming reminders')).toBeDefined()
+  expect(await screen.findByText('No hay recordatorios próximos')).toBeDefined()
 })
 
 test('a new lead time is written down and changes what is due', async () => {
@@ -153,11 +157,11 @@ test('a new lead time is written down and changes what is due', async () => {
 
   render(<RemindersPage />)
 
-  expect(await screen.findByText('Scheduled')).toBeDefined()
+  expect(await screen.findByText('Programado')).toBeDefined()
 
-  await user.click(screen.getByRole('button', { name: /reminder settings/i }))
-  await user.click(await screen.findByRole('button', { name: '2 hours' }))
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.click(screen.getByRole('button', { name: /ajustes de recordatorios/i }))
+  await user.click(await screen.findByRole('button', { name: '2 horas' }))
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
   await waitFor(() => expect(createSettings).toHaveBeenCalledTimes(1))
   expect(createSettings.mock.calls[0][0]).toMatchObject({
@@ -166,9 +170,9 @@ test('a new lead time is written down and changes what is due', async () => {
   })
 
   // Reopening shows what was saved, not the default it started from.
-  await user.click(screen.getByRole('button', { name: /reminder settings/i }))
+  await user.click(screen.getByRole('button', { name: /ajustes de recordatorios/i }))
   await waitFor(() =>
-    expect(screen.getByRole('button', { name: '2 hours' }).getAttribute('aria-pressed')).toBe(
+    expect(screen.getByRole('button', { name: '2 horas' }).getAttribute('aria-pressed')).toBe(
       'true',
     ),
   )
@@ -179,9 +183,13 @@ test('reminders can be switched off and the choice is saved', async () => {
 
   render(<RemindersPage />)
 
-  await user.click(await screen.findByRole('button', { name: /reminder settings/i }))
-  await user.click(await screen.findByRole('switch', { name: /disable reminders/i }))
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.click(
+    await screen.findByRole('button', { name: /ajustes de recordatorios/i }),
+  )
+  await user.click(
+    await screen.findByRole('switch', { name: /apagar los recordatorios/i }),
+  )
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
   await waitFor(() => expect(createSettings).toHaveBeenCalledTimes(1))
   expect(createSettings.mock.calls[0][0]).toMatchObject({ is_active: false })
@@ -201,7 +209,9 @@ test('a saved lead time is what the page comes back to', async () => {
 
   render(<RemindersPage />)
 
-  await user.click(await screen.findByRole('button', { name: /reminder settings/i }))
+  await user.click(
+    await screen.findByRole('button', { name: /ajustes de recordatorios/i }),
+  )
 
   await waitFor(() =>
     expect(screen.getByRole('button', { name: '30 min' }).getAttribute('aria-pressed')).toBe(
@@ -215,5 +225,5 @@ test('a reminder whose moment has passed is marked due', async () => {
 
   render(<RemindersPage />)
 
-  expect(await screen.findByText('Due')).toBeDefined()
+  expect(await screen.findByText('Por enviar')).toBeDefined()
 })

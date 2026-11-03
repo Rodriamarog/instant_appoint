@@ -95,7 +95,7 @@ export function ReminderSettingsDialog({
         if (current) {
           setTemplates([])
           setTemplatesError(
-            'Could not load your approved templates. Connect a WhatsApp number, or try again.',
+            'No se pudieron cargar tus plantillas aprobadas. Conecta un número de WhatsApp o inténtalo de nuevo.',
           )
         }
       })
@@ -125,7 +125,7 @@ export function ReminderSettingsDialog({
       await onSave(draft)
       onOpenChange(false)
     } catch (err) {
-      setError(errorMessage(err, 'Could not save your settings.'))
+      setError(errorMessage(err, 'No se pudieron guardar tus ajustes.'))
     } finally {
       setIsSaving(false)
     }
@@ -135,20 +135,24 @@ export function ReminderSettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Reminder settings</DialogTitle>
+          <DialogTitle>Ajustes de recordatorios</DialogTitle>
           <DialogDescription>
-            When a reminder goes out, whether it goes out at all, and what carries it.
+            Cuándo sale un recordatorio, si sale, y con qué plantilla.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5 pt-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Enable reminders</span>
+            <span className="text-sm font-medium">Enviar recordatorios</span>
             <button
               type="button"
               role="switch"
               aria-checked={draft.is_active}
-              aria-label={draft.is_active ? 'Disable reminders' : 'Enable reminders'}
+              aria-label={
+                draft.is_active
+                  ? 'Apagar los recordatorios'
+                  : 'Encender los recordatorios'
+              }
               onClick={() => setDraft((d) => ({ ...d, is_active: !d.is_active }))}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-ring ${
                 draft.is_active ? 'bg-primary' : 'bg-muted'
@@ -164,7 +168,7 @@ export function ReminderSettingsDialog({
 
           <fieldset className="space-y-3">
             <legend className="text-sm font-medium">
-              Send the reminder this far ahead
+              Enviar el recordatorio con esta antelación
             </legend>
             <div className="flex flex-wrap gap-2">
               {TIMING_OPTIONS.map((option) => (
@@ -189,13 +193,13 @@ export function ReminderSettingsDialog({
 
           <div className="space-y-2">
             <label htmlFor="reminder-template" className="text-sm font-medium">
-              Approved template
+              Plantilla aprobada
             </label>
 
             {templates === null ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Loading your approved templates...
+                Cargando tus plantillas aprobadas...
               </div>
             ) : (
               <select
@@ -212,7 +216,7 @@ export function ReminderSettingsDialog({
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
               >
                 <option value={templateValue('', draft.template_language)}>
-                  No template chosen
+                  Sin plantilla elegida
                 </option>
                 {draft.template_name !== '' && !chosen && (
                   <option
@@ -236,8 +240,8 @@ export function ReminderSettingsDialog({
 
             {templates !== null && templates.length === 0 && !templatesError && (
               <p className="text-xs text-muted-foreground">
-                You have no approved templates yet. Create one on the Templates page and
-                wait for Meta to approve it.
+                Aún no tienes plantillas aprobadas. Crea una en la página de
+                Plantillas y espera a que Meta la apruebe.
               </p>
             )}
 
@@ -245,22 +249,24 @@ export function ReminderSettingsDialog({
 
             {chosen && values !== REMINDER_PARAMETERS && (
               <p className="text-xs text-destructive">
-                A reminder fills in three values — the name, the date and the time — but
-                this template takes {values}. Meta will refuse the send.
+                Un recordatorio rellena tres valores — el nombre, la fecha y la
+                hora — pero esta plantilla admite {values}. Meta rechazará el
+                envío.
               </p>
             )}
 
             {draft.template_name === '' && (
               <p className="text-xs text-muted-foreground">
-                Reminders will not send until you choose a template. WhatsApp only
-                delivers approved templates outside a conversation.
+                No se enviará ningún recordatorio hasta que elijas una plantilla.
+                Fuera de una conversación, WhatsApp solo entrega plantillas
+                aprobadas.
               </p>
             )}
           </div>
 
           <div className="space-y-2">
             <label htmlFor="reminder-timezone" className="text-sm font-medium">
-              Spell the date and time in
+              Escribir la fecha y la hora en
             </label>
             <select
               id="reminder-timezone"
@@ -286,16 +292,16 @@ export function ReminderSettingsDialog({
               onClick={() => onOpenChange(false)}
               disabled={isSaving}
             >
-              Cancel
+              Cancelar
             </Button>
             <Button onClick={save} disabled={isSaving}>
               {isSaving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
+                  Guardando...
                 </>
               ) : (
-                'Save'
+                'Guardar'
               )}
             </Button>
           </div>

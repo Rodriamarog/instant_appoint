@@ -75,7 +75,8 @@ export function parseSignupMessage(raw: unknown): SignupResult | null {
     const message = msg.data?.error_message
     return {
       kind: 'error',
-      message: typeof message === 'string' ? message : 'Unknown error from Facebook',
+      message:
+        typeof message === 'string' ? message : 'Error desconocido de Facebook',
     }
   }
 

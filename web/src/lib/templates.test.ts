@@ -97,10 +97,10 @@ test('a draft is complete only with a name, category, language and body', () => 
       buttons: [],
     }),
   ).toEqual({
-    name: 'A name is required.',
-    category: 'Choose a category.',
-    language: 'Choose a language.',
-    body: 'A body is required.',
+    name: 'El nombre es obligatorio.',
+    category: 'Elige una categoría.',
+    language: 'Elige un idioma.',
+    body: 'El mensaje es obligatorio.',
   })
 
   expect(

@@ -9,7 +9,8 @@ import { WhatsAppEmbeddedSignup } from '@/components/whatsapp/embedded-signup'
 type LoginResponse = { authResponse?: { code: string } | null }
 type LoginCallback = (response: LoginResponse) => void
 
-const FAILED = 'The signup did not finish, so no number was connected. Try again.'
+const FAILED =
+  'La conexión no terminó, así que no se conectó ningún número. Inténtalo de nuevo.'
 
 /**
  * Stands in for the Facebook SDK, handing the test the callback FB.login was

@@ -49,10 +49,10 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
 /** The lead times the dialog offers, longest-used first in the old UI order. */
 export const TIMING_OPTIONS = [
   { label: '30 min', minutes: 30 },
-  { label: '1 hour', minutes: 60 },
-  { label: '2 hours', minutes: 120 },
-  { label: '12 hours', minutes: 720 },
-  { label: '24 hours', minutes: 1440 },
+  { label: '1 hora', minutes: 60 },
+  { label: '2 horas', minutes: 120 },
+  { label: '12 horas', minutes: 720 },
+  { label: '24 horas', minutes: 1440 },
 ]
 
 /**
@@ -150,7 +150,7 @@ export async function saveBusinessSettings(
 
   const owner = pb.authStore.record?.id
   if (!owner) {
-    throw new Error('Your session has expired. Sign in again to save this.')
+    throw new Error('Tu sesión expiró. Inicia sesión otra vez para guardar esto.')
   }
 
   return pb.collection(COLLECTION).create<BusinessSettings>({

@@ -1,4 +1,5 @@
 import { call } from '@/lib/api'
+import { spellTime } from '@/lib/dates'
 import { liveFeed, pollingFeed, type Feed } from '@/lib/feed'
 import { pb } from '@/lib/pocketbase'
 
@@ -177,7 +178,7 @@ export async function sendReply(
       method: 'POST',
       body: JSON.stringify({ conversation_id: conversationId, message: text }),
     },
-    'The message could not be sent. Please try again.',
+    'No se pudo enviar el mensaje. Inténtalo de nuevo.',
   )
 }
 
@@ -196,7 +197,14 @@ export function withMessage(thread: Message[], message: Message): Message[] {
   return merged.sort((a, b) => a.sent_at.localeCompare(b.sent_at))
 }
 
-/** The time a message was sent, in the viewer's own zone. */
+/**
+ * The time a message was sent, in the viewer's own zone.
+ *
+ * The clock comes from lib/dates rather than toLocaleTimeString, which reads
+ * the *browser's* locale: a machine left on en-US printed "03:30 PM" into a
+ * Spanish thread, and a thread is the one place where two timestamps have to
+ * be comparable at a glance.
+ */
 export function formatTime(iso: string): string {
   if (!iso) {
     return ''
@@ -207,5 +215,5 @@ export function formatTime(iso: string): string {
     return ''
   }
 
-  return instant.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return spellTime(instant)
 }

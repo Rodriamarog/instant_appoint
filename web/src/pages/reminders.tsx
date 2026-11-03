@@ -18,22 +18,10 @@ import {
   saveBusinessSettings,
   type BusinessSettings,
 } from '@/lib/business-settings'
+import { spellDateTime } from '@/lib/dates'
 import { listSentReminders, type Message } from '@/lib/messages'
 import { listUpcomingReminders, type UpcomingReminder } from '@/lib/reminders'
 import { listConnectedAccounts } from '@/lib/whatsapp-accounts'
-
-/** A stored instant, in the viewer's own zone and words. */
-function formatDateTime(instant: Date) {
-  return (
-    instant.toLocaleDateString(undefined, {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    }) +
-    ' at ' +
-    instant.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-  )
-}
 
 function Pill({ tone, children }: { tone: 'due' | 'scheduled' | 'sent'; children: string }) {
   const tones = {
@@ -96,7 +84,7 @@ export function RemindersPage() {
         // would have shown anyway. Saving from here would overwrite a row
         // that may exist, so say so rather than pretend.
         setSettings(DEFAULT_SETTINGS)
-        setError('Could not load your reminder settings.')
+        setError('No se pudieron cargar tus ajustes de recordatorios.')
       })
   }, [])
 
@@ -132,7 +120,7 @@ export function RemindersPage() {
       .catch(() => {
         if (current) {
           setUpcoming([])
-          setError('Could not load your upcoming reminders.')
+          setError('No se pudieron cargar tus próximos recordatorios.')
         }
       })
 
@@ -158,18 +146,18 @@ export function RemindersPage() {
     <section className="space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-heading text-2xl font-semibold">Reminders</h1>
+          <h1 className="font-heading text-2xl font-semibold">Recordatorios</h1>
           <p className="text-muted-foreground">
-            A WhatsApp reminder goes out{' '}
+            Sale un recordatorio por WhatsApp{' '}
             {settings.is_active
-              ? 'before every appointment that has a phone number.'
-              : 'before every appointment — once you switch reminders back on.'}
+              ? 'antes de cada cita que tenga un número de teléfono.'
+              : 'antes de cada cita, en cuanto vuelvas a encender los recordatorios.'}
           </p>
         </div>
         <button
           type="button"
           onClick={() => setDialogOpen(true)}
-          aria-label="Reminder settings"
+          aria-label="Ajustes de recordatorios"
           className="mt-1 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <Settings className="h-5 w-5" />
@@ -182,8 +170,9 @@ export function RemindersPage() {
         <div className="flex items-start gap-3 rounded-lg bg-amber-50 p-4 ring-1 ring-amber-200">
           <BellOff className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
           <p className="text-sm text-amber-800">
-            <strong>WhatsApp not connected.</strong> Reminders will not send until you
-            connect a WhatsApp Business number on the WhatsApp page.
+            <strong>WhatsApp no está conectado.</strong> No se enviará ningún
+            recordatorio hasta que conectes un número de WhatsApp Business en la
+            página de WhatsApp.
           </p>
         </div>
       )}
@@ -192,7 +181,8 @@ export function RemindersPage() {
         <div className="flex items-start gap-3 rounded-lg bg-muted p-4 ring-1 ring-border">
           <BellOff className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
           <p className="text-sm">
-            <strong>Reminders are switched off.</strong> Nothing below will be sent.
+            <strong>Los recordatorios están apagados.</strong> No se enviará nada
+            de lo que hay abajo.
           </p>
         </div>
       )}
@@ -200,7 +190,7 @@ export function RemindersPage() {
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Upcoming</CardTitle>
+            <CardTitle>Próximos</CardTitle>
             {upcoming !== null && <Count>{upcoming.length}</Count>}
           </CardHeader>
           <CardContent>
@@ -211,8 +201,8 @@ export function RemindersPage() {
             ) : upcoming.length === 0 ? (
               <Empty
                 icon={Bell}
-                title="No upcoming reminders"
-                hint="Appointments with a phone number will appear here."
+                title="No hay recordatorios próximos"
+                hint="Aquí aparecerán las citas que tengan un número de teléfono."
               />
             ) : (
               <ul className="space-y-2">
@@ -230,19 +220,19 @@ export function RemindersPage() {
                       <div className="flex items-center justify-between gap-2">
                         <p className="truncate text-sm font-medium">{event.client_name}</p>
                         {isDue ? (
-                          <Pill tone="due">Due</Pill>
+                          <Pill tone="due">Por enviar</Pill>
                         ) : (
-                          <Pill tone="scheduled">Scheduled</Pill>
+                          <Pill tone="scheduled">Programado</Pill>
                         )}
                       </div>
                       <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3 shrink-0" />
-                          {formatDateTime(new Date(event.start_time))}
+                          {spellDateTime(new Date(event.start_time))}
                         </span>
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3 shrink-0" />
-                          Reminder: {formatDateTime(reminderAt)}
+                          Recordatorio: {spellDateTime(reminderAt)}
                         </span>
                         <span className="flex items-center gap-1">
                           <Phone className="h-3 w-3 shrink-0" />+{event.client_phone}
@@ -258,15 +248,15 @@ export function RemindersPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Sent</CardTitle>
+            <CardTitle>Enviados</CardTitle>
             <Count>{sent.length}</Count>
           </CardHeader>
           <CardContent>
             {sent.length === 0 ? (
               <Empty
                 icon={MessageSquare}
-                title="No reminders sent yet"
-                hint="Sent reminders will appear here."
+                title="Aún no se ha enviado ningún recordatorio"
+                hint="Aquí aparecerán los recordatorios que ya salieron."
               />
             ) : (
               <ul className="max-h-96 space-y-2 overflow-y-auto">
@@ -281,14 +271,14 @@ export function RemindersPage() {
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-medium">+{message.to_number}</p>
-                        <Pill tone="sent">Sent</Pill>
+                        <Pill tone="sent">Enviado</Pill>
                       </div>
                       <p className="line-clamp-2 text-xs text-muted-foreground">
                         {message.message_content}
                       </p>
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Clock className="h-3 w-3 shrink-0" />
-                        {formatDateTime(new Date(message.sent_at))}
+                        {spellDateTime(new Date(message.sent_at))}
                       </span>
                     </div>
                   </li>

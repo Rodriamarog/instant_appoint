@@ -34,7 +34,7 @@ export function RegisterPage() {
     setSuccess('')
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match')
+      setError('Las contraseñas no coinciden')
       setIsLoading(false)
       return
     }
@@ -49,8 +49,8 @@ export function RegisterPage() {
 
       setSuccess(
         verificationSent
-          ? 'Account created! Please check your email and click the verification link to activate your account.'
-          : 'Account created, but the verification email could not be sent. Ask an administrator to verify the account.',
+          ? '¡Cuenta creada! Revisa tu correo y abre el enlace de verificación para activarla.'
+          : 'La cuenta se creó, pero no se pudo enviar el correo de verificación. Pide a un administrador que la verifique.',
       )
 
       // Clear form
@@ -60,7 +60,7 @@ export function RegisterPage() {
       setName('')
       setBusinessName('')
     } catch (err) {
-      setError(errorMessage(err, 'Failed to create account'))
+      setError(errorMessage(err, 'No se pudo crear la cuenta'))
     } finally {
       setIsLoading(false)
     }
@@ -74,7 +74,7 @@ export function RegisterPage() {
             InstantAppoint
           </CardTitle>
           <CardDescription className="text-center">
-            Create your account to get started
+            Crea tu cuenta para empezar
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleRegister}>
@@ -98,13 +98,13 @@ export function RegisterPage() {
 
             <div className="space-y-2">
               <label htmlFor="name" className="text-sm font-medium">
-                Your Full Name
+                Tu nombre completo
               </label>
               <Input
                 id="name"
                 name="name"
                 type="text"
-                placeholder="e.g. John Smith"
+                placeholder="p. ej. Juan Pérez"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -113,13 +113,13 @@ export function RegisterPage() {
 
             <div className="space-y-2">
               <label htmlFor="businessName" className="text-sm font-medium">
-                Business Name
+                Nombre del negocio
               </label>
               <Input
                 id="businessName"
                 name="businessName"
                 type="text"
-                placeholder="e.g. Smith Dental Clinic"
+                placeholder="p. ej. Clínica Dental Pérez"
                 value={businessName}
                 onChange={(e) => setBusinessName(e.target.value)}
               />
@@ -127,13 +127,13 @@ export function RegisterPage() {
 
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
-                Email
+                Correo electrónico
               </label>
               <Input
                 id="email"
                 name="email"
                 type="email"
-                placeholder="Enter your email"
+                placeholder="Escribe tu correo"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -142,13 +142,13 @@ export function RegisterPage() {
 
             <div className="space-y-2">
               <label htmlFor="password" className="text-sm font-medium">
-                Password
+                Contraseña
               </label>
               <Input
                 id="password"
                 name="password"
                 type="password"
-                placeholder="Enter your password"
+                placeholder="Escribe tu contraseña"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -158,13 +158,13 @@ export function RegisterPage() {
 
             <div className="space-y-2">
               <label htmlFor="confirmPassword" className="text-sm font-medium">
-                Confirm Password
+                Confirmar contraseña
               </label>
               <Input
                 id="confirmPassword"
                 name="confirmPassword"
                 type="password"
-                placeholder="Confirm your password"
+                placeholder="Repite tu contraseña"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
@@ -175,13 +175,13 @@ export function RegisterPage() {
 
           <CardFooter className="flex flex-col space-y-4">
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Creating account...' : 'Sign Up'}
+              {isLoading ? 'Creando cuenta...' : 'Crear cuenta'}
             </Button>
 
             <p className="text-sm text-center text-gray-600">
-              Already have an account?{' '}
+              ¿Ya tienes cuenta?{' '}
               <Link to="/login" className="text-blue-600 hover:underline">
-                Sign in
+                Inicia sesión
               </Link>
             </p>
           </CardFooter>

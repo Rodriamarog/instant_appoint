@@ -82,11 +82,11 @@ test('an approved template can be chosen and is saved with its language', async 
   const user = userEvent.setup()
   show()
 
-  const picker = await screen.findByLabelText('Approved template')
+  const picker = await screen.findByLabelText('Plantilla aprobada')
   // An English template, so the language has to travel with the name rather
   // than being left at the Spanish default: Meta refuses the wrong pair.
   await user.selectOptions(picker, 'short_reminder (en_US)')
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
   await waitFor(() =>
     expect(onSave).toHaveBeenCalledWith(
@@ -101,7 +101,7 @@ test('an approved template can be chosen and is saved with its language', async 
 test('a template Meta has not approved is not offered', async () => {
   show()
 
-  await screen.findByLabelText('Approved template')
+  await screen.findByLabelText('Plantilla aprobada')
   expect(screen.queryByRole('option', { name: /not_yet_approved/ })).toBeNull()
   expect(screen.getByRole('option', { name: /appointment_reminder/ })).toBeDefined()
 })
@@ -110,7 +110,7 @@ test('nothing chosen yet says so rather than looking configured', async () => {
   show({ template_name: '' })
 
   expect(
-    await screen.findByText(/Reminders will not send until you choose a template/),
+    await screen.findByText(/No se enviará ningún recordatorio hasta que elijas una plantilla/),
   ).toBeDefined()
 })
 
@@ -126,19 +126,19 @@ test('a template that does not take three values is called out', async () => {
   const user = userEvent.setup()
   show()
 
-  const picker = await screen.findByLabelText('Approved template')
+  const picker = await screen.findByLabelText('Plantilla aprobada')
   await user.selectOptions(picker, 'short_reminder (en_US)')
 
   // A reminder always sends the name, the date and the time, so a two-value
   // template is a send Meta will refuse.
-  expect(await screen.findByText(/this template takes 2/)).toBeDefined()
+  expect(await screen.findByText(/esta plantilla admite 2/)).toBeDefined()
 })
 
 test('an account with no approved templates is told where to make one', async () => {
   stubTemplates([pending])
   show()
 
-  expect(await screen.findByText(/no approved templates yet/)).toBeDefined()
+  expect(await screen.findByText(/no tienes plantillas aprobadas/)).toBeDefined()
 })
 
 test('a templates call that fails leaves the rest of the dialog usable', async () => {
@@ -146,10 +146,10 @@ test('a templates call that fails leaves the rest of the dialog usable', async (
   stubTemplates([], false)
   show()
 
-  expect(await screen.findByText(/Could not load your approved templates/)).toBeDefined()
+  expect(await screen.findByText(/No se pudieron cargar tus plantillas aprobadas/)).toBeDefined()
 
   await user.click(screen.getByRole('button', { name: '30 min' }))
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
   await waitFor(() =>
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ timing_minutes: 30 })),
@@ -160,7 +160,7 @@ test('a template already saved is kept even when the list cannot be read', async
   stubTemplates([], false)
   show({ template_name: 'appointment_reminder', template_language: 'es' })
 
-  const picker = await screen.findByLabelText('Approved template')
+  const picker = await screen.findByLabelText('Plantilla aprobada')
   expect((picker as HTMLSelectElement).selectedOptions[0].textContent).toContain(
     'appointment_reminder',
   )
@@ -170,9 +170,9 @@ test('the zone the date and time are spelled in can be chosen', async () => {
   const user = userEvent.setup()
   show()
 
-  const picker = await screen.findByLabelText('Spell the date and time in')
+  const picker = await screen.findByLabelText('Escribir la fecha y la hora en')
   await user.selectOptions(picker, 'America/Mexico City')
-  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
   await waitFor(() =>
     expect(onSave).toHaveBeenCalledWith(
@@ -184,6 +184,6 @@ test('the zone the date and time are spelled in can be chosen', async () => {
 test('a saved zone that is not one of the usual ones is kept', async () => {
   show({ timezone: 'Europe/Madrid' })
 
-  const picker = await screen.findByLabelText('Spell the date and time in')
+  const picker = await screen.findByLabelText('Escribir la fecha y la hora en')
   expect((picker as HTMLSelectElement).value).toBe('Europe/Madrid')
 })
