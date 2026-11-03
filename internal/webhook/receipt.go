@@ -36,14 +36,16 @@ const (
 //
 // The dates inside it come from internal/reminders rather than from a table
 // here, so the receipt and the reminder that follows it name the same day in
-// the same words. What is here is only the sentence around them and the two
-// button titles.
+// the same words. The button titles come from quickReplyWords in tap.go for
+// a sharper version of the same reason: the table that reads a tap back has
+// to be the table that titled the button, or a title changed here is a
+// patient's answer this app can no longer place. What is left here is only
+// the sentence around the dates.
 type receiptWording struct {
 	// body takes the date and then the time, in that order.
 	body string
 
-	confirm string
-	cancel  string
+	buttons quickReplyTitles
 }
 
 // How a receipt is written, per Meta template variant.
@@ -57,13 +59,11 @@ type receiptWording struct {
 var receiptWordings = map[string]receiptWording{
 	spanish: {
 		body:    "Tu cita quedó registrada para el %s a las %s. ¿Es correcto?",
-		confirm: "Confirmar",
-		cancel:  "Cancelar",
+		buttons: quickReplyWords[spanish],
 	},
 	english: {
 		body:    "Your appointment is booked for %s at %s. Is that right?",
-		confirm: "Confirm",
-		cancel:  "Cancel",
+		buttons: quickReplyWords[english],
 	},
 }
 
@@ -107,8 +107,8 @@ func (h *handler) sendReceipt(
 		// Confirm first and cancel second, which is the order every quick
 		// reply this app offers is in. The order is not decoration: it is
 		// what the two buttons mean, and a tap is matched back to it.
-		{ID: confirmButtonID, Title: wording.confirm},
-		{ID: cancelButtonID, Title: wording.cancel},
+		{ID: confirmButtonID, Title: wording.buttons.confirm},
+		{ID: cancelButtonID, Title: wording.buttons.cancel},
 	}
 
 	messageID, err := h.deps.SendButtons(ctx, phoneNumberID, account.AccessToken, appointment.ClientPhone, body, buttons)
@@ -142,13 +142,26 @@ func (h *handler) sendReceipt(
 	return nil
 }
 
-// receiptIsOwed says whether this appointment should be checked with the
-// patient, and why not when it should not.
+// suppressionReason says why this appointment must not be checked with the
+// patient, and is empty when nothing stops it.
 //
 // The reason is returned rather than logged here so that the caller logs one
 // line with the appointment on it, and so that this stays a question with no
 // side effects.
-func (h *handler) receiptIsOwed(account Account, appointment Appointment) string {
+func (h *handler) suppressionReason(account Account, appointment Appointment) string {
+	// Nothing can reach this today: the one caller is handed the
+	// appointment recordAppointment has just written, and that one is
+	// always the assistant's. It is here because of what the message says.
+	// A receipt tells the patient what the assistant wrote down out of the
+	// conversation they were just having; sent about a booking a member of
+	// staff made at the desk or over the phone, it asks them to confirm
+	// something no conversation of theirs led to. A second caller is all
+	// that stands between here and that, and it would arrive silently —
+	// this line turns it into a refusal somebody can read in the log.
+	if appointment.CreatedBy != appointments.Assistant {
+		return "the assistant did not write this appointment"
+	}
+
 	if appointment.Status == appointments.Proposed {
 		// Nothing has been agreed. A proposal is a note for a member of
 		// staff to read, and asking the patient to confirm something the
@@ -166,7 +179,7 @@ func (h *handler) receiptIsOwed(account Account, appointment Appointment) string
 		return "the appointment's start time cannot be read"
 	}
 
-	// The suppression rule. An appointment booked inside its own lead time
+	// The lead-time rule. An appointment booked inside its own lead time
 	// has its reminder fall due the moment it exists, so the patient would
 	// get a receipt and then a near-identical reminder seconds later, both
 	// asking them to confirm the same thing. When the reminder is already

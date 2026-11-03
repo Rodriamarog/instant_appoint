@@ -165,7 +165,7 @@ type Account struct {
 
 	// ReminderLeadTime is how far before an appointment that reminder falls
 	// due. An appointment booked inside it has its reminder due already,
-	// which is what suppresses the receipt — see handler.receiptIsOwed.
+	// which is what suppresses the receipt — see handler.suppressionReason.
 	ReminderLeadTime time.Duration
 }
 
@@ -653,7 +653,7 @@ func (h *handler) checkWithThePatient(
 	phoneNumberID, conversationID string,
 	created createdAppointment,
 ) {
-	if reason := h.receiptIsOwed(account, created.Appointment); reason != "" {
+	if reason := h.suppressionReason(account, created.Appointment); reason != "" {
 		h.deps.Logger.Info("no creation receipt: "+reason, "appointment_id", created.ID)
 
 		return

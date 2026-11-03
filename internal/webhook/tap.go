@@ -28,6 +28,32 @@ func (a TapAction) Status() appointments.Status {
 	return appointments.Confirmed
 }
 
+// quickReplyTitles is the pair of button titles one language's patients
+// read, in the order the two buttons are always offered in: Confirm first,
+// Cancel second.
+type quickReplyTitles struct {
+	confirm string
+	cancel  string
+}
+
+// Every title this app can put under a message, by the Meta template
+// variant it is written in.
+//
+// It is the one owner of these four words. A creation receipt titles its
+// buttons from here too — see receiptWordings — because a title this app
+// shows is a title a tap arrives carrying, and a word written on a button
+// in one place and matched in another is a word that can be changed in only
+// one of them. The tap that follows would then be unrecognisable, which is
+// a patient's cancellation doing nothing at all.
+//
+// It mirrors QUICK_REPLIES in web/src/lib/templates.ts, which is what the
+// create form offers. pt_BR is absent only because it offers the same two
+// Spanish words; a variant with words of its own has to be added here.
+var quickReplyWords = map[string]quickReplyTitles{
+	spanish: {confirm: "Confirmar", cancel: "Cancelar"},
+	english: {confirm: "Confirm", cancel: "Cancel"},
+}
+
 // quickReplies is every quick-reply label this app can have put under a
 // reminder, paired with the position it sits in — index 0 Confirm, index 1
 // Cancel.
@@ -40,32 +66,35 @@ func (a TapAction) Status() appointments.Status {
 // legitimately arrive are the ones this app itself offers when a template is
 // created.
 //
-// That is why this is a table of every language rather than a comparison
-// against two Spanish words. Each appointment carries the variant its
-// reminder is written in, so one clinic sends Spanish to one patient and
-// English to the next, and both sets of taps arrive here. Matching only the
-// Spanish pair would read half of them as unrecognised and silently leave
-// every English patient's appointment untouched.
-//
-// It mirrors QUICK_REPLIES in web/src/lib/templates.ts, which is what the
-// create form offers. A label added there and not here does not fail
-// anything: it produces a tap nobody can act on — recorded and surfaced by
-// the handler, which is the whole reason that path exists.
-var quickReplies = map[string]TapAction{
-	"Confirmar": TapConfirm,
-	"Cancelar":  TapCancel,
-	"Confirm":   TapConfirm,
-	"Cancel":    TapCancel,
+// That is why this covers every language rather than comparing against two
+// Spanish words. Each appointment carries the variant its reminder is
+// written in, so one clinic sends Spanish to one patient and English to the
+// next, and both sets of taps arrive here. Matching only the Spanish pair
+// would read half of them as unrecognised and silently leave every English
+// patient's appointment untouched. Building it from quickReplyWords is what
+// keeps that true without anybody remembering to: a language this app can
+// write a button in is a language it can read a tap back in.
+var quickReplies = resolvableTaps()
 
-	// The two ids this app sets on a creation receipt's buttons, which are
-	// not labels and are never shown. A receipt is a free-form message
-	// rather than a template, so unlike a reminder it can carry a payload
-	// this app chose — and a payload is the one part of a tap that does not
-	// change with the language the patient reads. The titles above are
-	// still matched, because the id is what Meta returns and not what it
-	// promises to return.
-	confirmButtonID: TapConfirm,
-	cancelButtonID:  TapCancel,
+func resolvableTaps() map[string]TapAction {
+	table := map[string]TapAction{
+		// The two ids this app sets on a creation receipt's buttons, which
+		// are not labels and are never shown. A receipt is a free-form
+		// message rather than a template, so unlike a reminder it can carry
+		// a payload this app chose — and a payload is the one part of a tap
+		// that does not change with the language the patient reads. The
+		// titles are still matched below, because the id is what Meta
+		// returns and not what it promises to return.
+		confirmButtonID: TapConfirm,
+		cancelButtonID:  TapCancel,
+	}
+
+	for _, words := range quickReplyWords {
+		table[words.confirm] = TapConfirm
+		table[words.cancel] = TapCancel
+	}
+
+	return table
 }
 
 // resolveTap names the action a tap asked for, reporting false when it
