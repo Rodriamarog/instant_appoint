@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, expect, test } from 'vitest'
 
@@ -56,4 +56,25 @@ test('a tab is not current for a path that merely starts with its own', () => {
   expect(
     within(bar).getByRole('link', { name: 'Inicio' }).getAttribute('aria-current'),
   ).toBeNull()
+})
+
+/**
+ * The dark-mode switch flips the class globals.css keys off, and remembers
+ * the choice for the next visit.
+ */
+test('the theme switch toggles dark mode and remembers it', async () => {
+  localStorage.removeItem('tema')
+  document.documentElement.classList.remove('dark')
+  nav('/inicio')
+
+  const toDark = screen.getByRole('button', { name: 'Cambiar a modo oscuro' })
+  fireEvent.click(toDark)
+
+  expect(document.documentElement.classList.contains('dark')).toBe(true)
+  expect(localStorage.getItem('tema')).toBe('dark')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Cambiar a modo claro' }))
+
+  expect(document.documentElement.classList.contains('dark')).toBe(false)
+  expect(localStorage.getItem('tema')).toBe('light')
 })

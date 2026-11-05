@@ -129,7 +129,7 @@ function Can({ yes, children }: { yes: boolean; children: React.ReactNode }) {
     <span className={cn('flex items-center gap-2', yes ? 'text-foreground' : 'text-muted-foreground')}>
       <Mark
         aria-label={yes ? 'Sí' : 'No'}
-        className={cn('size-3.5 shrink-0', yes ? 'text-emerald-600' : 'text-muted-foreground/60')}
+        className={cn('size-3.5 shrink-0', yes ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground/60')}
       />
       <span className={cn(!yes && 'line-through decoration-muted-foreground/40')}>{children}</span>
     </span>

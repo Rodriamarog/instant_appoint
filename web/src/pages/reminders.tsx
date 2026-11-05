@@ -30,9 +30,9 @@ import { listConnectedAccounts } from '@/lib/whatsapp-accounts'
 
 function Pill({ tone, children }: { tone: 'due' | 'scheduled' | 'sent'; children: string }) {
   const tones = {
-    due: 'bg-amber-100 text-amber-800 ring-amber-200',
+    due: 'bg-amber-100 text-amber-800 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30',
     scheduled: 'text-muted-foreground ring-border',
-    sent: 'bg-green-100 text-green-800 ring-green-200',
+    sent: 'bg-green-100 text-green-800 ring-green-200 dark:bg-green-500/15 dark:text-green-300 dark:ring-green-500/30',
   }
 
   return (
@@ -180,9 +180,9 @@ export function RemindersPage() {
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       {connected === false && (
-        <div className="flex items-start gap-3 rounded-lg bg-amber-50 p-4 ring-1 ring-amber-200">
-          <BellOff className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-          <p className="text-sm text-amber-800">
+        <div className="flex items-start gap-3 rounded-lg bg-amber-50 p-4 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:ring-amber-500/30">
+          <BellOff className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <p className="text-sm text-amber-800 dark:text-amber-200">
             <strong>WhatsApp no está conectado.</strong> No se enviará ningún
             recordatorio hasta que conectes un número de WhatsApp Business en la
             página de WhatsApp.
@@ -197,9 +197,9 @@ export function RemindersPage() {
         is worse than never having offered the button.
       */}
       {unmatched.length > 0 && (
-        <div className="flex items-start gap-3 rounded-lg bg-amber-50 p-4 ring-1 ring-amber-200">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-          <div className="min-w-0 space-y-1 text-sm text-amber-800">
+        <div className="flex items-start gap-3 rounded-lg bg-amber-50 p-4 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:ring-amber-500/30">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="min-w-0 space-y-1 text-sm text-amber-800 dark:text-amber-200">
             <p>
               <strong>Respuestas sin vincular.</strong> No pudimos saber a qué
               cita se referían. Cámbialas a mano en el calendario.
@@ -304,8 +304,8 @@ export function RemindersPage() {
                     key={message.id}
                     className="flex items-start gap-3 rounded-lg p-3 ring-1 ring-border"
                   >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-green-50">
-                      <Phone className="h-4 w-4 text-green-600" />
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-green-50 dark:bg-green-500/15">
+                      <Phone className="h-4 w-4 text-green-600 dark:text-green-400" />
                     </div>
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex items-center justify-between gap-2">

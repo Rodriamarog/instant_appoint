@@ -5,6 +5,17 @@
     <link rel="icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>InstantAppoint</title>
+    <!-- Mirrors src/lib/theme.ts, before first paint, so dark mode never flashes white. -->
+    <script>
+      try {
+        var t = localStorage.getItem('tema')
+        if (t !== 'light' && t !== 'dark') {
+          t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        }
+        if (t === 'dark') document.documentElement.classList.add('dark')
+        document.documentElement.style.colorScheme = t
+      } catch (e) {}
+    </script>
     <meta
       name="description"
       content="Agenda de citas con recordatorios automáticos por WhatsApp."

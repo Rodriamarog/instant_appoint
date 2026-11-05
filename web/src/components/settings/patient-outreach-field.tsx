@@ -70,7 +70,7 @@ export function PatientOutreachField({
       </div>
 
       {assistantOff && (
-        <p className="text-xs font-medium text-amber-700">
+        <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
           El asistente está apagado, así que por ahora no se manda nada. Esto aplica en cuanto
           lo enciendas.
         </p>

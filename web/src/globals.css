@@ -109,39 +109,46 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /*
+   * The same palette at night: the navy ink becomes the paper, and the blue
+   * is lifted a step so it still reads against it.
+   *
+   *   paper #0a0f22   raised #111833   surface #161e3b   line #252f52
+   *   ink #e8ecf8     muted #949fc0    blue #6b8cff      tint #1a2452
+   */
+  --background: #0a0f22;
+  --foreground: #e8ecf8;
+  --card: #111833;
+  --card-foreground: #e8ecf8;
+  --popover: #111833;
+  --popover-foreground: #e8ecf8;
+  --primary: #e8ecf8;
+  --primary-foreground: #0a0f22;
   --brand: #6b8cff;
   --brand-foreground: #ffffff;
+  --secondary: #161e3b;
+  --secondary-foreground: #e8ecf8;
+  --muted: #161e3b;
+  --muted-foreground: #949fc0;
+  --accent: #1a2452;
+  --accent-foreground: #b4c3ff;
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: #252f52;
+  --input: #2c375e;
+  --ring: #6b8cff;
+  --chart-1: #6b8cff;
+  --chart-2: #e8ecf8;
+  --chart-3: #5d6890;
+  --chart-4: #949fc0;
+  --chart-5: #1a2452;
+  --sidebar: #111833;
+  --sidebar-foreground: #e8ecf8;
+  --sidebar-primary: #6b8cff;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1a2452;
+  --sidebar-accent-foreground: #b4c3ff;
+  --sidebar-border: #252f52;
+  --sidebar-ring: #6b8cff;
 }
 
 /* react-big-calendar overrides, in the landing page's ink and blue. */
@@ -167,6 +174,9 @@
 .rbc-event.rbc-selected {
   background-color: var(--brand) !important;
 }
+/* --primary turns light at night, which would put white text on it. */
+.dark .rbc-event { background-color: #2f3d78 !important; }
+.dark .rbc-event:hover, .dark .rbc-event.rbc-selected { background-color: var(--brand) !important; }
 .rbc-event-label,
 .rbc-event-content { color: white !important; font-weight: 500 !important; }
 .rbc-day-bg { cursor: pointer !important; }

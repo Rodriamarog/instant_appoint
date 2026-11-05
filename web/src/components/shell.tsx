@@ -1,8 +1,9 @@
-import { LogOut } from 'lucide-react'
+import { LogOut, Moon, Sun } from 'lucide-react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 
 import { Logo } from '@/components/logo'
 import { signOut } from '@/lib/auth'
+import { useTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 
 /**
@@ -39,6 +40,7 @@ function isCurrent(pathname: string, to: string): boolean {
 export function Shell() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
+  const { theme, toggle } = useTheme()
 
   const handleSignOut = () => {
     signOut()
@@ -72,8 +74,17 @@ export function Shell() {
           </div>
           <button
             type="button"
+            onClick={toggle}
+            aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+            title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
+            className="ml-auto grid size-9 cursor-pointer place-items-center rounded-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          </button>
+          <button
+            type="button"
             onClick={handleSignOut}
-            className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-[10px] px-3 py-2 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="inline-flex cursor-pointer items-center gap-2 rounded-[10px] px-3 py-2 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <LogOut className="size-4" />
             <span className="sr-only sm:not-sr-only">Cerrar sesión</span>

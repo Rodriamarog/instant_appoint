@@ -46,13 +46,13 @@ function suggestedButtons(language: string): string[] {
 /** Meta's approval states, as a colour. Anything unexpected reads as a problem. */
 function statusClass(status: string) {
   if (status === 'APPROVED') {
-    return 'bg-green-100 text-green-700'
+    return 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300'
   }
   if (status === 'PENDING' || status === 'IN_APPEAL') {
     return 'bg-muted text-muted-foreground'
   }
 
-  return 'bg-red-100 text-red-600'
+  return 'bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-300'
 }
 
 export function TemplatesPage() {
@@ -499,7 +499,7 @@ function TemplateRow({ template }: { template: MessageTemplate }) {
 
       {feedback && (
         <p
-          className={`text-sm ${feedback.ok ? 'text-green-600' : 'text-destructive'}`}
+          className={`text-sm ${feedback.ok ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}
         >
           {feedback.text}
         </p>

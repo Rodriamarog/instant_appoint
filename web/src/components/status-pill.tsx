@@ -12,7 +12,7 @@ export type PillTone = 'settled' | 'waiting' | 'unsure' | 'off'
 const TONES: Record<PillTone, string> = {
   settled: 'bg-accent text-accent-foreground',
   waiting: 'bg-muted text-muted-foreground ring-1 ring-inset ring-border',
-  unsure: 'border border-dashed border-[#cfd6e6] bg-background text-muted-foreground',
+  unsure: 'border border-dashed border-[#cfd6e6] dark:border-[#3a4670] bg-background text-muted-foreground',
   off: 'bg-muted text-muted-foreground/80',
 }
 

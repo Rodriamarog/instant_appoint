@@ -107,7 +107,7 @@ export function DaySchedule({
       {rows.length === 0 ? (
         // Said out loud, because a blank panel and a load that quietly
         // failed look the same, and one of the two means go home.
-        <p className="rounded-[14px] border border-dashed border-[#cfd6e6] bg-muted/50 px-4 py-12 text-center text-sm text-muted-foreground">
+        <p className="rounded-[14px] border border-dashed border-[#cfd6e6] dark:border-[#3a4670] bg-muted/50 px-4 py-12 text-center text-sm text-muted-foreground">
           No hay citas para este día.
         </p>
       ) : (
