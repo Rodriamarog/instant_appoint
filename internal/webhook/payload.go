@@ -21,10 +21,18 @@ const (
 
 // incomingMessage is one message pulled out of a delivery.
 type incomingMessage struct {
-	PhoneNumberID string
+	// Channel is the app the message came through.
+	Channel Channel
+
+	// AccountKey is the business the delivery was addressed to: the
+	// WhatsApp phone_number_id, the Facebook Page id, or the Instagram
+	// account id. It is what finds the clinic.
+	AccountKey string
 
 	// CustomerPhone is the customer either way: the sender of an inbound
-	// message, the recipient of an echo.
+	// message, the recipient of an echo. On WhatsApp it is their number; on
+	// Messenger and Instagram it is the page-scoped id Meta names them by,
+	// which is the only address those channels have.
 	CustomerPhone string
 
 	Content   string
@@ -67,6 +75,13 @@ type incomingMessage struct {
 // still has to be acknowledged: a non-2xx would have the router redeliver it
 // for as long as it keeps failing.
 func extractMessages(payload any) []incomingMessage {
+	switch object, _ := text(field(payload, "object")); object {
+	case objectPage:
+		return extractPageMessages(payload, Messenger)
+	case objectInstagram:
+		return extractPageMessages(payload, Instagram)
+	}
+
 	var out []incomingMessage
 
 	for _, entry := range slice(field(payload, "entry")) {
@@ -136,7 +151,8 @@ func readMessage(item any, direction Direction, phoneNumberID string) (incomingM
 		return incomingMessage{}, false
 	}
 
-	extracted.PhoneNumberID = phoneNumberID
+	extracted.Channel = WhatsApp
+	extracted.AccountKey = phoneNumberID
 	extracted.CustomerPhone = customerPhone
 	extracted.MessageID = id
 	extracted.Direction = direction
@@ -224,6 +240,94 @@ func readTap(label, identifier string) (incomingMessage, bool) {
 		Content:    content,
 		TapChoices: []string{label, identifier},
 	}, true
+}
+
+// extractPageMessages reads a Messenger or Instagram delivery.
+//
+// Both arrive in the Messenger Platform's shape — entry[].messaging[], each
+// event naming a sender, a recipient and a message — and differ only in
+// which id entry.id is: the Page's, or the Instagram account's.
+func extractPageMessages(payload any, channel Channel) []incomingMessage {
+	var out []incomingMessage
+
+	for _, entry := range slice(field(payload, "entry")) {
+		business, ok := text(field(entry, "id"))
+		if !ok || business == "" {
+			continue
+		}
+
+		for _, event := range slice(field(entry, "messaging")) {
+			message, ok := readPageMessage(event, channel, business)
+			if !ok {
+				continue
+			}
+			out = append(out, message)
+		}
+	}
+
+	return out
+}
+
+// readPageMessage reads one messaging event, reporting false for anything
+// that is not a message this app stores: a read receipt, a reaction, an
+// edit, a deletion, or an attachment with no text.
+func readPageMessage(event any, channel Channel, business string) (incomingMessage, bool) {
+	message := field(event, "message")
+	if message == nil {
+		return incomingMessage{}, false
+	}
+
+	id, _ := text(field(message, "mid"))
+	if id == "" {
+		return incomingMessage{}, false
+	}
+
+	if deleted, _ := field(message, "is_deleted").(bool); deleted {
+		return incomingMessage{}, false
+	}
+
+	sender, _ := text(field(field(event, "sender"), "id"))
+	recipient, _ := text(field(field(event, "recipient"), "id"))
+
+	// An echo is the business's own message: sent from the Page's inbox,
+	// from the Instagram app, or by this app. The customer is then the
+	// recipient.
+	extracted := incomingMessage{Channel: channel, AccountKey: business, MessageID: id}
+	if echo, _ := field(message, "is_echo").(bool); echo {
+		extracted.Direction, extracted.CustomerPhone = Outbound, recipient
+	} else {
+		extracted.Direction, extracted.CustomerPhone = Inbound, sender
+	}
+
+	// A customer id equal to the business's own is a delivery about
+	// nothing this app can attribute.
+	if extracted.CustomerPhone == "" || extracted.CustomerPhone == business {
+		return incomingMessage{}, false
+	}
+
+	body, hasText := text(field(message, "text"))
+	if reply := field(message, "quick_reply"); reply != nil {
+		payload, _ := text(field(reply, "payload"))
+		tap, ok := readTap(body, payload)
+		if !ok {
+			return incomingMessage{}, false
+		}
+		extracted.Kind, extracted.Content, extracted.TapChoices = tap.Kind, tap.Content, tap.TapChoices
+	} else {
+		if !hasText || body == "" {
+			return incomingMessage{}, false
+		}
+		extracted.Kind, extracted.Content = KindText, body
+	}
+
+	extracted.RepliesTo, _ = text(field(field(message, "reply_to"), "mid"))
+
+	// Milliseconds here, where WhatsApp sends seconds.
+	if millis, ok := field(event, "timestamp").(float64); ok && millis > 0 {
+		extracted.Timestamp, extracted.HasTimestamp = time.UnixMilli(int64(millis)).UTC(), true
+	}
+
+	return extracted, true
 }
 
 // unixSeconds reads Meta's timestamp, which arrives as a decimal string of

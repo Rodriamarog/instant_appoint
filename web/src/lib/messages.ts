@@ -40,6 +40,8 @@ export interface Message {
    */
   event_id: string
   status: string
+  /** The app it went through. Rows from before the column read whatsapp. */
+  channel?: 'whatsapp' | 'messenger' | 'instagram'
 }
 
 /**

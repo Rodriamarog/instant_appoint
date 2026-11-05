@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { call } from '@/lib/api'
-import { CONFIG_ID, FB_APP_ID, parseSignupMessage } from '@/lib/embedded-signup'
+import { CONFIG_ID, parseSignupMessage } from '@/lib/embedded-signup'
 import { errorMessage } from '@/lib/errors'
+import { SDK_BLOCKED, useFacebookSdk, type FBLoginResponse } from '@/lib/facebook-sdk'
 
 /** Meta only posts signup results from this origin. */
 const FB_ORIGIN = 'https://www.facebook.com'
@@ -15,20 +16,6 @@ const FB_ORIGIN = 'https://www.facebook.com'
  */
 const SIGNUP_DID_NOT_FINISH =
   'La conexión no terminó, así que no se conectó ningún número. Inténtalo de nuevo.'
-
-declare global {
-  interface Window {
-    fbAsyncInit: () => void
-    FB?: {
-      init: (opts: object) => void
-      login: (cb: (response: FBResponse) => void, opts: object) => void
-    }
-  }
-}
-
-interface FBResponse {
-  authResponse?: { code: string }
-}
 
 interface Props {
   /** Called once the server has stored the connection. */
@@ -47,7 +34,8 @@ type Status = 'idle' | 'loading' | 'success' | 'error'
  * server together.
  */
 export function WhatsAppEmbeddedSignup({ onConnected }: Props) {
-  const [sdkReady, setSdkReady] = useState(false)
+  const sdk = useFacebookSdk()
+  const sdkReady = sdk === 'ready'
   const [status, setStatus] = useState<Status>('idle')
   const [failure, setFailure] = useState('')
 
@@ -62,34 +50,6 @@ export function WhatsAppEmbeddedSignup({ onConnected }: Props) {
   const popupOutcome = useRef<'cancel' | 'error' | null>(null)
 
   useEffect(() => {
-    // A hot reload leaves the SDK loaded but fbAsyncInit already spent.
-    if (window.FB) setSdkReady(true)
-
-    window.fbAsyncInit = () => {
-      window.FB?.init({
-        appId: FB_APP_ID,
-        autoLogAppEvents: true,
-        xfbml: true,
-        version: 'v25.0',
-      })
-      setSdkReady(true)
-    }
-
-    if (!document.getElementById('facebook-jssdk')) {
-      const script = document.createElement('script')
-      script.id = 'facebook-jssdk'
-      script.src = 'https://connect.facebook.net/en_US/sdk.js'
-      script.async = true
-      script.defer = true
-      script.onerror = () => {
-        setStatus('error')
-        setFailure(
-          'No se pudo cargar el SDK de Facebook. Normalmente lo provoca un bloqueador de anuncios.',
-        )
-      }
-      document.body.appendChild(script)
-    }
-
     const handleMessage = (event: MessageEvent) => {
       // The window hears from anything embedded in the page, so the origin
       // check is what makes the rest of this safe to trust.
@@ -165,7 +125,7 @@ export function WhatsAppEmbeddedSignup({ onConnected }: Props) {
     popupOutcome.current = null
 
     window.FB.login(
-      (response: FBResponse) => {
+      (response: FBLoginResponse) => {
         // No authResponse covers three different endings, and they must
         // not look alike. Meta posts CANCEL when the popup was dismissed on
         // purpose and ERROR when it failed and said why; both have already
@@ -217,6 +177,7 @@ export function WhatsAppEmbeddedSignup({ onConnected }: Props) {
       {status === 'error' && failure && (
         <p className="text-sm text-destructive">{failure}</p>
       )}
+      {sdk === 'failed' && <p className="text-sm text-destructive">{SDK_BLOCKED}</p>}
     </div>
   )
 }

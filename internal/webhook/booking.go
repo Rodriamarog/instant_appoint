@@ -35,6 +35,12 @@ type ExtractedAppointment struct {
 
 	// Summary is one line saying what was agreed or asked for.
 	Summary string
+
+	// ClientPhone is a phone number the customer wrote in the conversation,
+	// as the model read it, or empty. Only read on Messenger and Instagram,
+	// where it is the one way the appointment can get a WhatsApp reminder;
+	// on WhatsApp the conversation's own number is the fact.
+	ClientPhone string
 }
 
 // Appointment is an appointment to write.
@@ -149,4 +155,23 @@ func languageFor(customerPhone string) string {
 	}
 
 	return spanish
+}
+
+// digitsOnly reduces a phone number as somebody typed it to the digits Meta
+// sends to, or "" when what is left is too short to include a country code.
+// A ten-digit local number is not guessed at: prefixing the wrong country
+// sends somebody else's reminder, and an empty phone just means staff add it.
+func digitsOnly(phone string) string {
+	var digits strings.Builder
+	for _, r := range phone {
+		if r >= '0' && r <= '9' {
+			digits.WriteRune(r)
+		}
+	}
+
+	if digits.Len() < 11 || digits.Len() > 15 {
+		return ""
+	}
+
+	return digits.String()
 }

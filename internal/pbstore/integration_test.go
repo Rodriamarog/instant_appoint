@@ -157,17 +157,31 @@ func newStack(t *testing.T) *stack {
 		Secret: routerSecret,
 		Now:    time.Now,
 		Store:  pbstore.NewWebhookStore(s.app),
-		GenerateReply: func(ctx context.Context, history []webhook.ConversationMessage, text string) (string, error) {
+		GenerateReply: func(ctx context.Context, channel webhook.Channel, history []webhook.ConversationMessage, text string) (string, error) {
 			turns := make([]gemini.Message, 0, len(history))
 			for _, turn := range history {
 				turns = append(turns, gemini.Message{Role: turn.Role, Content: turn.Content})
 			}
 
+			if channel.ReachedThroughPage() {
+				return ai.GenerateReplyWithoutANumber(ctx, turns, text)
+			}
+
 			return ai.GenerateReply(ctx, turns, text)
 		},
-		SendMessage: whatsApp.SendText,
-		SendButtons: func(ctx context.Context, phoneNumberID, accessToken, to, body string, buttons []webhook.Button) (string, error) {
-			return whatsApp.SendButtons(ctx, phoneNumberID, accessToken, to, body, replyButtons(buttons))
+		SendMessage: func(ctx context.Context, channel webhook.Channel, from, accessToken, to, text string) (string, error) {
+			if channel.ReachedThroughPage() {
+				return whatsApp.SendPageMessage(ctx, from, accessToken, to, text, nil)
+			}
+
+			return whatsApp.SendText(ctx, from, accessToken, to, text)
+		},
+		SendButtons: func(ctx context.Context, channel webhook.Channel, from, accessToken, to, body string, buttons []webhook.Button) (string, error) {
+			if channel.ReachedThroughPage() {
+				return whatsApp.SendPageMessage(ctx, from, accessToken, to, body, replyButtons(buttons))
+			}
+
+			return whatsApp.SendButtons(ctx, from, accessToken, to, body, replyButtons(buttons))
 		},
 		ExtractAppointment: func(ctx context.Context, history []webhook.ConversationMessage) (*webhook.ExtractedAppointment, error) {
 			turns := make([]gemini.Message, 0, len(history))
@@ -181,10 +195,11 @@ func newStack(t *testing.T) *stack {
 			}
 
 			return &webhook.ExtractedAppointment{
-				ClientName: read.ClientName,
-				StartsAt:   read.StartsAt,
-				Certain:    read.Certain,
-				Summary:    read.Summary,
+				ClientName:  read.ClientName,
+				StartsAt:    read.StartsAt,
+				Certain:     read.Certain,
+				Summary:     read.Summary,
+				ClientPhone: read.ClientPhone,
 			}, nil
 		},
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),

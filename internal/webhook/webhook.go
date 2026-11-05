@@ -123,6 +123,10 @@ type StoredMessage struct {
 
 	ConversationID string
 
+	// Channel is the app the message went through. The zero value is stored
+	// as WhatsApp by the column's default.
+	Channel Channel
+
 	// CustomerPhone is the customer's number in both directions — the sender
 	// of an inbound message and the recipient of an outbound one.
 	CustomerPhone string
@@ -140,6 +144,12 @@ type StoredMessage struct {
 type Account struct {
 	UserID      string
 	AccessToken string
+
+	// SendFrom is what a reply is sent from when it is not the id the
+	// delivery was addressed to: the Facebook Page an Instagram account's
+	// messages go out through. Empty means the delivery's own id, which is
+	// right for WhatsApp and Messenger.
+	SendFrom string
 
 	// Mode is the clinic's ai_mode setting. It rides along with the account
 	// rather than arriving through a Store method of its own because the
@@ -190,10 +200,11 @@ type ConversationMessage struct {
 // Store is the persistence the handler needs. Production is PocketBase
 // (internal/pbstore); the tests are an in-memory fake.
 type Store interface {
-	// FindAccount returns the connected account for a phone number id, or a
-	// nil Account and a nil error when no account has that number. Not found
-	// is not an error: most numbers the router forwards belong elsewhere.
-	FindAccount(ctx context.Context, phoneNumberID string) (*Account, error)
+	// FindAccount returns the connected account a delivery was addressed
+	// to — a WhatsApp phone number id, a Page id or an Instagram account id,
+	// by channel — or a nil Account and a nil error when none has it. Not
+	// found is not an error: most ids the router forwards belong elsewhere.
+	FindAccount(ctx context.Context, channel Channel, key string) (*Account, error)
 
 	// HasMessage reports whether a message with this WhatsApp id is already
 	// stored.
@@ -202,7 +213,7 @@ type Store interface {
 	// UpsertConversation returns the id of the customer's active conversation,
 	// creating it if there is none, and records at as the time of its latest
 	// message.
-	UpsertConversation(ctx context.Context, userID, customerPhone, phoneNumberID, at string) (string, error)
+	UpsertConversation(ctx context.Context, userID string, channel Channel, customerPhone, accountKey, at string) (string, error)
 
 	// SaveMessage stores one message. An implementation may treat a message
 	// that is already stored as a no-op, which is what makes a redelivery
@@ -229,6 +240,16 @@ type Store interface {
 	// and not a convenience — a wamid matched across clinics would let one
 	// clinic's delivery move another clinic's appointment.
 	AppointmentForSentMessage(ctx context.Context, userID, sentMessageID string) (string, error)
+
+	// AppointmentInConversation reports whether an appointment of this
+	// clinic's came out of this conversation.
+	//
+	// It is how a Messenger or Instagram tap is checked. There, the receipt's
+	// buttons carry the appointment's id in their payload — those channels
+	// report no id for the message a quick reply answers — and a payload is
+	// only as trustworthy as the check that the appointment it names belongs
+	// to the patient who tapped it.
+	AppointmentInConversation(ctx context.Context, userID, conversationID, appointmentID string) (bool, error)
 
 	// SetAppointmentStatus moves an appointment and records who moved it and
 	// when, in the vocabulary of internal/appointments.
@@ -289,11 +310,14 @@ type Deps struct {
 	Store Store
 
 	// GenerateReply writes the reply to text, given the conversation so far
-	// with text itself excluded.
-	GenerateReply func(ctx context.Context, history []ConversationMessage, text string) (string, error)
+	// with text itself excluded. The channel is passed so the reply can ask
+	// for what that channel does not already know — a phone number, on
+	// Messenger and Instagram.
+	GenerateReply func(ctx context.Context, channel Channel, history []ConversationMessage, text string) (string, error)
 
-	// SendMessage sends text to the customer and returns WhatsApp's id for it.
-	SendMessage func(ctx context.Context, phoneNumberID, accessToken, to, text string) (string, error)
+	// SendMessage sends text to the customer over channel and returns Meta's
+	// id for it. from is the WhatsApp phone number id or the Page id.
+	SendMessage func(ctx context.Context, channel Channel, from, accessToken, to, text string) (string, error)
 
 	// SendButtons sends body to the customer with quick replies under it
 	// and returns WhatsApp's id for it.
@@ -304,7 +328,7 @@ type Deps struct {
 	// delivers anything. A reminder a day later has no such window and must
 	// be a template Meta has approved, which is why the two paths do not
 	// share a send.
-	SendButtons func(ctx context.Context, phoneNumberID, accessToken, to, body string, buttons []Button) (string, error)
+	SendButtons func(ctx context.Context, channel Channel, from, accessToken, to, body string, buttons []Button) (string, error)
 
 	// ExtractAppointment reads a whole conversation and reports the
 	// appointment it agreed on, or nil when it agreed none.
@@ -457,15 +481,15 @@ func (h *handler) process(ctx context.Context, message incomingMessage) error {
 		return nil
 	}
 
-	account, err := store.FindAccount(ctx, message.PhoneNumberID)
+	account, err := store.FindAccount(ctx, message.Channel, message.AccountKey)
 	if err != nil {
-		return fmt.Errorf("look up the account for phone number id %s: %w", message.PhoneNumberID, err)
+		return fmt.Errorf("look up the %s account %s: %w", message.Channel, message.AccountKey, err)
 	}
 	if account == nil {
 		// The router forwards every number it serves. One this app does not
 		// know is somebody else's, not a fault.
-		h.deps.Logger.Warn("no connected account for the delivered phone number id",
-			"phone_number_id", message.PhoneNumberID)
+		h.deps.Logger.Warn("no connected account for the delivered id",
+			"channel", string(message.Channel), "id", message.AccountKey)
 
 		return nil
 	}
@@ -476,7 +500,7 @@ func (h *handler) process(ctx context.Context, message incomingMessage) error {
 	// a conversation it arrived at the end of.
 	now := isotime.Format(h.deps.Now())
 
-	conversationID, err := store.UpsertConversation(ctx, account.UserID, message.CustomerPhone, message.PhoneNumberID, now)
+	conversationID, err := store.UpsertConversation(ctx, account.UserID, message.Channel, message.CustomerPhone, message.AccountKey, now)
 	if err != nil {
 		return fmt.Errorf("upsert the conversation for %s: %w", message.CustomerPhone, err)
 	}
@@ -493,7 +517,7 @@ func (h *handler) process(ctx context.Context, message incomingMessage) error {
 	// and a button in it was not pressed by the patient.
 	appointmentID := ""
 	if message.Kind == KindTap && message.Direction == Inbound {
-		appointmentID, err = h.applyTap(ctx, account.UserID, message, now)
+		appointmentID, err = h.applyTap(ctx, account.UserID, conversationID, message, now)
 		if err != nil {
 			return err
 		}
@@ -504,6 +528,7 @@ func (h *handler) process(ctx context.Context, message incomingMessage) error {
 		Kind:           message.Kind,
 		AppointmentID:  appointmentID,
 		ConversationID: conversationID,
+		Channel:        message.Channel,
 		CustomerPhone:  message.CustomerPhone,
 		Content:        message.Content,
 		Direction:      message.Direction,
@@ -540,13 +565,13 @@ func (h *handler) process(ctx context.Context, message incomingMessage) error {
 	// answer to a question this app asked, it has already been acted on
 	// above, and there is no agreement in it to read.
 	if message.Kind != KindTap && account.Mode.RecordsAppointments() {
-		created, err := h.recordAppointment(ctx, h.deps.Store, *account, conversationID)
+		created, err := h.recordAppointment(ctx, h.deps.Store, *account, message.Channel, conversationID)
 		if err != nil {
 			h.deps.Logger.Error("reading the conversation for an appointment failed; the message is stored and the delivery is acknowledged",
 				"conversation_id", conversationID, "error", err)
 		}
 		if created != nil {
-			h.checkWithThePatient(ctx, *account, message.PhoneNumberID, conversationID, *created)
+			h.checkWithThePatient(ctx, *account, message, conversationID, *created)
 		}
 	}
 
@@ -602,7 +627,14 @@ func (h *handler) notAnswerable(account Account, message incomingMessage) string
 //
 // Only a real storage failure is returned, because only that is worth
 // redelivering.
-func (h *handler) applyTap(ctx context.Context, userID string, message incomingMessage, now string) (string, error) {
+func (h *handler) applyTap(ctx context.Context, userID, conversationID string, message incomingMessage, now string) (string, error) {
+	// A Messenger or Instagram receipt names its appointment in the
+	// button's payload, because those channels do not say which message a
+	// quick reply answers.
+	if named := tappedAppointment(message.TapChoices); named != "" {
+		return h.applyNamedTap(ctx, userID, conversationID, named, message, now)
+	}
+
 	if message.RepliesTo == "" {
 		h.deps.Logger.Warn("a tap arrived naming no message it answers; no appointment was changed",
 			"message_id", message.MessageID, "content", message.Content)
@@ -640,6 +672,36 @@ func (h *handler) applyTap(ctx context.Context, userID string, message incomingM
 	return appointmentID, nil
 }
 
+// applyNamedTap moves the appointment a tap's payload names, once it is
+// established that the appointment came out of the very conversation the tap
+// arrived in. A payload naming any other appointment changes nothing.
+func (h *handler) applyNamedTap(ctx context.Context, userID, conversationID, appointmentID string, message incomingMessage, now string) (string, error) {
+	ours, err := h.deps.Store.AppointmentInConversation(ctx, userID, conversationID, appointmentID)
+	if err != nil {
+		return "", fmt.Errorf("check the appointment %s a tap names: %w", appointmentID, err)
+	}
+	if !ours {
+		h.deps.Logger.Warn("a tap named an appointment that did not come from this conversation; no appointment was changed",
+			"message_id", message.MessageID, "appointment_id", appointmentID)
+
+		return "", nil
+	}
+
+	action, ok := resolveTap(message.TapChoices)
+	if !ok {
+		return "", nil
+	}
+
+	if err := h.deps.Store.SetAppointmentStatus(ctx, appointmentID, action.Status(), appointments.Patient, now); err != nil {
+		return "", fmt.Errorf("record the patient's tap against appointment %s: %w", appointmentID, err)
+	}
+
+	h.deps.Logger.Info("a patient's tap moved an appointment",
+		"message_id", message.MessageID, "appointment_id", appointmentID, "status", string(action.Status()))
+
+	return appointmentID, nil
+}
+
 // createdAppointment is an appointment this delivery itself wrote.
 //
 // It is what the receipt may be sent about and nothing else is: a write
@@ -661,16 +723,25 @@ type createdAppointment struct {
 func (h *handler) checkWithThePatient(
 	ctx context.Context,
 	account Account,
-	phoneNumberID, conversationID string,
+	message incomingMessage,
+	conversationID string,
 	created createdAppointment,
 ) {
-	if reason := h.suppressionReason(account, created.Appointment); reason != "" {
+	// Where the receipt goes: the number on the appointment for WhatsApp,
+	// and on the other channels the customer the conversation is with —
+	// the appointment's phone, if it has one, is for the WhatsApp reminder.
+	to := created.ClientPhone
+	if message.Channel.ReachedThroughPage() {
+		to = message.CustomerPhone
+	}
+
+	if reason := h.suppressionReason(account, message.Channel, to, created.Appointment); reason != "" {
 		h.deps.Logger.Info("no creation receipt: "+reason, "appointment_id", created.ID)
 
 		return
 	}
 
-	if err := h.sendReceipt(ctx, account, phoneNumberID, conversationID, created); err != nil {
+	if err := h.sendReceipt(ctx, account, message, conversationID, to, created); err != nil {
 		h.deps.Logger.Error("the creation receipt failed; the appointment is written and kept",
 			"appointment_id", created.ID, "error", err)
 	}
@@ -693,6 +764,7 @@ func (h *handler) recordAppointment(
 	ctx context.Context,
 	writer AppointmentWriter,
 	account Account,
+	channel Channel,
 	conversationID string,
 ) (*createdAppointment, error) {
 	// The duplicate rule, and the first thing in the path rather than the
@@ -750,8 +822,18 @@ func (h *handler) recordAppointment(
 	// The customer's number, taken from the conversation rather than from
 	// anything the model wrote: it is the one fact here that is not an
 	// interpretation.
+	//
+	// Except where the conversation is not with a number. On Messenger and
+	// Instagram the customer is a page-scoped id that no WhatsApp reminder
+	// can reach, so the phone is the one the patient wrote down, if they
+	// did, and the name falls back to the channel when there is neither.
 	customerPhone := ""
-	if len(stored) > 0 {
+	if channel.ReachedThroughPage() {
+		customerPhone = digitsOnly(extracted.ClientPhone)
+		if extracted.ClientName == "" && customerPhone == "" {
+			extracted.ClientName = channel.anonymousName()
+		}
+	} else if len(stored) > 0 {
 		customerPhone = stored[len(stored)-1].CustomerPhone
 	}
 
@@ -801,12 +883,12 @@ func (h *handler) reply(ctx context.Context, account Account, conversationID str
 		history = append(history, ConversationMessage{Role: role, Content: m.Content})
 	}
 
-	text, err := h.deps.GenerateReply(ctx, history, message.Content)
+	text, err := h.deps.GenerateReply(ctx, message.Channel, history, message.Content)
 	if err != nil {
 		return fmt.Errorf("generate a reply: %w", err)
 	}
 
-	replyID, err := h.deps.SendMessage(ctx, message.PhoneNumberID, account.AccessToken, message.CustomerPhone, text)
+	replyID, err := h.deps.SendMessage(ctx, message.Channel, sendFrom(account, message), account.AccessToken, message.CustomerPhone, text)
 	if err != nil {
 		return fmt.Errorf("send the reply: %w", err)
 	}
@@ -816,6 +898,7 @@ func (h *handler) reply(ctx context.Context, account Account, conversationID str
 	err = h.deps.Store.SaveMessage(ctx, account.UserID, StoredMessage{
 		MessageID:      replyID,
 		ConversationID: conversationID,
+		Channel:        message.Channel,
 		CustomerPhone:  message.CustomerPhone,
 		Content:        text,
 		Direction:      Outbound,
@@ -828,4 +911,13 @@ func (h *handler) reply(ctx context.Context, account Account, conversationID str
 	h.deps.Logger.Info("sent an AI reply", "to", message.CustomerPhone, "message_id", replyID)
 
 	return nil
+}
+
+// sendFrom is the id a message to this customer goes out from.
+func sendFrom(account Account, message incomingMessage) string {
+	if account.SendFrom != "" {
+		return account.SendFrom
+	}
+
+	return message.AccountKey
 }

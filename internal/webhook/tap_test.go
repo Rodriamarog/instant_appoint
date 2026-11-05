@@ -132,6 +132,7 @@ func TestATapIsStoredInTheConversationLikeAnyOtherMessage(t *testing.T) {
 		Kind:           webhook.KindTap,
 		AppointmentID:  "appointment-1",
 		ConversationID: "conv-1",
+		Channel:        webhook.WhatsApp,
 		CustomerPhone:  "521000000001",
 		Content:        "Confirmar",
 		Direction:      webhook.Inbound,

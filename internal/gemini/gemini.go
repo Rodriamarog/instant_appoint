@@ -118,6 +118,18 @@ func New(apiKey string) *Client {
 // history is oldest first and must not contain incoming: it is the context,
 // and incoming is the turn being answered.
 func (c *Client) GenerateReply(ctx context.Context, history []Message, incoming string) (string, error) {
+	return c.reply(ctx, history, incoming, false)
+}
+
+// GenerateReplyWithoutANumber is GenerateReply for a conversation that is not
+// with a phone number — Messenger or Instagram — where the assistant also
+// asks for one, because the appointment reminder goes out over WhatsApp and
+// cannot reach the patient otherwise.
+func (c *Client) GenerateReplyWithoutANumber(ctx context.Context, history []Message, incoming string) (string, error) {
+	return c.reply(ctx, history, incoming, true)
+}
+
+func (c *Client) reply(ctx context.Context, history []Message, incoming string, askForNumber bool) (string, error) {
 	contents := make([]content, 0, len(history)+1)
 	for _, message := range history {
 		contents = append(contents, content{Role: message.Role, Parts: []part{{Text: message.Content}}})
@@ -136,7 +148,7 @@ func (c *Client) GenerateReply(ctx context.Context, history []Message, incoming 
 			// this is what the live model has been receiving. Changing it to
 			// "system" would be a prompt change dressed up as a port.
 			Role:  RoleUser,
-			Parts: []part{{Text: c.systemPrompt()}},
+			Parts: []part{{Text: c.systemPrompt(askForNumber)}},
 		},
 		Contents: contents,
 		// Tools is deliberately left empty. The model that talks to a
@@ -226,21 +238,28 @@ func (c *Client) baseURL() string {
 // The blank line and the em dash are inherited from the original. The date is
 // the only variable and the only thing anchoring the model's sense of when
 // "next Tuesday" is.
-func (c *Client) systemPrompt() string {
+func (c *Client) systemPrompt(askForNumber bool) string {
 	now := time.Now
 	if c.Now != nil {
 		now = c.Now
 	}
 
-	return "You are a friendly appointment booking assistant for a business.\n" +
+	prompt := "You are a friendly appointment booking assistant for a business.\n" +
 		"Today is " + now().In(c.zone).Format(jsDateTime) + ".\n" +
 		"\n" +
 		"Your job is to help customers arrange appointments through natural conversation.\n" +
-		"Keep responses concise and conversational — this is WhatsApp, not email.\n" +
+		"Keep responses concise and conversational — this is a chat app, not email.\n" +
 		"Find out what the customer needs, their name, and the day and time that suits them.\n" +
 		"Once that is settled, repeat the day and time back and tell them it is written down and a member of staff will confirm it.\n" +
 		"You cannot confirm, move or cancel an appointment yourself, and you must never tell a customer that theirs is already confirmed.\n" +
 		"Reply in the same language the customer uses."
+
+	if askForNumber {
+		prompt += "\nBefore the conversation ends, ask once for a WhatsApp number with its country code, " +
+			"so the business can send an appointment reminder. If they would rather not give one, that is fine."
+	}
+
+	return prompt
 }
 
 // --- wire shapes ---------------------------------------------------------

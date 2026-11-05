@@ -1,6 +1,10 @@
 package webhook
 
-import "github.com/Rodriamarog/instant_appoint/internal/appointments"
+import (
+	"strings"
+
+	"github.com/Rodriamarog/instant_appoint/internal/appointments"
+)
 
 // TapAction is what a patient asked for by tapping a quick reply under a
 // reminder.
@@ -107,10 +111,39 @@ func resolvableTaps() map[string]TapAction {
 // live into silence.
 func resolveTap(choices []string) (TapAction, bool) {
 	for _, choice := range choices {
+		choice, _, _ = strings.Cut(choice, tapSeparator)
 		if action, ok := quickReplies[choice]; ok {
 			return action, true
 		}
 	}
 
 	return "", false
+}
+
+// tapSeparator joins a button id to the appointment it is about, in the
+// payload of a Messenger or Instagram receipt: "confirm:<appointment id>".
+const tapSeparator = ":"
+
+// namedTap is the payload of a button that names its appointment.
+func namedTap(buttonID, appointmentID string) string {
+	return buttonID + tapSeparator + appointmentID
+}
+
+// tappedAppointment is the appointment a tap's payload names, or "" when it
+// names none — every WhatsApp tap, whose buttons carry no appointment.
+//
+// Only a payload that starts with one of this app's own button ids counts,
+// so a label that happens to contain the separator is not read as one.
+func tappedAppointment(choices []string) string {
+	for _, choice := range choices {
+		action, appointmentID, found := strings.Cut(choice, tapSeparator)
+		if !found || appointmentID == "" {
+			continue
+		}
+		if action == confirmButtonID || action == cancelButtonID {
+			return appointmentID
+		}
+	}
+
+	return ""
 }

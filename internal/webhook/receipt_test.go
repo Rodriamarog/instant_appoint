@@ -142,7 +142,7 @@ func TestAutopilotStillAnswersAPatientWhoWroteInWhileOutreachIsOff(t *testing.T)
 
 	assertStatus(t, response, http.StatusOK)
 	assertEqual(t, "sent", h.sends(), []send{
-		{phoneNumberID: phoneNumberID, to: "5215511111111", text: "reply to: hola"},
+		{channel: webhook.WhatsApp, phoneNumberID: phoneNumberID, to: "5215511111111", text: "reply to: hola"},
 	})
 }
 

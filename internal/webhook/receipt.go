@@ -77,7 +77,8 @@ var receiptWordings = map[string]receiptWording{
 func (h *handler) sendReceipt(
 	ctx context.Context,
 	account Account,
-	phoneNumberID, conversationID string,
+	message incomingMessage,
+	conversationID, to string,
 	created createdAppointment,
 ) error {
 	appointment := created.Appointment
@@ -111,7 +112,15 @@ func (h *handler) sendReceipt(
 		{ID: cancelButtonID, Title: wording.buttons.cancel},
 	}
 
-	messageID, err := h.deps.SendButtons(ctx, phoneNumberID, account.AccessToken, appointment.ClientPhone, body, buttons)
+	// On Messenger and Instagram a tap does not say which message it
+	// answers, so the buttons say which appointment they are about.
+	if message.Channel.ReachedThroughPage() {
+		for i := range buttons {
+			buttons[i].ID = namedTap(buttons[i].ID, created.ID)
+		}
+	}
+
+	messageID, err := h.deps.SendButtons(ctx, message.Channel, sendFrom(account, message), account.AccessToken, to, body, buttons)
 	if err != nil {
 		return fmt.Errorf("send the receipt: %w", err)
 	}
@@ -127,7 +136,8 @@ func (h *handler) sendReceipt(
 		Kind:           KindReceipt,
 		AppointmentID:  created.ID,
 		ConversationID: conversationID,
-		CustomerPhone:  appointment.ClientPhone,
+		Channel:        message.Channel,
+		CustomerPhone:  to,
 		Content:        body,
 		Direction:      Outbound,
 		SentAt:         isotime.Format(h.deps.Now()),
@@ -137,7 +147,7 @@ func (h *handler) sendReceipt(
 	}
 
 	h.deps.Logger.Info("sent a creation receipt",
-		"appointment_id", created.ID, "message_id", messageID, "to", appointment.ClientPhone)
+		"appointment_id", created.ID, "message_id", messageID, "to", to)
 
 	return nil
 }
@@ -148,7 +158,7 @@ func (h *handler) sendReceipt(
 // The reason is returned rather than logged here so that the caller logs one
 // line with the appointment on it, and so that this stays a question with no
 // side effects.
-func (h *handler) suppressionReason(account Account, appointment Appointment) string {
+func (h *handler) suppressionReason(account Account, channel Channel, to string, appointment Appointment) string {
 	// Nothing can reach this today: the one caller is handed the
 	// appointment recordAppointment has just written, and that one is
 	// always the assistant's. It is here because of what the message says.
@@ -180,8 +190,8 @@ func (h *handler) suppressionReason(account Account, appointment Appointment) st
 		return "nothing has been agreed yet"
 	}
 
-	if appointment.ClientPhone == "" {
-		return "there is no number to send it to"
+	if to == "" {
+		return "there is nobody to send it to"
 	}
 
 	start, err := isotime.Parse(appointment.StartsAt)
@@ -198,7 +208,12 @@ func (h *handler) suppressionReason(account Account, appointment Appointment) st
 	// Only when a reminder will actually go out, though: reminders switched
 	// off, or no template chosen, means there is no second message to defer
 	// to and suppressing this one would leave the patient with nothing.
-	if account.SendsReminders && !h.deps.Now().Before(start.Add(-account.ReminderLeadTime)) {
+	//
+	// And only when that reminder can reach the patient: it goes out over
+	// WhatsApp, to the appointment's number, which a Messenger or Instagram
+	// patient may never have given.
+	remindedAnyway := account.SendsReminders && appointment.ClientPhone != ""
+	if remindedAnyway && !h.deps.Now().Before(start.Add(-account.ReminderLeadTime)) {
 		return "the appointment's own reminder is already due and says the same thing"
 	}
 

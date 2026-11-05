@@ -79,12 +79,24 @@ func NewWebhookStore(app core.App) *WebhookStore {
 // message that has to be stored. A number mid-reconnect, or one still carrying
 // the retired QR flow's account_type, would otherwise have its customers'
 // messages dropped. The tightening belongs on sending, not on receiving.
-func (s *WebhookStore) FindAccount(_ context.Context, phoneNumberID string) (*webhook.Account, error) {
-	record, err := s.app.FindFirstRecordByFilter(
-		migrations.WhatsAppAccountsCollection,
-		"phone_number_id = {:phoneNumberID}",
-		dbx.Params{"phoneNumberID": phoneNumberID},
-	)
+func (s *WebhookStore) FindAccount(_ context.Context, channel webhook.Channel, key string) (*webhook.Account, error) {
+	var record *core.Record
+	var err error
+	if channel.ReachedThroughPage() {
+		// A Page or an Instagram account. The row is deleted on disconnect,
+		// so there is no is_active to be loose about here.
+		record, err = s.app.FindFirstRecordByFilter(
+			migrations.SocialAccountsCollection,
+			"channel = {:channel} && external_id = {:key}",
+			dbx.Params{"channel": string(channel), "key": key},
+		)
+	} else {
+		record, err = s.app.FindFirstRecordByFilter(
+			migrations.WhatsAppAccountsCollection,
+			"phone_number_id = {:phoneNumberID}",
+			dbx.Params{"phoneNumberID": key},
+		)
+	}
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		// Not an error. The router forwards every number it serves, and most
@@ -100,6 +112,11 @@ func (s *WebhookStore) FindAccount(_ context.Context, phoneNumberID string) (*we
 	account := &webhook.Account{
 		UserID:      userID,
 		AccessToken: record.GetString("access_token"),
+
+		// Instagram messages go out through the linked Page. Empty on a
+		// WhatsApp row, which has no such column, and equal to the key on a
+		// Messenger one.
+		SendFrom: record.GetString("page_id"),
 
 		// What a clinic with no settings row looks like: the assistant off,
 		// no reminders, and the zone every other reader of a missing
@@ -203,8 +220,8 @@ func (s *WebhookStore) HasMessage(_ context.Context, messageID string) (bool, er
 // phoneNumberID is written on both paths, so a conversation follows the number
 // the customer is actually talking to and a human replying from the dashboard
 // is sent from it.
-func (s *WebhookStore) UpsertConversation(_ context.Context, userID, customerPhone, phoneNumberID, at string) (string, error) {
-	record, err := s.findConversation(userID, customerPhone)
+func (s *WebhookStore) UpsertConversation(_ context.Context, userID string, channel webhook.Channel, customerPhone, phoneNumberID, at string) (string, error) {
+	record, err := s.findConversation(userID, channel, customerPhone)
 	switch {
 	case err != nil && !errors.Is(err, sql.ErrNoRows):
 		return "", err
@@ -227,6 +244,7 @@ func (s *WebhookStore) UpsertConversation(_ context.Context, userID, customerPho
 	created := core.NewRecord(collection)
 	created.Set("user_id", userID)
 	created.Set("customer_phone", customerPhone)
+	created.Set(migrations.ChannelField, string(channel))
 	created.Set("status", activeConversation)
 	created.Set("last_message_at", at)
 	created.Set("phone_number_id", phoneNumberID)
@@ -244,7 +262,7 @@ func (s *WebhookStore) UpsertConversation(_ context.Context, userID, customerPho
 	// lookup above and this write. The unique index is what made that
 	// visible — nothing in this process could have seen it — and the right
 	// answer is the conversation that won, not a failed delivery.
-	record, err = s.findConversation(userID, customerPhone)
+	record, err = s.findConversation(userID, channel, customerPhone)
 	if err != nil {
 		return "", fmt.Errorf("another delivery created the conversation but it could not be read back: %w", err)
 	}
@@ -258,11 +276,11 @@ func (s *WebhookStore) UpsertConversation(_ context.Context, userID, customerPho
 	return record.Id, nil
 }
 
-func (s *WebhookStore) findConversation(userID, customerPhone string) (*core.Record, error) {
+func (s *WebhookStore) findConversation(userID string, channel webhook.Channel, customerPhone string) (*core.Record, error) {
 	return s.app.FindFirstRecordByFilter(
 		migrations.ConversationsCollection,
-		"user_id = {:userID} && customer_phone = {:customerPhone} && status = {:status}",
-		dbx.Params{"userID": userID, "customerPhone": customerPhone, "status": activeConversation},
+		"user_id = {:userID} && channel = {:channel} && customer_phone = {:customerPhone} && status = {:status}",
+		dbx.Params{"userID": userID, "channel": string(channel), "customerPhone": customerPhone, "status": activeConversation},
 	)
 }
 
@@ -303,6 +321,9 @@ func (s *WebhookStore) SaveMessage(_ context.Context, userID string, message web
 	// 'reminder', so a tap naming the same appointment does not collide with
 	// the reminder it answers.
 	record.Set("event_id", message.AppointmentID)
+	if message.Channel != "" {
+		record.Set(migrations.ChannelField, string(message.Channel))
+	}
 
 	if err := s.app.Save(record); err != nil {
 		if message.MessageID != "" && IsUniqueViolation(err) {
@@ -368,6 +389,29 @@ func (s *WebhookStore) HasAppointmentFromConversation(_ context.Context, convers
 		migrations.AppointmentsCollection,
 		"conversation_id = {:conversationID}",
 		dbx.Params{"conversationID": conversationID},
+	)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return false, nil
+
+	case err != nil:
+		return false, err
+	}
+
+	return true, nil
+}
+
+// AppointmentInConversation reports whether this clinic has an appointment
+// with this id that was written out of this conversation.
+func (s *WebhookStore) AppointmentInConversation(_ context.Context, userID, conversationID, appointmentID string) (bool, error) {
+	if conversationID == "" || appointmentID == "" {
+		return false, nil
+	}
+
+	_, err := s.app.FindFirstRecordByFilter(
+		migrations.AppointmentsCollection,
+		"id = {:id} && user_id = {:userID} && conversation_id = {:conversationID}",
+		dbx.Params{"id": appointmentID, "userID": userID, "conversationID": conversationID},
 	)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):

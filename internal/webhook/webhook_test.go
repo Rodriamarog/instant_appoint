@@ -50,6 +50,7 @@ type storedMessage struct {
 type conversation struct {
 	id            string
 	userID        string
+	channel       webhook.Channel
 	customerPhone string
 }
 
@@ -156,7 +157,7 @@ func (s *fakeStore) setAccount(change func(*webhook.Account)) {
 	s.accounts[phoneNumberID] = account
 }
 
-func (s *fakeStore) FindAccount(_ context.Context, id string) (*webhook.Account, error) {
+func (s *fakeStore) FindAccount(_ context.Context, _ webhook.Channel, id string) (*webhook.Account, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -184,7 +185,7 @@ func (s *fakeStore) HasMessage(_ context.Context, messageID string) (bool, error
 	return false, nil
 }
 
-func (s *fakeStore) UpsertConversation(_ context.Context, userID, customerPhone, _, _ string) (string, error) {
+func (s *fakeStore) UpsertConversation(_ context.Context, userID string, channel webhook.Channel, customerPhone, _, _ string) (string, error) {
 	if s.onUpsertConversat != nil {
 		s.onUpsertConversat()
 	}
@@ -193,7 +194,7 @@ func (s *fakeStore) UpsertConversation(_ context.Context, userID, customerPhone,
 	defer s.mu.Unlock()
 
 	for _, c := range s.conversations {
-		if c.userID == userID && c.customerPhone == customerPhone {
+		if c.userID == userID && c.channel == channel && c.customerPhone == customerPhone {
 			return c.id, nil
 		}
 	}
@@ -201,6 +202,7 @@ func (s *fakeStore) UpsertConversation(_ context.Context, userID, customerPhone,
 	created := conversation{
 		id:            fmt.Sprintf("conv-%d", len(s.conversations)+1),
 		userID:        userID,
+		channel:       channel,
 		customerPhone: customerPhone,
 	}
 	s.conversations = append(s.conversations, created)
@@ -225,6 +227,19 @@ func (s *fakeStore) SaveMessage(_ context.Context, userID string, m webhook.Stor
 type writtenAppointment struct {
 	webhook.Appointment
 	userID string
+}
+
+func (s *fakeStore) AppointmentInConversation(_ context.Context, userID, conversationID, appointmentID string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, written := range s.appointments {
+		if fmt.Sprintf("appointment-%d", i+1) == appointmentID {
+			return written.userID == userID && written.ConversationID == conversationID, nil
+		}
+	}
+
+	return false, nil
 }
 
 func (s *fakeStore) HasAppointmentFromConversation(_ context.Context, conversationID string) (bool, error) {
@@ -395,6 +410,7 @@ func (s *fakeStore) count(messageID string) int {
 
 // send is one call the handler made to WhatsApp.
 type send struct {
+	channel       webhook.Channel
 	phoneNumberID string
 	to            string
 	text          string
@@ -403,6 +419,7 @@ type send struct {
 // receipt is one message with quick replies under it that the handler sent,
 // which is a different call from a plain reply and is counted separately.
 type receipt struct {
+	channel       webhook.Channel
 	phoneNumberID string
 	to            string
 	body          string
@@ -451,24 +468,24 @@ func setup(opts options) *harness {
 		Secret: secret,
 		Now:    func() time.Time { return frozen },
 		Store:  store,
-		GenerateReply: func(_ context.Context, history []webhook.ConversationMessage, text string) (string, error) {
+		GenerateReply: func(_ context.Context, _ webhook.Channel, history []webhook.ConversationMessage, text string) (string, error) {
 			h.mu.Lock()
 			h.history = append(h.history, history)
 			h.mu.Unlock()
 
 			return "reply to: " + text, nil
 		},
-		SendMessage: func(_ context.Context, pid, _, to, text string) (string, error) {
+		SendMessage: func(_ context.Context, channel webhook.Channel, pid, _, to, text string) (string, error) {
 			h.mu.Lock()
 			defer h.mu.Unlock()
-			h.sent = append(h.sent, send{phoneNumberID: pid, to: to, text: text})
+			h.sent = append(h.sent, send{channel: channel, phoneNumberID: pid, to: to, text: text})
 
 			return fmt.Sprintf("wamid.reply-%d", len(h.sent)), nil
 		},
-		SendButtons: func(_ context.Context, pid, _, to, body string, buttons []webhook.Button) (string, error) {
+		SendButtons: func(_ context.Context, channel webhook.Channel, pid, _, to, body string, buttons []webhook.Button) (string, error) {
 			h.mu.Lock()
 			defer h.mu.Unlock()
-			h.checked = append(h.checked, receipt{phoneNumberID: pid, to: to, body: body, buttons: buttons})
+			h.checked = append(h.checked, receipt{channel: channel, phoneNumberID: pid, to: to, body: body, buttons: buttons})
 
 			return fmt.Sprintf("wamid.receipt-%d", len(h.checked)), nil
 		},
@@ -492,16 +509,22 @@ func setup(opts options) *harness {
 		deps.Store = opts.store
 	}
 	if opts.generateReply != nil {
-		deps.GenerateReply = opts.generateReply
+		generateReply := opts.generateReply
+		deps.GenerateReply = func(ctx context.Context, _ webhook.Channel, history []webhook.ConversationMessage, text string) (string, error) {
+			return generateReply(ctx, history, text)
+		}
 	}
 	if opts.sendMessage != nil {
-		deps.SendMessage = opts.sendMessage
+		sendMessage := opts.sendMessage
+		deps.SendMessage = func(ctx context.Context, _ webhook.Channel, pid, token, to, text string) (string, error) {
+			return sendMessage(ctx, pid, token, to, text)
+		}
 	}
 	if opts.sendButtons != nil {
 		sendButtons := opts.sendButtons
-		deps.SendButtons = func(ctx context.Context, pid, token, to, body string, buttons []webhook.Button) (string, error) {
+		deps.SendButtons = func(ctx context.Context, channel webhook.Channel, pid, token, to, body string, buttons []webhook.Button) (string, error) {
 			h.mu.Lock()
-			h.checked = append(h.checked, receipt{phoneNumberID: pid, to: to, body: body, buttons: buttons})
+			h.checked = append(h.checked, receipt{channel: channel, phoneNumberID: pid, to: to, body: body, buttons: buttons})
 			h.mu.Unlock()
 
 			return sendButtons(ctx, pid, token, to, body, buttons)
@@ -759,7 +782,7 @@ func TestStoresAnInboundMessageAndSendsAndStoresAnAIReply(t *testing.T) {
 	response := h.post(t, payload([]change{messages(textMessage("wamid.1", "5215511111111", "hola", frozen))}))
 
 	assertStatus(t, response, http.StatusOK)
-	assertEqual(t, "sent", h.sends(), []send{{phoneNumberID: phoneNumberID, to: "5215511111111", text: "reply to: hola"}})
+	assertEqual(t, "sent", h.sends(), []send{{channel: webhook.WhatsApp, phoneNumberID: phoneNumberID, to: "5215511111111", text: "reply to: hola"}})
 
 	got := [][3]string{}
 	for _, m := range h.store.messages {
@@ -1159,7 +1182,7 @@ func TestAnAssistantOnAutopilotRepliesAndStoresBothHalves(t *testing.T) {
 	response := h.post(t, payload([]change{messages(textMessage("wamid.auto", "5215511111111", "hola", frozen))}))
 
 	assertStatus(t, response, http.StatusOK)
-	assertEqual(t, "sent", h.sends(), []send{{phoneNumberID: phoneNumberID, to: "5215511111111", text: "reply to: hola"}})
+	assertEqual(t, "sent", h.sends(), []send{{channel: webhook.WhatsApp, phoneNumberID: phoneNumberID, to: "5215511111111", text: "reply to: hola"}})
 	assertEqual(t, "stored", h.store.ids(), []string{"wamid.auto", "wamid.reply-1"})
 }
 

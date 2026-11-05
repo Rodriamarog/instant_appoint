@@ -5,7 +5,8 @@ import { errorMessage } from '@/lib/errors'
 import { formatTime, listMessages, type Message } from '@/lib/messages'
 
 /**
- * The WhatsApp thread an appointment was read out of.
+ * The thread an appointment was read out of — WhatsApp, Messenger or
+ * Instagram.
  *
  * It exists because of one question. An appointment the assistant wrote —
  * and especially one it only proposed — provokes "why does this exist?", and
@@ -52,29 +53,39 @@ export function ConversationTranscript({ conversationId }: { conversationId: str
   }
 
   if (messages.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Esta conversación ya no tiene mensajes.
-      </p>
-    )
+    return <p className="text-sm text-muted-foreground">Esta conversación ya no tiene mensajes.</p>
   }
 
+  // The patient may never have given a phone number on these two, which is
+  // why the appointment shows none — worth saying where staff will look.
+  const channel = CHANNEL_NAMES[messages[0].channel ?? 'whatsapp']
+
   return (
-    <ul className="max-h-56 space-y-2 overflow-y-auto">
-      {messages.map((message) => (
-        <li key={message.id} className="text-sm">
-          <span className="text-xs text-muted-foreground">
-            {/*
+    <>
+      {channel && (
+        <p className="text-xs font-medium text-muted-foreground">Conversación por {channel}</p>
+      )}
+      <ul className="max-h-56 space-y-2 overflow-y-auto">
+        {messages.map((message) => (
+          <li key={message.id} className="text-sm">
+            <span className="text-xs text-muted-foreground">
+              {/*
               Who said it, not which direction it travelled. A receptionist
               reading this is working out who agreed to what, and "saliente"
               is the webhook's word, not theirs.
             */}
-            {message.direction === 'inbound' ? 'Paciente' : 'Clínica'} ·{' '}
-            {formatTime(message.sent_at)}
-          </span>
-          <p className="whitespace-pre-wrap">{message.message_content}</p>
-        </li>
-      ))}
-    </ul>
+              {message.direction === 'inbound' ? 'Paciente' : 'Clínica'} ·{' '}
+              {formatTime(message.sent_at)}
+            </span>
+            <p className="whitespace-pre-wrap">{message.message_content}</p>
+          </li>
+        ))}
+      </ul>
+    </>
   )
+}
+
+const CHANNEL_NAMES: Record<string, string | undefined> = {
+  messenger: 'Messenger',
+  instagram: 'Instagram',
 }

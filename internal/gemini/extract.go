@@ -44,6 +44,10 @@ type Appointment struct {
 	// Summary is one line saying what was agreed or asked for, for the
 	// person who later has to work out why this appointment exists.
 	Summary string
+
+	// ClientPhone is a phone number the customer wrote in the conversation,
+	// as written, or empty.
+	ClientPhone string
 }
 
 // ExtractAppointment reads a whole conversation and reports the appointment
@@ -95,7 +99,7 @@ func (c *Client) extractionPrompt() string {
 		now = c.Now
 	}
 
-	return "You are reading a WhatsApp conversation between a business and one of its customers.\n" +
+	return "You are reading a chat conversation between a business and one of its customers.\n" +
 		"Today is " + now().In(c.zone).Format(jsDateTime) + ", and both of them are in the " + businessZone + " time zone.\n" +
 		"\n" +
 		"Your only job is to record an appointment the two of them have discussed, by calling " + recordAppointment + " once.\n" +
@@ -135,6 +139,11 @@ var recordAppointmentDeclaration = functionDeclaration{
 			"summary": {
 				Type:        "string",
 				Description: "One short sentence, in the customer's own language, saying what was agreed or what they asked for.",
+			},
+			"client_phone": {
+				Type: "string",
+				Description: "A phone number the customer wrote in the conversation, with its country code if they gave one. " +
+					"Empty if they wrote none. Never invent or complete one.",
 			},
 		},
 		Required: []string{"starts_at", "certain", "summary"},
@@ -177,6 +186,7 @@ func (c *Client) readAppointment(body []byte) (*Appointment, error) {
 			StartsAt   string `json:"starts_at"`
 			Certain    bool   `json:"certain"`
 			Summary    string `json:"summary"`
+			Phone      string `json:"client_phone"`
 		}
 		if err := json.Unmarshal(p.FunctionCall.Args, &arguments); err != nil {
 			return nil, fmt.Errorf("gemini: read the arguments of %s: %w", recordAppointment, err)
@@ -193,10 +203,11 @@ func (c *Client) readAppointment(body []byte) (*Appointment, error) {
 		}
 
 		return &Appointment{
-			ClientName: arguments.ClientName,
-			StartsAt:   startsAt,
-			Certain:    arguments.Certain,
-			Summary:    arguments.Summary,
+			ClientName:  arguments.ClientName,
+			StartsAt:    startsAt,
+			Certain:     arguments.Certain,
+			Summary:     arguments.Summary,
+			ClientPhone: arguments.Phone,
 		}, nil
 	}
 

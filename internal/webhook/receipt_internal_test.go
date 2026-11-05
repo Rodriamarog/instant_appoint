@@ -47,7 +47,7 @@ func TestOnlyWhatTheAssistantWroteIsCheckedWithThePatient(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := h.suppressionReason(account, Appointment{
+			got := h.suppressionReason(account, WhatsApp, "5215511111111", Appointment{
 				ClientPhone: "5215511111111",
 				StartsAt:    isotime.Format(now.Add(48 * time.Hour)),
 				Status:      appointments.Pending,

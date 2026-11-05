@@ -14,6 +14,7 @@ import (
 	"github.com/Rodriamarog/instant_appoint/internal/isotime"
 	"github.com/Rodriamarog/instant_appoint/internal/pbstore"
 	"github.com/Rodriamarog/instant_appoint/internal/reminders"
+	"github.com/Rodriamarog/instant_appoint/internal/webhook"
 	"github.com/Rodriamarog/instant_appoint/internal/whatsapp"
 	"github.com/Rodriamarog/instant_appoint/migrations"
 )
@@ -250,7 +251,7 @@ func (s *Store) Claim(ctx context.Context, claim reminders.Claim) (string, error
 	// is then refused leaves the conversation behind, which costs nothing: it
 	// is the conversation the winning run is using, and it is keyed uniquely.
 	conversationID, err := s.conversations.UpsertConversation(
-		ctx, claim.UserID, claim.ToNumber, claim.PhoneNumberID, at)
+		ctx, claim.UserID, webhook.WhatsApp, claim.ToNumber, claim.PhoneNumberID, at)
 	if err != nil {
 		return "", fmt.Errorf("resolve the customer's conversation: %w", err)
 	}

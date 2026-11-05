@@ -26,6 +26,7 @@ import (
 	"github.com/Rodriamarog/instant_appoint/internal/reminderjob"
 	"github.com/Rodriamarog/instant_appoint/internal/seed"
 	"github.com/Rodriamarog/instant_appoint/internal/server"
+	"github.com/Rodriamarog/instant_appoint/internal/social"
 	"github.com/Rodriamarog/instant_appoint/internal/webhook"
 	"github.com/Rodriamarog/instant_appoint/internal/whatsapp"
 	_ "github.com/Rodriamarog/instant_appoint/migrations"
@@ -83,6 +84,11 @@ func main() {
 		}
 
 		whatsapp.Register(se.Router, client)
+
+		// Messenger and Instagram, connected with one Facebook Login on the
+		// same Meta app, so their webhooks are signed with the same secret
+		// the router already checks.
+		social.Register(se.Router, social.NewConnector(se.App, client))
 
 		pbstore.RegisterWebhook(se.Router, inboundWebhook(se.App, client))
 
@@ -143,7 +149,7 @@ func inboundWebhook(app core.App, client *meta.Client) http.Handler {
 		Secret: secret,
 		Now:    time.Now,
 		Store:  pbstore.NewWebhookStore(app),
-		GenerateReply: func(ctx context.Context, history []webhook.ConversationMessage, text string) (string, error) {
+		GenerateReply: func(ctx context.Context, channel webhook.Channel, history []webhook.ConversationMessage, text string) (string, error) {
 			// The two packages spell the roles the same way and neither
 			// imports the other, which is the point: the handler does not
 			// depend on which model answers.
@@ -152,10 +158,20 @@ func inboundWebhook(app core.App, client *meta.Client) http.Handler {
 				turns = append(turns, gemini.Message{Role: turn.Role, Content: turn.Content})
 			}
 
+			if channel.ReachedThroughPage() {
+				return ai.GenerateReplyWithoutANumber(ctx, turns, text)
+			}
+
 			return ai.GenerateReply(ctx, turns, text)
 		},
-		SendMessage: client.SendText,
-		SendButtons: func(ctx context.Context, phoneNumberID, accessToken, to, body string, buttons []webhook.Button) (string, error) {
+		SendMessage: func(ctx context.Context, channel webhook.Channel, from, accessToken, to, text string) (string, error) {
+			if channel.ReachedThroughPage() {
+				return client.SendPageMessage(ctx, from, accessToken, to, text, nil)
+			}
+
+			return client.SendText(ctx, from, accessToken, to, text)
+		},
+		SendButtons: func(ctx context.Context, channel webhook.Channel, from, accessToken, to, body string, buttons []webhook.Button) (string, error) {
 			// Copied field by field rather than passed through as one
 			// shared type, for the same reason as the roles above: what a
 			// quick reply is stays the handler's decision and the wire
@@ -165,7 +181,11 @@ func inboundWebhook(app core.App, client *meta.Client) http.Handler {
 				out = append(out, meta.Button{ID: button.ID, Title: button.Title})
 			}
 
-			return client.SendButtons(ctx, phoneNumberID, accessToken, to, body, out)
+			if channel.ReachedThroughPage() {
+				return client.SendPageMessage(ctx, from, accessToken, to, body, out)
+			}
+
+			return client.SendButtons(ctx, from, accessToken, to, body, out)
 		},
 		ExtractAppointment: func(ctx context.Context, history []webhook.ConversationMessage) (*webhook.ExtractedAppointment, error) {
 			turns := make([]gemini.Message, 0, len(history))
@@ -184,10 +204,11 @@ func inboundWebhook(app core.App, client *meta.Client) http.Handler {
 			// and it stays answerable with no database and no Gemini
 			// precisely because neither package imports the other.
 			return &webhook.ExtractedAppointment{
-				ClientName: read.ClientName,
-				StartsAt:   read.StartsAt,
-				Certain:    read.Certain,
-				Summary:    read.Summary,
+				ClientName:  read.ClientName,
+				StartsAt:    read.StartsAt,
+				Certain:     read.Certain,
+				Summary:     read.Summary,
+				ClientPhone: read.ClientPhone,
 			}, nil
 		},
 		Logger: app.Logger(),

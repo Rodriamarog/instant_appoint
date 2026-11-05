@@ -76,7 +76,7 @@ func TestFindAccountResolvesAConnectedNumber(t *testing.T) {
 	userID := connectAccount(t, app, "555000111", nil)
 	store := pbstore.NewWebhookStore(app)
 
-	account, err := store.FindAccount(context.Background(), "555000111")
+	account, err := store.FindAccount(context.Background(), webhook.WhatsApp, "555000111")
 	if err != nil {
 		t.Fatalf("FindAccount: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestFindAccountReturnsNothingForAnUnknownNumber(t *testing.T) {
 	connectAccount(t, app, "555000111", nil)
 	store := pbstore.NewWebhookStore(app)
 
-	account, err := store.FindAccount(context.Background(), "1078215982040649")
+	account, err := store.FindAccount(context.Background(), webhook.WhatsApp, "1078215982040649")
 	if err != nil {
 		t.Fatalf("FindAccount: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestFindAccountDoesNotFilterOnTheAccountsState(t *testing.T) {
 			connectAccount(t, app, "555000111", tc.extra)
 			store := pbstore.NewWebhookStore(app)
 
-			account, err := store.FindAccount(context.Background(), "555000111")
+			account, err := store.FindAccount(context.Background(), webhook.WhatsApp, "555000111")
 			if err != nil {
 				t.Fatalf("FindAccount: %v", err)
 			}
@@ -267,7 +267,7 @@ func TestUpsertConversationCreatesThenReuses(t *testing.T) {
 	store := pbstore.NewWebhookStore(app)
 	ctx := context.Background()
 
-	first, err := store.UpsertConversation(ctx, "user000000000001", "5215511111111", "555000111", "2026-10-13T12:00:00.000Z")
+	first, err := store.UpsertConversation(ctx, "user000000000001", webhook.WhatsApp, "5215511111111", "555000111", "2026-10-13T12:00:00.000Z")
 	if err != nil {
 		t.Fatalf("the first upsert: %v", err)
 	}
@@ -275,7 +275,7 @@ func TestUpsertConversationCreatesThenReuses(t *testing.T) {
 		t.Fatal("no conversation id was returned")
 	}
 
-	second, err := store.UpsertConversation(ctx, "user000000000001", "5215511111111", "555000222", "2026-10-13T12:05:00.000Z")
+	second, err := store.UpsertConversation(ctx, "user000000000001", webhook.WhatsApp, "5215511111111", "555000222", "2026-10-13T12:05:00.000Z")
 	if err != nil {
 		t.Fatalf("the second upsert: %v", err)
 	}
@@ -307,7 +307,7 @@ func TestUpsertConversationSeparatesCustomersAndBusinesses(t *testing.T) {
 	store := pbstore.NewWebhookStore(app)
 	ctx := context.Background()
 
-	mine, err := store.UpsertConversation(ctx, "user000000000001", "5215511111111", "555000111", "2026-10-13T12:00:00.000Z")
+	mine, err := store.UpsertConversation(ctx, "user000000000001", webhook.WhatsApp, "5215511111111", "555000111", "2026-10-13T12:00:00.000Z")
 	if err != nil {
 		t.Fatalf("UpsertConversation: %v", err)
 	}
@@ -317,7 +317,7 @@ func TestUpsertConversationSeparatesCustomersAndBusinesses(t *testing.T) {
 		{"the same customer of another business", "user000000000002", "5215511111111"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			other, err := store.UpsertConversation(ctx, tc.userID, tc.phone, "555000111", "2026-10-13T12:00:00.000Z")
+			other, err := store.UpsertConversation(ctx, tc.userID, webhook.WhatsApp, tc.phone, "555000111", "2026-10-13T12:00:00.000Z")
 			if err != nil {
 				t.Fatalf("UpsertConversation: %v", err)
 			}
@@ -348,7 +348,7 @@ func TestConcurrentUpsertsSettleOnOneConversation(t *testing.T) {
 			defer done.Done()
 			start.Wait()
 			ids[i], errs[i] = store.UpsertConversation(
-				context.Background(), "user000000000001", "5215511111111", "555000111", "2026-10-13T12:00:00.000Z")
+				context.Background(), "user000000000001", webhook.WhatsApp, "5215511111111", "555000111", "2026-10-13T12:00:00.000Z")
 		}()
 	}
 	start.Done()
@@ -578,7 +578,7 @@ func TestFindAccountCarriesTheClinicsAIMode(t *testing.T) {
 		userID := connectAccount(t, app, "555000111", nil)
 		setAIMode(t, app, userID, string(mode))
 
-		account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), "555000111")
+		account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), webhook.WhatsApp, "555000111")
 		if err != nil {
 			t.Fatalf("FindAccount: %v", err)
 		}
@@ -599,7 +599,7 @@ func TestAClinicWithNoSettingsRowAtAllIsOff(t *testing.T) {
 	app := newApp(t)
 	connectAccount(t, app, "555000111", nil)
 
-	account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), "555000111")
+	account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), webhook.WhatsApp, "555000111")
 	if err != nil {
 		t.Fatalf("FindAccount: %v", err)
 	}
@@ -632,7 +632,7 @@ func TestEachClinicGetsItsOwnMode(t *testing.T) {
 		"555000111": webhook.ModeOff,
 		"555000222": webhook.ModeAutopilot,
 	} {
-		account, err := store.FindAccount(context.Background(), number)
+		account, err := store.FindAccount(context.Background(), webhook.WhatsApp, number)
 		if err != nil {
 			t.Fatalf("FindAccount(%s): %v", number, err)
 		}
@@ -669,7 +669,7 @@ func TestFindAccountCarriesWhetherTheAssistantMayMessagePatients(t *testing.T) {
 		migrations.PatientOutreachField: string(webhook.OutreachOff),
 	})
 
-	account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), "555000111")
+	account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), webhook.WhatsApp, "555000111")
 	if err != nil {
 		t.Fatalf("FindAccount: %v", err)
 	}
@@ -687,7 +687,7 @@ func TestAClinicWithNoSettingsRowMayStillMessageItsPatients(t *testing.T) {
 	app := newApp(t)
 	connectAccount(t, app, "555000111", nil)
 
-	account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), "555000111")
+	account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), webhook.WhatsApp, "555000111")
 	if err != nil {
 		t.Fatalf("FindAccount: %v", err)
 	}
@@ -735,7 +735,7 @@ func TestFindAccountCarriesWhatTheClinicsRemindersDo(t *testing.T) {
 		"timezone":       "America/Tijuana",
 	})
 
-	account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), "555000111")
+	account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), webhook.WhatsApp, "555000111")
 	if err != nil {
 		t.Fatalf("FindAccount: %v", err)
 	}
@@ -768,7 +768,7 @@ func TestAClinicWhoseRemindersWouldNeverGoOutSendsNone(t *testing.T) {
 			setAIMode(t, app, userID, string(webhook.ModeAutopilot))
 			setReminderSettings(t, app, userID, tc.fields)
 
-			account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), "555000111")
+			account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), webhook.WhatsApp, "555000111")
 			if err != nil {
 				t.Fatalf("FindAccount: %v", err)
 			}
@@ -787,7 +787,7 @@ func TestAClinicWithNoSettingsRowStillHasAZone(t *testing.T) {
 	app := newApp(t)
 	connectAccount(t, app, "555000111", nil)
 
-	account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), "555000111")
+	account, err := pbstore.NewWebhookStore(app).FindAccount(context.Background(), webhook.WhatsApp, "555000111")
 	if err != nil {
 		t.Fatalf("FindAccount: %v", err)
 	}

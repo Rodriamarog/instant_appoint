@@ -27,6 +27,19 @@
 export const FB_APP_ID = import.meta.env.VITE_META_APP_ID || '1195277397801905'
 export const CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || '986479390379975'
 
+/**
+ * The Facebook Login for Business configuration for Messenger and Instagram:
+ * the permissions to read the person's Pages and answer their messages
+ * (pages_show_list, pages_messaging, pages_manage_metadata,
+ * instagram_basic, instagram_manage_messages, business_management).
+ *
+ * A second configuration, not CONFIG_ID, because that one is WhatsApp's
+ * Embedded Signup and asks for none of these. Empty until one is created in
+ * the Meta app dashboard; the connect button says so instead of opening a
+ * login that cannot work.
+ */
+export const MESSAGING_CONFIG_ID = import.meta.env.VITE_META_MESSAGING_CONFIG_ID || ''
+
 export type SignupResult =
   | { kind: 'finish'; wabaId: string; phoneNumberId?: string }
   | { kind: 'cancel' }

@@ -144,6 +144,7 @@ read at boot.
 |---|---|---|
 | `VITE_META_APP_ID` | `1195277397801905` | the server's `META_APP_ID` |
 | `VITE_META_CONFIG_ID` | `986479390379975` | the Embedded Signup configuration inside that app |
+| `VITE_META_MESSAGING_CONFIG_ID` | none yet | the Facebook Login for Business configuration for Messenger and Instagram, in the same app. Unset, the connect button explains it is not configured |
 
 Both are **public identifiers** of a Facebook app, not secrets — which is why
 they can ship in code the browser downloads. The app secret never leaves the
@@ -295,6 +296,50 @@ Country code, digits only, no `+`:
 
 - US: `15512345678`
 - Mexico: `5215512345678` — use the `521` prefix for Mexican mobile numbers, not `52`
+
+## Messenger and Instagram
+
+A clinic connects its Facebook Page under **Integraciones** with one Facebook
+Login. The Page answers Messenger, and the Instagram professional account
+linked to it (if any) answers Instagram: Instagram messages are sent and
+received through the Page, so one Page token serves both. See
+`docs/adr/0001-messenger-instagram-via-facebook-login.md` for why it is
+Facebook Login and not Instagram Login.
+
+Deliveries arrive at the same `/api/webhook` as WhatsApp, as `page` and
+`instagram` objects, and go through the same handler: stored in the same
+conversations (tagged with `channel`), answered on autopilot, read for an
+appointment, and checked with the patient through a receipt whose quick
+replies carry the appointment id.
+
+Reminders stay on WhatsApp: outside the 24-hour window Meta lets a Page send
+nothing a reminder could use, on Instagram at all. On these channels the
+assistant asks for a WhatsApp number, and the extraction stores one if the
+patient gives it; without one the appointment has no phone and no reminder.
+
+### One-time Meta setup
+
+All in the same Meta app as WhatsApp (`META_APP_ID`), because the webhook
+router verifies every delivery with that app's secret:
+
+1. Add the **Messenger** and **Instagram** products (Instagram: "API setup
+   with Facebook login").
+2. **Webhooks**: subscribe the `Page` object (`messages`,
+   `messaging_postbacks`, `message_echoes`) and the `Instagram` object
+   (`messages`, `messaging_postbacks`) to `https://hooks.neurocrow.com/meta`
+   with the router's verify token.
+3. **Facebook Login for Business → Configurations**: create one with a *User
+   access token* and the permissions `pages_show_list`, `pages_messaging`,
+   `pages_manage_metadata`, `instagram_basic`, `instagram_manage_messages`,
+   `business_management`. Its id is `VITE_META_MESSAGING_CONFIG_ID`.
+4. In the router's admin (`hooks.neurocrow.com/admin` → Rules), route
+   `page` `*` and `instagram` `*` to InstantAppoint.
+5. Until App Review grants those permissions Advanced Access, only people
+   with a role on the app can connect a Page.
+
+The clinic also has to allow it on Instagram's side: Configuración ›
+Mensajes y respuestas a historias › Herramientas conectadas › Permitir
+acceso a mensajes. The Integraciones page says so.
 
 ## Reminders
 
