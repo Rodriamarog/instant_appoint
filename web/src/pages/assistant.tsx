@@ -70,7 +70,7 @@ export function AssistantPage() {
   }
 
   return (
-    <section className="max-w-xl space-y-6">
+    <section className="space-y-6">
       <AIModeField value={settings.ai_mode} onChange={(ai_mode) => change({ ai_mode })} />
 
       {/* Below the mode and not above it: this is a control over something

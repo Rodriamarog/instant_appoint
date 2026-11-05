@@ -24,7 +24,7 @@ export function AIModeField({
 }) {
   return (
     <fieldset className="space-y-3">
-      <legend className="font-heading text-lg font-bold tracking-tight">El asistente de IA</legend>
+      <legend className="text-sm font-semibold">El asistente de IA</legend>
       <p className="text-xs text-muted-foreground">
         Qué puede hacer el asistente con los mensajes que te mandan tus pacientes.
       </p>

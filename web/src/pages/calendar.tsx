@@ -7,6 +7,7 @@ import {
   type View,
 } from 'react-big-calendar'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { DaySchedule } from '@/components/calendar/day-schedule'
 import { EventDialog } from '@/components/calendar/event-dialog'
@@ -196,30 +197,77 @@ function storedPane(): Pane {
   return PANES.some(({ pane }) => pane === stored) ? (stored as Pane) : 'day'
 }
 
+/** Hoy, Semana or Mes: which of the three ways of looking at the diary is up. */
+function PaneSwitcher({
+  pane: current,
+  onChoose,
+}: {
+  pane: Pane
+  onChoose: (pane: Pane) => void
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Vista"
+      className="inline-flex rounded-[10px] bg-muted p-1 ring-1 ring-border"
+    >
+      {PANES.map(({ pane: option, label }) => (
+        <button
+          key={option}
+          type="button"
+          aria-pressed={current === option}
+          onClick={() => onChoose(option)}
+          className={cn(
+            'cursor-pointer rounded-[7px] px-3.5 py-1.5 text-sm font-medium transition-colors',
+            current === option
+              ? 'bg-background text-foreground shadow-[0_1px_2px_rgba(11,18,51,0.08),0_0_0_1px_var(--border)]'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 /**
  * The grid's navigation, without the view switcher it ships with.
  *
  * react-big-calendar's own toolbar offers Mes, Semana and Día. Left in
  * place it would be a second control for the choice the segmented control
- * above already makes, and its Día button would hand back the day grid this
+ * beside it already makes, and its Día button would hand back the day grid this
  * page deliberately replaced with a list. Its today button is named for the
  * span it jumps to so that it does not read as a second Hoy.
  */
-function GridToolbar({ label, view, onNavigate }: ToolbarProps<SlotEvent, object>) {
+function GridToolbar({
+  label,
+  view,
+  onNavigate,
+  trailing,
+}: ToolbarProps<SlotEvent, object> & { trailing?: React.ReactNode }) {
+  const step =
+    'grid h-8 cursor-pointer place-items-center rounded-[7px] px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+
   return (
-    <div className="rbc-toolbar">
-      <span className="rbc-btn-group">
-        <button type="button" onClick={() => onNavigate('PREV')}>
-          Anterior
-        </button>
-        <button type="button" onClick={() => onNavigate('TODAY')}>
-          {view === 'week' ? 'Esta semana' : 'Este mes'}
-        </button>
-        <button type="button" onClick={() => onNavigate('NEXT')}>
-          Siguiente
-        </button>
-      </span>
-      <span className="rbc-toolbar-label">{label}</span>
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <h2 className="font-heading text-2xl font-bold tracking-[-0.03em] first-letter:uppercase">
+        {label}
+      </h2>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex items-center gap-0.5 rounded-[10px] p-1 ring-1 ring-border">
+          <button type="button" aria-label="Anterior" className={step} onClick={() => onNavigate('PREV')}>
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button type="button" className={cn(step, 'px-3')} onClick={() => onNavigate('TODAY')}>
+            {view === 'week' ? 'Esta semana' : 'Este mes'}
+          </button>
+          <button type="button" aria-label="Siguiente" className={step} onClick={() => onNavigate('NEXT')}>
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+        {trailing}
+      </div>
     </div>
   )
 }
@@ -301,15 +349,25 @@ export function CalendarPage() {
   )
 
   const views = useMemo<View[]>(() => ['week', 'month'], [])
-  const slotComponents = useMemo(
-    () => ({ event: SlotLabel, toolbar: GridToolbar }),
-    [],
-  )
-
-  const choosePane = (next: Pane) => {
+  const choosePane = useCallback((next: Pane) => {
     setPane(next)
     localStorage.setItem(VIEW_STORAGE_KEY, next)
-  }
+  }, [])
+
+  // On the same line as what it switches between — the date's heading in
+  // the day pane, the grid's toolbar otherwise — rather than on a row of its
+  // own above both.
+  const switcher = <PaneSwitcher pane={pane} onChoose={choosePane} />
+
+  const slotComponents = useMemo(
+    () => ({
+      event: SlotLabel,
+      toolbar: (props: ToolbarProps<SlotEvent, object>) => (
+        <GridToolbar {...props} trailing={<PaneSwitcher pane={pane} onChoose={choosePane} />} />
+      ),
+    }),
+    [pane, choosePane],
+  )
 
   const openForEditing = (appointment: Appointment) => {
     setSelected(appointment)
@@ -325,38 +383,16 @@ export function CalendarPage() {
         </Alert>
       )}
 
-      <div
-        role="group"
-        aria-label="Vista"
-        className="inline-flex rounded-[10px] bg-muted p-1 ring-1 ring-border"
-      >
-        {PANES.map(({ pane: option, label }) => (
-          <button
-            key={option}
-            type="button"
-            aria-pressed={pane === option}
-            onClick={() => choosePane(option)}
-            className={cn(
-              'cursor-pointer rounded-[7px] px-3.5 py-1.5 text-sm font-medium transition-colors',
-              pane === option
-                ? 'bg-background text-foreground shadow-[0_1px_2px_rgba(11,18,51,0.08),0_0_0_1px_var(--border)]'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
       {pane === 'day' ? (
         <DaySchedule
           appointments={rows}
           timeZone={timeZone}
           now={now}
           onSelect={openForEditing}
+          actions={switcher}
         />
       ) : (
-        <div style={{ height: 'calc(100vh - 260px)', minHeight: '32rem' }}>
+        <div style={{ height: 'calc(100vh - 220px)', minHeight: '32rem' }}>
           <Calendar
             localizer={localizer}
             messages={MESSAGES}

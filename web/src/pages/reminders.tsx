@@ -160,8 +160,7 @@ export function RemindersPage() {
     <section className="space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="font-heading text-xl font-bold tracking-tight">Recordatorios</h2>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Sale un recordatorio por WhatsApp{' '}
             {settings.is_active
               ? 'antes de cada cita que tenga un número de teléfono.'

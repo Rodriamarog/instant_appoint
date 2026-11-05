@@ -85,7 +85,7 @@ afterEach(() => {
 
 /** What the calendar says it is showing. */
 function toolbarLabel(): string {
-  return document.querySelector('.rbc-toolbar-label')?.textContent ?? ''
+  return screen.queryByRole('heading', { level: 2 })?.textContent ?? ''
 }
 
 /** The filter string of the nth query the page ran. */

@@ -2,18 +2,14 @@ import { Navigate, Route, Routes } from 'react-router'
 
 import { RequireAuth } from '@/components/require-auth'
 import { Shell } from '@/components/shell'
-import { AssistantPage } from '@/pages/assistant'
 import { CalendarPage } from '@/pages/calendar'
 import { HomePage } from '@/pages/home'
 import { LoginPage } from '@/pages/login'
 import { NotFoundPage } from '@/pages/not-found'
 import { PrivacyPolicyPage } from '@/pages/privacy-policy'
 import { RegisterPage } from '@/pages/register'
-import { RemindersPage } from '@/pages/reminders'
 import { SettingsPage } from '@/pages/settings'
-import { TemplatesPage } from '@/pages/templates'
 import { TermsOfServicePage } from '@/pages/terms-of-service'
-import { WhatsAppPage } from '@/pages/whatsapp'
 
 /**
  * The route table.
@@ -57,10 +53,12 @@ export function App() {
         <Route element={<Shell />}>
           <Route path="inicio" element={<CalendarPage />} />
           <Route path="configuracion" element={<SettingsPage />}>
-            <Route index element={<AssistantPage />} />
-            <Route path="whatsapp" element={<WhatsAppPage />} />
-            <Route path="recordatorios" element={<RemindersPage />} />
-            <Route path="plantillas" element={<TemplatesPage />} />
+            {/* One page; each path only says which row starts open. */}
+            <Route index element={null} />
+            <Route path="asistente" element={null} />
+            <Route path="whatsapp" element={null} />
+            <Route path="recordatorios" element={null} />
+            <Route path="plantillas" element={null} />
           </Route>
         </Route>
       </Route>

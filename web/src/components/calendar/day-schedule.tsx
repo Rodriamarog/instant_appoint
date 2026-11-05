@@ -16,6 +16,11 @@ interface DayScheduleProps {
   /** Now. A prop so a test can stand anywhere in the day. */
   now: Date
   onSelect?: (appointment: Appointment) => void
+  /**
+   * Controls that belong on the heading's line — the page's view switcher —
+   * so they share the date's row instead of spending one of their own.
+   */
+  actions?: React.ReactNode
 }
 
 /**
@@ -53,6 +58,7 @@ export function DaySchedule({
   timeZone,
   now,
   onSelect,
+  actions,
 }: DayScheduleProps) {
   // The clinic's day, never the viewer's: a receptionist looking at this at
   // 23:00 is still working today, and a dentist reading it from abroad is
@@ -68,10 +74,11 @@ export function DaySchedule({
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-heading text-2xl font-bold tracking-[-0.03em] first-letter:uppercase">
           {spellDay(today)}
         </h2>
+        {actions}
       </div>
 
       <dl className="grid grid-cols-3 gap-3">

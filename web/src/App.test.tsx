@@ -144,15 +144,25 @@ test('Inicio is the appointments page', async () => {
  * used to have a tab of its own and now lives under Configuración.
  */
 test.each([
-  ['/configuracion', 'radiogroup', 'El asistente de IA'],
-  ['/configuracion/whatsapp', 'heading', 'WhatsApp'],
-  ['/configuracion/recordatorios', 'heading', 'Recordatorios'],
-  ['/configuracion/plantillas', 'heading', 'Plantillas'],
-])('%s is still reachable', async (path, role, name) => {
+  ['/configuracion/asistente', /^Asistente de IA/],
+  ['/configuracion/whatsapp', /^Número de WhatsApp/],
+  ['/configuracion/recordatorios', /^Recordatorios/],
+  ['/configuracion/plantillas', /^Plantillas/],
+])('%s is still reachable, opened', async (path, name) => {
   openSignedIn(path)
 
-  expect(await screen.findByRole(role, { name })).toBeDefined()
+  const row = await screen.findByRole('button', { name })
+  await waitFor(() => expect(row.getAttribute('aria-expanded')).toBe('true'))
   expect(screen.queryByText(/no encontrada/i)).toBeNull()
+})
+
+test('/configuracion lists every setting, none of them opened', async () => {
+  openSignedIn('/configuracion')
+
+  for (const name of [/^Asistente de IA/, /^Número de WhatsApp/, /^Recordatorios/, /^Plantillas/]) {
+    const row = await screen.findByRole('button', { name })
+    expect(row.getAttribute('aria-expanded')).toBe('false')
+  }
 })
 
 /**
