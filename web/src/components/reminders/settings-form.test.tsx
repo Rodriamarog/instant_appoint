@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
-import { ReminderSettingsDialog } from '@/components/reminders/settings-dialog'
+import { ReminderSettingsForm } from '@/components/reminders/settings-form'
 import { DEFAULT_SETTINGS, type BusinessSettings } from '@/lib/business-settings'
 
 /**
@@ -58,9 +58,7 @@ const onSave = vi.fn(() => Promise.resolve())
 
 function show(settings: Partial<BusinessSettings> = {}) {
   render(
-    <ReminderSettingsDialog
-      open
-      onOpenChange={() => {}}
+    <ReminderSettingsForm
       settings={{ ...DEFAULT_SETTINGS, ...settings }}
       onSave={onSave}
     />,
@@ -166,30 +164,8 @@ test('a template already saved is kept even when the list cannot be read', async
   )
 })
 
-test('the zone the date and time are spelled in can be chosen', async () => {
-  const user = userEvent.setup()
-  show()
-
-  const picker = await screen.findByLabelText('Escribir la fecha y la hora en')
-  await user.selectOptions(picker, 'America/Mexico City')
-  await user.click(screen.getByRole('button', { name: 'Guardar' }))
-
-  await waitFor(() =>
-    expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({ timezone: 'America/Mexico_City' }),
-    ),
-  )
-})
-
-test('a saved zone that is not one of the usual ones is kept', async () => {
-  show({ timezone: 'Europe/Madrid' })
-
-  const picker = await screen.findByLabelText('Escribir la fecha y la hora en')
-  expect((picker as HTMLSelectElement).value).toBe('Europe/Madrid')
-})
-
 /**
- * The AI mode switch moved to Configuración with #21, but this dialog still
+ * The AI mode switch lives on its own page, but this form still
  * saves the whole settings row. A save written field by field here would
  * quietly switch a clinic's assistant off from a page that no longer even
  * mentions it.

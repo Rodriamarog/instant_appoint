@@ -21,14 +21,14 @@ function nav(path: string) {
   return screen.getByRole('navigation')
 }
 
-test('the signed-in navigation is Inicio, Asistente and Configuración, and nothing else', () => {
-  const bar = nav('/inicio')
+test('the signed-in navigation is Agenda, Asistente, Integraciones and Configuración, and nothing else', () => {
+  const bar = nav('/agenda')
 
   expect(
     within(bar)
       .getAllByRole('link')
       .map((link) => link.textContent),
-  ).toEqual(['Inicio', 'Asistente', 'Configuración'])
+  ).toEqual(['Agenda', 'Asistente', 'Integraciones', 'Configuración'])
 })
 
 /**
@@ -36,25 +36,25 @@ test('the signed-in navigation is Inicio, Asistente and Configuración, and noth
  * somebody is inside one. The styling was an exact pathname match, which
  * would have left both tabs looking unvisited on every page that matters.
  */
-test('the Configuración tab stays current while inside one of its pages', () => {
-  const bar = nav('/configuracion/plantillas')
+test('a tab stays current while inside one of its pages', () => {
+  const bar = nav('/integraciones/plantillas')
 
-  const current = within(bar).getByRole('link', { name: 'Configuración' })
+  const current = within(bar).getByRole('link', { name: 'Integraciones' })
   expect(current.getAttribute('aria-current')).toBe('page')
   expect(
-    within(bar).getByRole('link', { name: 'Inicio' }).getAttribute('aria-current'),
+    within(bar).getByRole('link', { name: 'Agenda' }).getAttribute('aria-current'),
   ).toBeNull()
 })
 
 /**
- * /inicio must not light up for /inicio-anything, which a bare startsWith
+ * /agenda must not light up for /agenda-anything, which a bare startsWith
  * would do.
  */
 test('a tab is not current for a path that merely starts with its own', () => {
   const bar = nav('/configuracion')
 
   expect(
-    within(bar).getByRole('link', { name: 'Inicio' }).getAttribute('aria-current'),
+    within(bar).getByRole('link', { name: 'Agenda' }).getAttribute('aria-current'),
   ).toBeNull()
 })
 
@@ -65,7 +65,7 @@ test('a tab is not current for a path that merely starts with its own', () => {
 test('the theme switch toggles dark mode and remembers it', async () => {
   localStorage.removeItem('tema')
   document.documentElement.classList.remove('dark')
-  nav('/inicio')
+  nav('/agenda')
 
   const toDark = screen.getByRole('button', { name: 'Cambiar a modo oscuro' })
   fireEvent.click(toDark)

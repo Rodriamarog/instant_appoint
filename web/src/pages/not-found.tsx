@@ -11,7 +11,7 @@ import { useIsSignedIn } from '@/lib/auth'
  * would offer them a sign-in button they do not need.
  */
 export function NotFoundPage() {
-  const start = useIsSignedIn() ? '/inicio' : '/'
+  const start = useIsSignedIn() ? '/agenda' : '/'
 
   return (
     <section className="mx-auto max-w-xl space-y-3 px-4 py-24 text-center">

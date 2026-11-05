@@ -9,15 +9,16 @@ import { cn } from '@/lib/utils'
 /**
  * The whole of the signed-in navigation.
  *
- * Inicio is the daily work. Asistente gets a tab of its own because what the
+ * Agenda is the daily work. Asistente gets a tab of its own because what the
  * assistant may do with a patient's messages is the product's central
- * decision, not one more setting. Connecting a number, the templates and the
- * reminder settings are decided once and left alone, so they sit under
- * Configuración.
+ * decision, not one more setting. Integraciones holds the channels patients
+ * write in on (WhatsApp now, Messenger and Instagram next) and WhatsApp's
+ * templates. Configuración is the business, its reminders and the account.
  */
 const links = [
-  { to: '/inicio', label: 'Inicio' },
+  { to: '/agenda', label: 'Agenda' },
   { to: '/asistente', label: 'Asistente' },
+  { to: '/integraciones', label: 'Integraciones' },
   { to: '/configuracion', label: 'Configuración' },
 ]
 
@@ -25,7 +26,7 @@ const links = [
  * True while the person is on `to` or on a page beneath it.
  *
  * The separator is part of the comparison on purpose: a bare prefix test
- * would light /inicio up for an /inicio-anything added later, which is a
+ * would light /agenda up for an /agenda-anything added later, which is a
  * different page. An exact match is not enough either — Configuración holds
  * four sub-pages, and the tab went dark on every one of them.
  */

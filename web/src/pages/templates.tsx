@@ -98,7 +98,7 @@ export function TemplatesPage() {
         <p className="text-sm text-muted-foreground">
           Conecta un número de WhatsApp Business antes de crear plantillas.
         </p>
-        <Link to="/configuracion/whatsapp" className="text-sm underline">
+        <Link to="/integraciones/whatsapp" className="text-sm underline">
           Ir a la conexión de WhatsApp
         </Link>
       </div>

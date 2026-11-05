@@ -133,20 +133,24 @@ beforeEach(() => {
 })
 
 /** Signing in lands here, so this is the one path that has to be right. */
-test('Inicio is the appointments page', async () => {
-  openSignedIn('/inicio')
+test('Agenda is the appointments page', async () => {
+  openSignedIn('/agenda')
 
   expect(await screen.findByRole('button', { name: 'Hoy' })).toBeDefined()
 })
 
 /**
- * Nothing the five tabs reached may be lost. Each of these is a page that
- * used to have a tab of its own and now lives under Configuración.
+ * Nothing the old tabs reached may be lost. Each path opens its row,
+ * including the Configuración paths WhatsApp and Plantillas had before they
+ * moved to Integraciones.
  */
 test.each([
+  ['/integraciones/whatsapp', /^Número de WhatsApp/],
+  ['/integraciones/plantillas', /^Plantillas/],
   ['/configuracion/whatsapp', /^Número de WhatsApp/],
-  ['/configuracion/recordatorios', /^Recordatorios/],
   ['/configuracion/plantillas', /^Plantillas/],
+  ['/configuracion/recordatorios', /^Recordatorios/],
+  ['/configuracion/negocio', /^Datos del negocio/],
 ])('%s is still reachable, opened', async (path, name) => {
   openSignedIn(path)
 
@@ -169,21 +173,22 @@ test.each(['/asistente', '/configuracion/asistente'])('%s shows the assistant', 
 test('/configuracion lists every setting, none of them opened', async () => {
   openSignedIn('/configuracion')
 
-  for (const name of [/^Número de WhatsApp/, /^Recordatorios/, /^Plantillas/]) {
+  for (const name of [/^Datos del negocio/, /^Recordatorios/, /^Tema/, /^Contraseña/]) {
     const row = await screen.findByRole('button', { name })
     expect(row.getAttribute('aria-expanded')).toBe('false')
   }
 })
 
 /**
- * The five old paths are in people's history and in their bookmarks. Four of
- * them still name a page, so they take you to it rather than to a 404.
+ * The old paths are in people's history and in their bookmarks. Those that
+ * still name a page take you to it rather than to a 404.
  */
 test.each([
-  ['/calendar', 'Inicio'],
-  ['/whatsapp', 'Configuración'],
+  ['/calendar', 'Agenda'],
+  ['/inicio', 'Agenda'],
+  ['/whatsapp', 'Integraciones'],
   ['/reminders', 'Configuración'],
-  ['/templates', 'Configuración'],
+  ['/templates', 'Integraciones'],
 ])('the old %s link lands under %s', async (path, tab) => {
   openSignedIn(path)
 
@@ -208,7 +213,7 @@ test('a deep link to the deleted chat page says there is nothing there', async (
   // And the way out goes where a signed-in person belongs, not to the
   // signed-out landing page.
   await waitFor(() =>
-    expect(screen.getByRole('link').getAttribute('href')).toBe('/inicio'),
+    expect(screen.getByRole('link').getAttribute('href')).toBe('/agenda'),
   )
 })
 
@@ -217,7 +222,7 @@ test('a deep link to the deleted chat page says there is nothing there', async (
  * a person arrives is the app's answer to "what is this for", so it is
  * asserted through the route table rather than against the navigate call.
  */
-test('signing in lands on Inicio', async () => {
+test('signing in lands on the Agenda', async () => {
   pb.authStore.clear()
 
   render(

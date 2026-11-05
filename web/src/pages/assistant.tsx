@@ -11,7 +11,7 @@ import { errorMessage } from '@/lib/errors'
 
 /**
  * What the assistant is allowed to do with the messages a clinic's patients
- * send. A top-level tab of its own, beside Inicio.
+ * send. A top-level tab of its own, beside Agenda.
  *
  * It is first because it is the decision with a patient on the other end of
  * it: the reminder settings and the templates decide how a message is worded,

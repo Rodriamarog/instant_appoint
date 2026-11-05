@@ -97,3 +97,66 @@ export async function register(
 export async function requestVerification(email: string): Promise<void> {
   await pb.collection(USERS).requestVerification(email)
 }
+
+type CurrentUser = { id: string; email: string; business_name: string }
+
+// The auth store hands back a freshly parsed record on every read, so the
+// snapshot is cached and only replaced when what it says changes —
+// useSyncExternalStore re-renders forever otherwise.
+let cachedUser: CurrentUser | null = null
+
+function currentUserSnapshot(): CurrentUser | null {
+  const record = pb.authStore.record
+  if (!record) {
+    cachedUser = null
+    return null
+  }
+  const next = {
+    id: String(record.id),
+    email: String(record.email ?? ''),
+    business_name: String(record.business_name ?? ''),
+  }
+  if (
+    !cachedUser ||
+    cachedUser.id !== next.id ||
+    cachedUser.email !== next.email ||
+    cachedUser.business_name !== next.business_name
+  ) {
+    cachedUser = next
+  }
+  return cachedUser
+}
+
+/** The signed-in account, re-rendering whenever the session changes. */
+export function useCurrentUser(): CurrentUser | null {
+  return useSyncExternalStore(subscribe, currentUserSnapshot)
+}
+
+/** Renames the business on the signed-in account. */
+export async function updateBusinessName(businessName: string): Promise<void> {
+  const id = pb.authStore.record?.id
+  if (!id) {
+    throw new Error('No hay una sesión iniciada.')
+  }
+  // PocketBase refreshes the auth store's copy of the record itself when the
+  // record it updates is the signed-in one.
+  await pb.collection(USERS).update(id, { business_name: businessName })
+}
+
+/**
+ * Changes the password. PocketBase invalidates every session of the account
+ * when it does, this one included, so it signs straight back in with the
+ * new password rather than dropping the person at the login page.
+ */
+export async function changePassword(current: string, next: string): Promise<void> {
+  const record = pb.authStore.record
+  if (!record) {
+    throw new Error('No hay una sesión iniciada.')
+  }
+  await pb.collection(USERS).update(record.id, {
+    oldPassword: current,
+    password: next,
+    passwordConfirm: next,
+  })
+  await pb.collection(USERS).authWithPassword(String(record.email), next)
+}

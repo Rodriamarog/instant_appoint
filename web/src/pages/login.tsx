@@ -55,7 +55,7 @@ export function LoginPage() {
       // An unverified account is refused by lib/auth, which clears the
       // session again rather than leaving a half-signed-in page.
       await signIn(emailVal, passwordVal)
-      navigate('/inicio')
+      navigate('/agenda')
     } catch (err) {
       setError(errorMessage(err, 'No se pudo iniciar sesión'))
       setIsLoading(false) // Only reset on error; success navigates away.
