@@ -77,18 +77,30 @@ export function AssistantPage() {
         </p>
       ) : (
         <>
-          <section className="rounded-[14px] bg-background p-5 ring-1 ring-border">
+          <section aria-labelledby="modo">
+            <h2 id="modo" className="mb-1 text-sm font-semibold">
+              ¿Qué hace el asistente?
+            </h2>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Con los mensajes que te mandan tus pacientes por WhatsApp.
+            </p>
             <AIModeField value={settings.ai_mode} onChange={(ai_mode) => change({ ai_mode })} />
           </section>
 
           {/* Below the mode and not above it: this is a control over something
               the assistant only does once the mode has let it write, so the
               decision it qualifies has to have been read first. */}
-          <section className="rounded-[14px] bg-background p-5 ring-1 ring-border">
-            <PatientOutreachField
-              value={settings.patient_outreach}
-              onChange={(patient_outreach) => change({ patient_outreach })}
-            />
+          <section aria-labelledby="por-su-cuenta">
+            <h2 id="por-su-cuenta" className="mb-3 text-sm font-semibold">
+              Mensajes que manda por su cuenta
+            </h2>
+            <div className="rounded-[14px] bg-background p-5 ring-1 ring-border">
+              <PatientOutreachField
+                value={settings.patient_outreach}
+                onChange={(patient_outreach) => change({ patient_outreach })}
+                assistantOff={settings.ai_mode === 'off'}
+              />
+            </div>
           </section>
 
           {error && <p className="text-sm text-destructive">{error}</p>}

@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
 
@@ -31,15 +31,29 @@ test('all three positions are offered', () => {
   }
 })
 
-test('each position says in plain words what it does', () => {
+test('each position shows, side by side, whether it answers and whether it books', () => {
   show('off')
 
   // The labels are three words each and the difference between two of them is
   // not guessable from the words alone; without this the clinic is choosing
-  // what its patients are told by reading a thesaurus.
-  expect(screen.getByText(/no responde ni escribe nada/i)).toBeDefined()
+  // what its patients are told by reading a thesaurus. Every card carries
+  // the same checklist, so the comparison is made at a glance.
+  const card = (label: RegExp) => screen.getByRole('radio', { name: label })
+
+  for (const label of [/Apagado/, /Observador/, /Piloto automático/]) {
+    expect(card(label).textContent).toMatch(/Contesta a tus pacientes/)
+    expect(card(label).textContent).toMatch(/Agenda las citas acordadas/)
+  }
+  expect(within(card(/Observador/)).getAllByLabelText('No')).toHaveLength(1)
+  expect(within(card(/Piloto automático/)).queryAllByLabelText('No')).toHaveLength(0)
+  expect(within(card(/Apagado/)).getAllByLabelText('No')).toHaveLength(2)
+})
+
+test('the chosen position is spelled out in full', () => {
+  show('observer')
+
   expect(screen.getByText(/Observa las conversaciones/i)).toBeDefined()
-  expect(screen.getByText(/responde solo, por WhatsApp/i)).toBeDefined()
+  expect(screen.queryByText(/responde solo, por WhatsApp/i)).toBeNull()
 })
 
 test('both active positions say that they write appointments', () => {
