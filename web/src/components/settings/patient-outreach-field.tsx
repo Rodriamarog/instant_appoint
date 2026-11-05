@@ -33,7 +33,7 @@ export function PatientOutreachField({
 
   return (
     <fieldset className="space-y-3">
-      <legend className="text-sm font-semibold">Mensajes que el asistente manda por su cuenta</legend>
+      <legend className="font-heading text-lg font-bold tracking-tight">Mensajes que el asistente manda por su cuenta</legend>
       <p className="text-xs text-muted-foreground">
         Hoy es uno solo: cuando el asistente agenda una cita a partir de una conversación, le
         manda al paciente lo que anotó para que lo confirme o lo cancele.

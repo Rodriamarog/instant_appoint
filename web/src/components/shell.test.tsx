@@ -21,14 +21,14 @@ function nav(path: string) {
   return screen.getByRole('navigation')
 }
 
-test('the signed-in navigation is Inicio and Configuración, and nothing else', () => {
+test('the signed-in navigation is Inicio, Asistente and Configuración, and nothing else', () => {
   const bar = nav('/inicio')
 
   expect(
     within(bar)
       .getAllByRole('link')
       .map((link) => link.textContent),
-  ).toEqual(['Inicio', 'Configuración'])
+  ).toEqual(['Inicio', 'Asistente', 'Configuración'])
 })
 
 /**

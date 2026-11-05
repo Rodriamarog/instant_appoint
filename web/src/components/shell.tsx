@@ -8,13 +8,15 @@ import { cn } from '@/lib/utils'
 /**
  * The whole of the signed-in navigation.
  *
- * Two tabs, because only one of the five this replaced was daily work:
- * connecting a number happens once, choosing a template is a setup act with a
- * Meta review attached, and the reminder settings are decided and then left
- * alone. All three sit under Configuración now.
+ * Inicio is the daily work. Asistente gets a tab of its own because what the
+ * assistant may do with a patient's messages is the product's central
+ * decision, not one more setting. Connecting a number, the templates and the
+ * reminder settings are decided once and left alone, so they sit under
+ * Configuración.
  */
 const links = [
   { to: '/inicio', label: 'Inicio' },
+  { to: '/asistente', label: 'Asistente' },
   { to: '/configuracion', label: 'Configuración' },
 ]
 

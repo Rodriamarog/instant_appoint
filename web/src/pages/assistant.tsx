@@ -11,7 +11,7 @@ import { errorMessage } from '@/lib/errors'
 
 /**
  * What the assistant is allowed to do with the messages a clinic's patients
- * send, and the first thing Configuración opens on.
+ * send. A top-level tab of its own, beside Inicio.
  *
  * It is first because it is the decision with a patient on the other end of
  * it: the reminder settings and the templates decide how a message is worded,
@@ -61,27 +61,39 @@ export function AssistantPage() {
     }
   }
 
-  if (!settings) {
-    return (
-      <p className="text-sm text-muted-foreground" role="status">
-        {error || 'Cargando la configuración de tu asistente...'}
-      </p>
-    )
-  }
-
   return (
-    <section className="space-y-6">
-      <AIModeField value={settings.ai_mode} onChange={(ai_mode) => change({ ai_mode })} />
+    <div className="mx-auto max-w-3xl space-y-8">
+      <div>
+        <h1 className="font-heading text-3xl font-bold tracking-[-0.03em]">Asistente</h1>
+        <p className="mt-1.5 text-muted-foreground">
+          Quién contesta los mensajes de tus pacientes, y qué puede hacer el asistente por su
+          cuenta.
+        </p>
+      </div>
 
-      {/* Below the mode and not above it: this is a control over something
-          the assistant only does once the mode has let it write, so the
-          decision it qualifies has to have been read first. */}
-      <PatientOutreachField
-        value={settings.patient_outreach}
-        onChange={(patient_outreach) => change({ patient_outreach })}
-      />
+      {!settings ? (
+        <p className="text-sm text-muted-foreground" role="status">
+          {error || 'Cargando la configuración de tu asistente...'}
+        </p>
+      ) : (
+        <>
+          <section className="rounded-[14px] bg-background p-5 ring-1 ring-border">
+            <AIModeField value={settings.ai_mode} onChange={(ai_mode) => change({ ai_mode })} />
+          </section>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
-    </section>
+          {/* Below the mode and not above it: this is a control over something
+              the assistant only does once the mode has let it write, so the
+              decision it qualifies has to have been read first. */}
+          <section className="rounded-[14px] bg-background p-5 ring-1 ring-border">
+            <PatientOutreachField
+              value={settings.patient_outreach}
+              onChange={(patient_outreach) => change({ patient_outreach })}
+            />
+          </section>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </>
+      )}
+    </div>
   )
 }

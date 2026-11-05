@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router'
 
 import { RequireAuth } from '@/components/require-auth'
 import { Shell } from '@/components/shell'
+import { AssistantPage } from '@/pages/assistant'
 import { CalendarPage } from '@/pages/calendar'
 import { HomePage } from '@/pages/home'
 import { LoginPage } from '@/pages/login'
@@ -48,14 +49,20 @@ export function App() {
         element={<Navigate to="/configuracion/plantillas" replace />}
       />
 
+      {/* The assistant lived under Configuración before it got a tab. */}
+      <Route
+        path="configuracion/asistente"
+        element={<Navigate to="/asistente" replace />}
+      />
+
       {/* Everything below here needs a session. */}
       <Route element={<RequireAuth />}>
         <Route element={<Shell />}>
           <Route path="inicio" element={<CalendarPage />} />
+          <Route path="asistente" element={<AssistantPage />} />
           <Route path="configuracion" element={<SettingsPage />}>
             {/* One page; each path only says which row starts open. */}
             <Route index element={null} />
-            <Route path="asistente" element={null} />
             <Route path="whatsapp" element={null} />
             <Route path="recordatorios" element={null} />
             <Route path="plantillas" element={null} />

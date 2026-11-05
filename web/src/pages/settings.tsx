@@ -2,14 +2,12 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router'
 import {
   Bell,
-  Bot,
   ChevronDown,
   FileText,
   MessageCircle,
   type LucideIcon,
 } from 'lucide-react'
 
-import { AssistantPage } from '@/pages/assistant'
 import { RemindersPage } from '@/pages/reminders'
 import { TemplatesPage } from '@/pages/templates'
 import { WhatsAppPage } from '@/pages/whatsapp'
@@ -36,19 +34,6 @@ interface Row {
 }
 
 const groups: { heading: string; rows: Row[] }[] = [
-  {
-    heading: 'Asistente',
-    rows: [
-      {
-        id: 'asistente',
-        path: '/configuracion/asistente',
-        icon: Bot,
-        title: 'Asistente de IA',
-        subtitle: 'Qué hace el asistente con los mensajes de tus pacientes',
-        content: () => <AssistantPage />,
-      },
-    ],
-  },
   {
     heading: 'WhatsApp',
     rows: [

@@ -144,7 +144,6 @@ test('Inicio is the appointments page', async () => {
  * used to have a tab of its own and now lives under Configuración.
  */
 test.each([
-  ['/configuracion/asistente', /^Asistente de IA/],
   ['/configuracion/whatsapp', /^Número de WhatsApp/],
   ['/configuracion/recordatorios', /^Recordatorios/],
   ['/configuracion/plantillas', /^Plantillas/],
@@ -156,10 +155,21 @@ test.each([
   expect(screen.queryByText(/no encontrada/i)).toBeNull()
 })
 
+/**
+ * The assistant has a tab of its own now; its old Configuración path, and
+ * the bare /configuracion it used to open on, must not lose it.
+ */
+test.each(['/asistente', '/configuracion/asistente'])('%s shows the assistant', async (path) => {
+  openSignedIn(path)
+
+  expect(await screen.findByRole('radiogroup', { name: 'El asistente de IA' })).toBeDefined()
+  expect(screen.getByRole('heading', { level: 1, name: 'Asistente' })).toBeDefined()
+})
+
 test('/configuracion lists every setting, none of them opened', async () => {
   openSignedIn('/configuracion')
 
-  for (const name of [/^Asistente de IA/, /^Número de WhatsApp/, /^Recordatorios/, /^Plantillas/]) {
+  for (const name of [/^Número de WhatsApp/, /^Recordatorios/, /^Plantillas/]) {
     const row = await screen.findByRole('button', { name })
     expect(row.getAttribute('aria-expanded')).toBe('false')
   }

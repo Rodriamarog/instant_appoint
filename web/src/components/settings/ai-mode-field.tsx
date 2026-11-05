@@ -4,7 +4,7 @@ import { AI_MODE_OPTIONS, type AIMode } from '@/lib/business-settings'
  * The switch that decides whether a clinic's patients are answered by the
  * assistant, and how much it is allowed to do when they are.
  *
- * It owns no state and saves nothing: the Configuración page it sits on —
+ * It owns no state and saves nothing: the Asistente page it sits on —
  * pages/assistant.tsx — holds the settings and does the saving. That is what
  * let it move there out of the reminder settings dialog it was first written
  * in, as one line deleted and the same line written elsewhere, with no
@@ -24,7 +24,7 @@ export function AIModeField({
 }) {
   return (
     <fieldset className="space-y-3">
-      <legend className="text-sm font-semibold">El asistente de IA</legend>
+      <legend className="font-heading text-lg font-bold tracking-tight">El asistente de IA</legend>
       <p className="text-xs text-muted-foreground">
         Qué puede hacer el asistente con los mensajes que te mandan tus pacientes.
       </p>
