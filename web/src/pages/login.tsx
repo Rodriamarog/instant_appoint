@@ -1,16 +1,12 @@
+import { ArrowRight } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 
+import { AuthField, AuthLayout } from '@/components/auth-layout'
+import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { requestVerification, signIn } from '@/lib/auth'
 import { errorMessage } from '@/lib/errors'
 
@@ -67,93 +63,71 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">
-            InstantAppoint
-          </CardTitle>
-          <CardDescription className="text-center">
-            Inicia sesión en tu cuenta para gestionar tus citas
-          </CardDescription>
-        </CardHeader>
-        <form onSubmit={handleLogin}>
-          <CardContent className="space-y-4">
-            {error && (
-              <div
-                role="alert"
-                className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded"
-              >
-                {error}
-              </div>
-            )}
-            {verificationMessage && (
-              <div
-                role="status"
-                className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded"
-              >
-                {verificationMessage}
-              </div>
-            )}
+    <AuthLayout
+      title="Inicia sesión"
+      subtitle="Entra para ver tu agenda del día y quién ya confirmó."
+    >
+      <form onSubmit={handleLogin} className="space-y-5">
+        {error && <Alert variant="destructive">{error}</Alert>}
+        {verificationMessage && (
+          <Alert variant="success" role="status">
+            {verificationMessage}
+          </Alert>
+        )}
 
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium">
-                Correo electrónico
-              </label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="Escribe tu correo"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
+        <AuthField>
+          <Label htmlFor="email">Correo electrónico</Label>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            placeholder="tu@correo.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </AuthField>
 
-            <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium">
-                Contraseña
-              </label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="Escribe tu contraseña"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-          </CardContent>
+        <AuthField>
+          <Label htmlFor="password">Contraseña</Label>
+          <Input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            placeholder="Escribe tu contraseña"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </AuthField>
 
-          <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Iniciando sesión...' : 'Iniciar sesión'}
-            </Button>
+        <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
+          {isLoading ? 'Iniciando sesión...' : 'Iniciar sesión'}
+          {!isLoading && <ArrowRight data-icon="inline-end" />}
+        </Button>
+      </form>
 
-            <div className="text-sm text-center text-gray-600 space-y-2">
-              <p>
-                ¿No tienes cuenta?{' '}
-                <Link to="/register" className="text-blue-600 hover:underline">
-                  Crear cuenta
-                </Link>
-              </p>
-              <p>
-                ¿Aún no verificas tu correo?{' '}
-                <button
-                  type="button"
-                  onClick={handleResendVerification}
-                  disabled={isResendingVerification}
-                  className="text-blue-600 hover:underline disabled:opacity-50"
-                >
-                  {isResendingVerification ? 'Enviando...' : 'Reenviar verificación'}
-                </button>
-              </p>
-            </div>
-          </CardFooter>
-        </form>
-      </Card>
-    </div>
+      <div className="mt-8 space-y-3 border-t pt-6 text-sm text-muted-foreground">
+        <p>
+          ¿No tienes cuenta?{' '}
+          <Link to="/register" className="font-semibold text-brand hover:underline">
+            Crear cuenta
+          </Link>
+        </p>
+        <p>
+          ¿Aún no verificas tu correo?{' '}
+          <button
+            type="button"
+            onClick={handleResendVerification}
+            disabled={isResendingVerification}
+            className="cursor-pointer font-semibold text-brand hover:underline disabled:opacity-50"
+          >
+            {isResendingVerification ? 'Enviando...' : 'Reenviar verificación'}
+          </button>
+        </p>
+      </div>
+    </AuthLayout>
   )
 }

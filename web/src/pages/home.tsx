@@ -1,4 +1,3 @@
-import '@fontsource-variable/inter-tight'
 import {
   ArrowRight,
   ArrowUpRight,

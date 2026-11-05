@@ -4,6 +4,7 @@ import {
   type Appointment,
   type AppointmentStatus,
 } from '@/lib/appointments'
+import { StatusPill, type PillTone } from '@/components/status-pill'
 import { spellDay, zonedDay, zonedTime } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 
@@ -30,6 +31,14 @@ const COUNTED: { status: AppointmentStatus; label: string }[] = [
   { status: 'pending', label: 'Pendientes' },
   { status: 'cancelled', label: 'Canceladas' },
 ]
+
+/** Each status as a pill, in the landing page's day view's two colours. */
+const TONE: Record<AppointmentStatus, PillTone> = {
+  confirmed: 'settled',
+  pending: 'waiting',
+  proposed: 'unsure',
+  cancelled: 'off',
+}
 
 /**
  * Today's appointments, in time order, each saying whether the patient has
@@ -60,7 +69,7 @@ export function DaySchedule({
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-heading text-xl font-semibold first-letter:uppercase">
+        <h2 className="font-heading text-2xl font-bold tracking-[-0.03em] first-letter:uppercase">
           {spellDay(today)}
         </h2>
       </div>
@@ -70,12 +79,20 @@ export function DaySchedule({
           <div
             key={status}
             data-testid={`count-${status}`}
-            className="rounded-lg border px-4 py-3"
+            className={cn(
+              'flex flex-col-reverse rounded-[14px] px-4 py-3.5 ring-1 ring-border',
+              status === 'confirmed' ? 'bg-accent ring-brand/15' : 'bg-background',
+            )}
           >
-            <dd className="text-2xl font-semibold tabular-nums">
+            <dt className="text-sm text-muted-foreground">{label}</dt>
+            <dd
+              className={cn(
+                'font-heading text-3xl font-bold tracking-tight tabular-nums',
+                status === 'confirmed' && 'text-brand',
+              )}
+            >
               {rows.filter((row) => row.status === status).length}
             </dd>
-            <dt className="text-sm text-muted-foreground">{label}</dt>
           </div>
         ))}
       </dl>
@@ -83,11 +100,11 @@ export function DaySchedule({
       {rows.length === 0 ? (
         // Said out loud, because a blank panel and a load that quietly
         // failed look the same, and one of the two means go home.
-        <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+        <p className="rounded-[14px] border border-dashed border-[#cfd6e6] bg-muted/50 px-4 py-12 text-center text-sm text-muted-foreground">
           No hay citas para este día.
         </p>
       ) : (
-        <ul className="divide-y rounded-lg border">
+        <ul className="divide-y overflow-hidden rounded-[14px] bg-background ring-1 ring-border">
           {rows.map((row) => (
             <li
               key={row.id}
@@ -96,17 +113,20 @@ export function DaySchedule({
               <button
                 type="button"
                 onClick={() => onSelect?.(row)}
-                className="flex w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-muted/50"
+                className="flex w-full cursor-pointer items-center gap-4 px-4 py-3.5 text-left transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
               >
-                <span className="w-14 shrink-0 font-mono text-sm tabular-nums">
+                <span className="w-14 shrink-0 text-sm font-medium text-muted-foreground tabular-nums">
                   {zonedTime(new Date(row.start_time), timeZone)}
                 </span>
-                <span data-testid="client" className="flex-1 truncate">
+                <span
+                  data-testid="client"
+                  className="flex-1 truncate text-[15px] font-semibold"
+                >
                   {row.client_name}
                 </span>
-                <span className="shrink-0 text-sm text-muted-foreground">
+                <StatusPill tone={TONE[row.status]}>
                   {statusLabel(row.status)}
-                </span>
+                </StatusPill>
               </button>
             </li>
           ))}

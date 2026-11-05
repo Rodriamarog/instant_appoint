@@ -1,6 +1,9 @@
+import { LogOut } from 'lucide-react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 
+import { Logo } from '@/components/logo'
 import { signOut } from '@/lib/auth'
+import { cn } from '@/lib/utils'
 
 /**
  * The whole of the signed-in navigation.
@@ -41,38 +44,42 @@ export function Shell() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b">
+    <div className="flex min-h-screen flex-col bg-background">
+      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur-sm supports-[backdrop-filter]:bg-background/85">
         <nav
           aria-label="Principal"
-          className="mx-auto flex max-w-5xl items-center gap-6 px-6 py-4 text-sm"
+          className="mx-auto flex h-16 max-w-5xl items-center gap-2 px-4 text-sm sm:gap-6 sm:px-6"
         >
-          <span className="font-heading font-semibold">InstantAppoint</span>
-          {links.map(({ to, label }) => (
-            <Link
-              key={to}
-              to={to}
-              aria-current={isCurrent(pathname, to) ? 'page' : undefined}
-              className={
-                isCurrent(pathname, to)
-                  ? 'text-foreground'
-                  : 'text-muted-foreground'
-              }
-            >
-              {label}
-            </Link>
-          ))}
+          <Logo className="mr-2 shrink-0 text-[17px] sm:text-[19px]" />
+          <div className="flex items-center gap-1">
+            {links.map(({ to, label }) => (
+              <Link
+                key={to}
+                to={to}
+                aria-current={isCurrent(pathname, to) ? 'page' : undefined}
+                className={cn(
+                  'rounded-lg px-3 py-2 font-medium transition-colors',
+                  isCurrent(pathname, to)
+                    ? 'bg-muted text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
           <button
             type="button"
             onClick={handleSignOut}
-            className="ml-auto rounded-lg bg-black px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800"
+            className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-[10px] px-3 py-2 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
-            Cerrar sesión
+            <LogOut className="size-4" />
+            <span className="sr-only sm:not-sr-only">Cerrar sesión</span>
           </button>
         </nav>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
         <Outlet />
       </main>
     </div>

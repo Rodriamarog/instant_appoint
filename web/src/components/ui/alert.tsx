@@ -4,11 +4,12 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 const alertVariants = cva(
-  'relative w-full rounded-3xl px-4 py-3 text-sm ring-1 ring-inset',
+  'relative w-full rounded-[10px] px-4 py-3 text-sm ring-1 ring-inset',
   {
     variants: {
       variant: {
-        default: 'bg-card text-card-foreground ring-foreground/10',
+        default: 'bg-card text-card-foreground ring-border',
+        success: 'bg-accent text-accent-foreground ring-brand/20',
         destructive: 'bg-destructive/10 text-destructive ring-destructive/20',
       },
     },

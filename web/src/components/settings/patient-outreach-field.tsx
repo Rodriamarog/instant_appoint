@@ -33,7 +33,7 @@ export function PatientOutreachField({
 
   return (
     <fieldset className="space-y-3">
-      <legend className="text-sm font-medium">Mensajes que el asistente manda por su cuenta</legend>
+      <legend className="font-heading text-lg font-bold tracking-tight">Mensajes que el asistente manda por su cuenta</legend>
       <p className="text-xs text-muted-foreground">
         Hoy es uno solo: cuando el asistente agenda una cita a partir de una conversación, le
         manda al paciente lo que anotó para que lo confirme o lo cancele.
@@ -44,11 +44,11 @@ export function PatientOutreachField({
         role="switch"
         aria-checked={on}
         onClick={() => onChange(on ? 'off' : 'on')}
-        className={`w-full rounded-lg border p-3 text-left transition-colors ${
-          on ? 'border-primary bg-primary/5' : 'border-border hover:border-foreground/40'
+        className={`w-full cursor-pointer rounded-[12px] border p-4 text-left transition-colors ${
+          on ? 'border-brand bg-accent ring-1 ring-brand' : 'border-border hover:border-brand/40 hover:bg-muted'
         }`}
       >
-        <span className="block text-sm font-medium">
+        <span className="block text-[15px] font-semibold">
           {on
             ? 'El asistente le pide al paciente que confirme la cita'
             : 'El asistente no le escribe al paciente por su cuenta'}

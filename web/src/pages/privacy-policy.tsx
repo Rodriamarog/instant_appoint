@@ -1,3 +1,7 @@
+import { Link } from 'react-router'
+
+import { Logo } from '@/components/logo'
+
 /**
  * The public privacy policy, served at /politica-de-privacidad.
  *
@@ -7,15 +11,18 @@
  */
 export function PrivacyPolicyPage() {
   return (
-    <div className="max-w-3xl mx-auto px-6 py-16">
-      <h1 className="text-3xl font-bold mb-2">Política de privacidad</h1>
-      <p className="text-gray-500 mb-8">
+    <div className="max-w-3xl mx-auto px-6 py-10 sm:py-14">
+      <Link to="/" className="inline-block mb-12">
+        <Logo />
+      </Link>
+      <h1 className="font-heading text-4xl font-bold tracking-[-0.035em] mb-2">Política de privacidad</h1>
+      <p className="text-muted-foreground mb-8">
         Última actualización: 16 de mayo de 2026
       </p>
 
-      <section className="space-y-6 text-gray-700">
+      <section className="space-y-6 text-muted-foreground">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="font-heading text-xl font-bold tracking-tight text-foreground mb-2">
             1. Sobre NeuroCrow
           </h2>
           <p>
@@ -27,7 +34,7 @@ export function PrivacyPolicyPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="font-heading text-xl font-bold tracking-tight text-foreground mb-2">
             2. Información que recogemos
           </h2>
           <ul className="list-disc pl-5 space-y-1">
@@ -52,7 +59,7 @@ export function PrivacyPolicyPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="font-heading text-xl font-bold tracking-tight text-foreground mb-2">
             3. Cómo usamos tu información
           </h2>
           <ul className="list-disc pl-5 space-y-1">
@@ -75,7 +82,7 @@ export function PrivacyPolicyPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="font-heading text-xl font-bold tracking-tight text-foreground mb-2">
             4. Datos de WhatsApp
           </h2>
           <p>
@@ -89,7 +96,7 @@ export function PrivacyPolicyPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="font-heading text-xl font-bold tracking-tight text-foreground mb-2">
             5. Conservación de los datos
           </h2>
           <p>
@@ -100,7 +107,7 @@ export function PrivacyPolicyPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="font-heading text-xl font-bold tracking-tight text-foreground mb-2">
             6. Servicios de terceros
           </h2>
           <p>
@@ -112,12 +119,12 @@ export function PrivacyPolicyPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="font-heading text-xl font-bold tracking-tight text-foreground mb-2">
             7. Contacto
           </h2>
           <p>
             Si tienes dudas sobre esta política de privacidad, escríbenos a:{' '}
-            <a href="mailto:support@neurocrow.com" className="text-blue-600 underline">
+            <a href="mailto:support@neurocrow.com" className="text-brand underline">
               support@neurocrow.com
             </a>
           </p>

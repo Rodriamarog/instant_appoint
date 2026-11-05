@@ -20,11 +20,18 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="font-heading text-2xl font-semibold">Configuración</h1>
+      <div>
+        <h1 className="font-heading text-3xl font-bold tracking-[-0.03em]">
+          Configuración
+        </h1>
+        <p className="mt-1.5 text-muted-foreground">
+          Lo que decides una vez y después dejas en paz.
+        </p>
+      </div>
 
       <nav
         aria-label="Configuración"
-        className="flex flex-wrap gap-2 border-b pb-3 text-sm"
+        className="-mx-1 flex gap-1 overflow-x-auto border-b px-1 pb-3 text-sm"
       >
         {sections.map(({ to, label }) => {
           // Exact, unlike the top bar: these are siblings, and the first of
@@ -36,10 +43,10 @@ export function SettingsPage() {
               key={to}
               to={to}
               aria-current={current ? 'page' : undefined}
-              className={`rounded-lg px-3 py-1.5 ${
+              className={`shrink-0 rounded-lg px-3 py-2 font-medium transition-colors ${
                 current
-                  ? 'bg-muted font-medium text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               }`}
             >
               {label}

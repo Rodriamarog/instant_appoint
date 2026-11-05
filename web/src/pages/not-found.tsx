@@ -14,13 +14,14 @@ export function NotFoundPage() {
   const start = useIsSignedIn() ? '/inicio' : '/'
 
   return (
-    <section className="space-y-3">
-      <h1 className="font-heading text-2xl font-semibold">
+    <section className="mx-auto max-w-xl space-y-3 px-4 py-24 text-center">
+      <p className="text-sm font-semibold text-brand">404</p>
+      <h1 className="font-heading text-4xl font-bold tracking-[-0.035em]">
         Página no encontrada
       </h1>
       <p className="text-muted-foreground">
         No hay nada en esta dirección.{' '}
-        <Link to={start} className="underline">
+        <Link to={start} className="font-semibold text-brand hover:underline">
           Ir al inicio
         </Link>
         .

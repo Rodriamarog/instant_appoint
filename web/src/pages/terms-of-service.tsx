@@ -1,3 +1,7 @@
+import { Link } from 'react-router'
+
+import { Logo } from '@/components/logo'
+
 /**
  * The public terms of service, served at /terminos-de-servicio.
  *
@@ -6,15 +10,18 @@
  */
 export function TermsOfServicePage() {
   return (
-    <div className="max-w-3xl mx-auto px-6 py-16">
-      <h1 className="text-3xl font-bold mb-2">Términos de servicio</h1>
-      <p className="text-gray-500 mb-8">
+    <div className="max-w-3xl mx-auto px-6 py-10 sm:py-14">
+      <Link to="/" className="inline-block mb-12">
+        <Logo />
+      </Link>
+      <h1 className="font-heading text-4xl font-bold tracking-[-0.035em] mb-2">Términos de servicio</h1>
+      <p className="text-muted-foreground mb-8">
         Última actualización: 16 de mayo de 2026
       </p>
 
-      <section className="space-y-6 text-gray-700">
+      <section className="space-y-6 text-muted-foreground">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="font-heading text-xl font-bold tracking-tight text-foreground mb-2">
             1. Aceptación de los términos
           </h2>
           <p>
@@ -25,7 +32,7 @@ export function TermsOfServicePage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="font-heading text-xl font-bold tracking-tight text-foreground mb-2">
             2. Descripción del servicio
           </h2>
           <p>
@@ -37,7 +44,7 @@ export function TermsOfServicePage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="font-heading text-xl font-bold tracking-tight text-foreground mb-2">
             3. Uso permitido
           </h2>
           <ul className="list-disc pl-5 space-y-1">
@@ -58,7 +65,7 @@ export function TermsOfServicePage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="font-heading text-xl font-bold tracking-tight text-foreground mb-2">
             4. Uso prohibido
           </h2>
           <ul className="list-disc pl-5 space-y-1">
@@ -72,7 +79,7 @@ export function TermsOfServicePage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="font-heading text-xl font-bold tracking-tight text-foreground mb-2">
             5. Responsabilidad sobre la cuenta
           </h2>
           <p>
@@ -82,7 +89,7 @@ export function TermsOfServicePage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="font-heading text-xl font-bold tracking-tight text-foreground mb-2">
             6. Baja de los mensajes
           </h2>
           <p>
@@ -93,7 +100,7 @@ export function TermsOfServicePage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="font-heading text-xl font-bold tracking-tight text-foreground mb-2">
             7. Exención de responsabilidad
           </h2>
           <p>
@@ -105,12 +112,12 @@ export function TermsOfServicePage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="font-heading text-xl font-bold tracking-tight text-foreground mb-2">
             8. Contacto
           </h2>
           <p>
             Si tienes dudas sobre estos términos, escríbenos a:{' '}
-            <a href="mailto:support@neurocrow.com" className="text-blue-600 underline">
+            <a href="mailto:support@neurocrow.com" className="text-brand underline">
               support@neurocrow.com
             </a>
           </p>

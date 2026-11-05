@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 
 import '@fontsource-variable/inter'
+import '@fontsource-variable/inter-tight'
 import '@fontsource-variable/geist-mono'
 import '@/globals.css'
 

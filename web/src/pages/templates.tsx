@@ -49,7 +49,7 @@ function statusClass(status: string) {
     return 'bg-green-100 text-green-700'
   }
   if (status === 'PENDING' || status === 'IN_APPEAL') {
-    return 'bg-gray-100 text-gray-600'
+    return 'bg-muted text-muted-foreground'
   }
 
   return 'bg-red-100 text-red-600'
@@ -95,7 +95,7 @@ export function TemplatesPage() {
   if (!hasAccount) {
     return (
       <div className="space-y-3">
-        <h2 className="font-heading text-xl font-semibold">Plantillas</h2>
+        <h2 className="font-heading text-xl font-bold tracking-tight">Plantillas</h2>
         <p className="text-sm text-muted-foreground">
           Conecta un número de WhatsApp Business antes de crear plantillas.
         </p>
@@ -109,7 +109,7 @@ export function TemplatesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-heading text-xl font-semibold">Plantillas</h2>
+        <h2 className="font-heading text-xl font-bold tracking-tight">Plantillas</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Las plantillas de mensaje viven en Meta. Una nueva se queda en
           PENDING hasta que Meta la aprueba, y solo se puede enviar una
@@ -212,7 +212,7 @@ function CreateTemplateForm({ onCreated }: { onCreated: () => Promise<void> }) {
         {isOpen ? 'Cancelar' : 'Nueva plantilla'}
       </Button>
 
-      {success && <Alert>{success}</Alert>}
+      {success && <Alert variant="success" role="status">{success}</Alert>}
       {failure && <Alert variant="destructive">{failure}</Alert>}
 
       {isOpen && (
@@ -415,10 +415,10 @@ function TemplateRow({ template }: { template: MessageTemplate }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{template.name}</span>
-          <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">
+          <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
             {template.language}
           </span>
-          <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">
+          <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
             {template.category}
           </span>
         </div>
@@ -444,7 +444,7 @@ function TemplateRow({ template }: { template: MessageTemplate }) {
       </div>
 
       {body && (
-        <p className="rounded bg-gray-50 p-2 text-xs text-gray-600">{body}</p>
+        <p className="rounded bg-muted p-2 text-xs text-muted-foreground">{body}</p>
       )}
 
       {/*
@@ -458,7 +458,7 @@ function TemplateRow({ template }: { template: MessageTemplate }) {
           {buttons.map((label, index) => (
             <span
               key={`${index}:${label}`}
-              className="rounded border px-2 py-0.5 text-xs text-gray-600"
+              className="rounded border px-2 py-0.5 text-xs text-muted-foreground"
             >
               {label}
             </span>

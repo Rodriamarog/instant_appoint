@@ -1,16 +1,12 @@
+import { ArrowRight } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 
+import { AuthField, AuthLayout } from '@/components/auth-layout'
+import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { register } from '@/lib/auth'
 import { errorMessage } from '@/lib/errors'
 
@@ -67,126 +63,100 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">
-            InstantAppoint
-          </CardTitle>
-          <CardDescription className="text-center">
-            Crea tu cuenta para empezar
-          </CardDescription>
-        </CardHeader>
-        <form onSubmit={handleRegister}>
-          <CardContent className="space-y-4">
-            {error && (
-              <div
-                role="alert"
-                className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded"
-              >
-                {error}
-              </div>
-            )}
-            {success && (
-              <div
-                role="status"
-                className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded"
-              >
-                {success}
-              </div>
-            )}
+    <AuthLayout
+      title="Crea tu cuenta"
+      subtitle="Toma un minuto. Después conectas tu WhatsApp y nosotros nos encargamos de los recordatorios."
+    >
+      <form onSubmit={handleRegister} className="space-y-5">
+        {error && <Alert variant="destructive">{error}</Alert>}
+        {success && (
+          <Alert variant="success" role="status">
+            {success}
+          </Alert>
+        )}
 
-            <div className="space-y-2">
-              <label htmlFor="name" className="text-sm font-medium">
-                Tu nombre completo
-              </label>
-              <Input
-                id="name"
-                name="name"
-                type="text"
-                placeholder="p. ej. Juan Pérez"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
+        <AuthField>
+          <Label htmlFor="name">Tu nombre completo</Label>
+          <Input
+            id="name"
+            name="name"
+            type="text"
+            autoComplete="name"
+            placeholder="p. ej. Juan Pérez"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+        </AuthField>
+        <AuthField>
+          <Label htmlFor="businessName">Nombre del negocio</Label>
+          <Input
+            id="businessName"
+            name="businessName"
+            type="text"
+            autoComplete="organization"
+            placeholder="p. ej. Clínica Dental Pérez"
+            value={businessName}
+            onChange={(e) => setBusinessName(e.target.value)}
+          />
+        </AuthField>
+        <AuthField>
+          <Label htmlFor="email">Correo electrónico</Label>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            placeholder="tu@correo.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </AuthField>
 
-            <div className="space-y-2">
-              <label htmlFor="businessName" className="text-sm font-medium">
-                Nombre del negocio
-              </label>
-              <Input
-                id="businessName"
-                name="businessName"
-                type="text"
-                placeholder="p. ej. Clínica Dental Pérez"
-                value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
-              />
-            </div>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <AuthField>
+            <Label htmlFor="password">Contraseña</Label>
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Mínimo 8 caracteres"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={8}
+            />
+          </AuthField>
+          <AuthField>
+            <Label htmlFor="confirmPassword">Confirmar contraseña</Label>
+            <Input
+              id="confirmPassword"
+              name="confirmPassword"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Repítela"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={8}
+            />
+          </AuthField>
+        </div>
 
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium">
-                Correo electrónico
-              </label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="Escribe tu correo"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
+        <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
+          {isLoading ? 'Creando cuenta...' : 'Crear cuenta'}
+          {!isLoading && <ArrowRight data-icon="inline-end" />}
+        </Button>
+      </form>
 
-            <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium">
-                Contraseña
-              </label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="Escribe tu contraseña"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={8}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="confirmPassword" className="text-sm font-medium">
-                Confirmar contraseña
-              </label>
-              <Input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                placeholder="Repite tu contraseña"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                minLength={8}
-              />
-            </div>
-          </CardContent>
-
-          <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Creando cuenta...' : 'Crear cuenta'}
-            </Button>
-
-            <p className="text-sm text-center text-gray-600">
-              ¿Ya tienes cuenta?{' '}
-              <Link to="/login" className="text-blue-600 hover:underline">
-                Inicia sesión
-              </Link>
-            </p>
-          </CardFooter>
-        </form>
-      </Card>
-    </div>
+      <p className="mt-8 border-t pt-6 text-sm text-muted-foreground">
+        ¿Ya tienes cuenta?{' '}
+        <Link to="/login" className="font-semibold text-brand hover:underline">
+          Inicia sesión
+        </Link>
+      </p>
+    </AuthLayout>
   )
 }

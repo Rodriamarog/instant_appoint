@@ -328,7 +328,7 @@ export function CalendarPage() {
       <div
         role="group"
         aria-label="Vista"
-        className="inline-flex rounded-lg border p-1"
+        className="inline-flex rounded-[10px] bg-muted p-1 ring-1 ring-border"
       >
         {PANES.map(({ pane: option, label }) => (
           <button
@@ -337,9 +337,9 @@ export function CalendarPage() {
             aria-pressed={pane === option}
             onClick={() => choosePane(option)}
             className={cn(
-              'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+              'cursor-pointer rounded-[7px] px-3.5 py-1.5 text-sm font-medium transition-colors',
               pane === option
-                ? 'bg-foreground text-background'
+                ? 'bg-background text-foreground shadow-[0_1px_2px_rgba(11,18,51,0.08),0_0_0_1px_var(--border)]'
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >

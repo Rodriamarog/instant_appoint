@@ -17,12 +17,12 @@ function DialogContent({
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay
         data-slot="dialog-overlay"
-        className="fixed inset-0 z-50 bg-black/50"
+        className="fixed inset-0 z-50 bg-[#0b1233]/40"
       />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-4xl bg-card p-6 text-card-foreground shadow-lg',
+          'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-[14px] bg-card p-6 text-card-foreground shadow-[0_40px_70px_-30px_rgba(11,18,51,0.45)] ring-1 ring-border',
           'max-h-[calc(100vh-2rem)]',
           className,
         )}
@@ -68,7 +68,7 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('font-heading text-base leading-none font-medium', className)}
+      className={cn('font-heading text-lg leading-tight font-bold tracking-tight', className)}
       {...props}
     />
   )
