@@ -33,6 +33,10 @@ import (
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "healthcheck" {
+		os.Exit(runHealthcheck())
+	}
+
 	app := pocketbase.New()
 
 	// Automigrate would write a migration file for every collection edit made

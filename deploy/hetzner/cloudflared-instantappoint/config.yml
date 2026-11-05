@@ -1,0 +1,11 @@
+# /etc/cloudflared-instantappoint/config.yml on the Hetzner box (copy of this file).
+# Tunnel instantappoint-hetzner, created 2026-11-05. Its own tunnel and unit
+# (cloudflared-instantappoint.service), like cloudflared-hooks; never add these
+# hostnames to another app's tunnel config.
+tunnel: cd0c1fbb-2ea0-4d60-a3f3-a25171e00f59
+credentials-file: /root/.cloudflared-instantappoint/instantappoint-hetzner.json
+
+ingress:
+  - hostname: appointments.neurocrow.com
+    service: http://127.0.0.1:3012
+  - service: http_status:404

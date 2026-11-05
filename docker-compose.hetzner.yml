@@ -1,0 +1,35 @@
+# Production compose for the Hetzner box (/opt/apps/instantappoint), used by
+# scripts/deploy-hetzner.sh. Same pattern as neurocrow-hooks'
+# docker-compose.hetzner.yml.
+#
+# This box also runs Monitor Judicial (whatsapp-bot, tribunal-scraper,
+# rag-api-server, legal-rag-*), pedimentos-v2, neurocrow-hooks,
+# neurocrow-content and neurocrow-site. This service only binds 127.0.0.1:3012
+# (public traffic for appointments.neurocrow.com arrives through its own
+# cloudflared tunnel, cloudflared-instantappoint.service) and has hard
+# memory/CPU limits so it can never starve them.
+services:
+  app:
+    build:
+      context: .
+    restart: unless-stopped
+    # The four variables the README lists, and nothing else; see
+    # scripts/deploy-hetzner.sh for how .env is written.
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:3012:8090"
+    # PocketBase's SQLite databases (data.db, auxiliary.db) and uploads live on
+    # the host so they survive rebuilds and scripts/backup-hetzner-db.sh can
+    # read them. The image runs as uid 65532, so the deploy script chowns
+    # ./data/pb_data to 65532:65532.
+    volumes:
+      - ./data/pb_data:/pb_data
+    mem_limit: 256m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD", "/app/instantappoint", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s

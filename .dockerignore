@@ -1,0 +1,14 @@
+.git
+.claude
+.env*
+*.pem
+scripts/.env.prod-secrets*
+pb_data
+data
+instantappoint
+instantappoint.exe
+web/node_modules
+web/dist
+web/.vite
+whatsapp-service
+pb_migrations

@@ -1,0 +1,12 @@
+[Unit]
+Description=cloudflared tunnel for instantappoint (Hetzner)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/cloudflared tunnel --config /etc/cloudflared-instantappoint/config.yml run
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
