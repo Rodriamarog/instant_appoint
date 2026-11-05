@@ -64,6 +64,14 @@ cloudflared tunnel --origincert ~/.cloudflared/cert.pem route dns --overwrite-dn
 Check the output for `tunnelID=cd0c1fbb…`. Then verify functionally: stop the container, and the
 public URL should answer 502.
 
+## Webhook router
+
+The neurocrow-hooks destination `instantappoint` (id 1) points at
+`https://appointments.neurocrow.com/api/webhook` and is signed with `DEST_SECRET_INSTANTAPPOINT`.
+That secret must equal this app's `NEUROCROW_ROUTER_SECRET`. The URL was repointed from the dead
+`agendapro.neurocrow.com` on 2026-11-05 (audit row 10). Change it again in the hooks admin UI, not
+by editing the database.
+
 ## Logs
 
 App warnings, such as a missing env var or webhook errors, go to PocketBase's `_logs`, under
