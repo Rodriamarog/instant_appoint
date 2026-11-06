@@ -144,7 +144,7 @@ read at boot.
 |---|---|---|
 | `VITE_META_APP_ID` | `1195277397801905` | the server's `META_APP_ID` |
 | `VITE_META_CONFIG_ID` | `986479390379975` | the Embedded Signup configuration inside that app |
-| `VITE_META_MESSAGING_CONFIG_ID` | none yet | the Facebook Login for Business configuration for Messenger and Instagram, in the same app. Unset, the connect button explains it is not configured |
+| `VITE_META_MESSAGING_CONFIG_ID` | none | optional Facebook Login for Business configuration for Messenger and Instagram. Unset, the button uses the classic Facebook login and asks for the permissions by name |
 
 Both are **public identifiers** of a Facebook app, not secrets — which is why
 they can ship in code the browser downloads. The app secret never leaves the
@@ -322,20 +322,19 @@ patient gives it; without one the appointment has no phone and no reminder.
 All in the same Meta app as WhatsApp (`META_APP_ID`), because the webhook
 router verifies every delivery with that app's secret:
 
-1. Add the **Messenger** and **Instagram** products (Instagram: "API setup
-   with Facebook login").
-2. **Webhooks**: subscribe the `Page` object (`messages`,
-   `messaging_postbacks`, `message_echoes`) and the `Instagram` object
-   (`messages`, `messaging_postbacks`) to `https://hooks.neurocrow.com/meta`
-   with the router's verify token.
-3. **Facebook Login for Business → Configurations**: create one with a *User
-   access token* and the permissions `pages_show_list`, `pages_messaging`,
+1. The **Messenger** and **Instagram** products, with these permissions
+   approved (all are live on the app): `pages_show_list`, `pages_messaging`,
    `pages_manage_metadata`, `instagram_basic`, `instagram_manage_messages`,
-   `business_management`. Its id is `VITE_META_MESSAGING_CONFIG_ID`.
-4. In the router's admin (`hooks.neurocrow.com/admin` → Rules), route
-   `page` `*` and `instagram` `*` to InstantAppoint.
-5. Until App Review grants those permissions Advanced Access, only people
-   with a role on the app can connect a Page.
+   `business_management`. The connect button asks for them by name with the
+   classic Facebook login, so no Login configuration is needed.
+2. **Webhooks**: the `page` object (`messages`, `messaging_postbacks`,
+   `message_echoes`) and the `instagram` object (`messages`,
+   `messaging_postbacks`) subscribed to `https://hooks.neurocrow.com/meta`
+   with the router's verify token.
+3. In the router (`hooks.neurocrow.com/admin` → Rules), `page` `*` and
+   `instagram` `*` routed to InstantAppoint.
+
+All three are done.
 
 The clinic also has to allow it on Instagram's side: Configuración ›
 Mensajes y respuestas a historias › Herramientas conectadas › Permitir

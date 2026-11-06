@@ -13,6 +13,16 @@ import {
   type PageChoice,
 } from '@/lib/social-accounts'
 
+/** What the connection needs: list the Pages, read and send their messages, and the same for a linked Instagram account. */
+const MESSAGING_SCOPES = [
+  'pages_show_list',
+  'pages_messaging',
+  'pages_manage_metadata',
+  'instagram_basic',
+  'instagram_manage_messages',
+  'business_management',
+].join(',')
+
 type Status =
   | { kind: 'idle' }
   | { kind: 'loading' }
@@ -66,7 +76,10 @@ export function FacebookConnect({
         connectWithCode(response.authResponse.code).then(settle, fail)
       },
       {
-        config_id: MESSAGING_CONFIG_ID,
+        // A Login for Business configuration when one is set; otherwise the
+        // classic login asking for the permissions by name (all already
+        // approved on the app), which is how Neurocrow connected Pages before.
+        ...(MESSAGING_CONFIG_ID ? { config_id: MESSAGING_CONFIG_ID } : { scope: MESSAGING_SCOPES }),
         response_type: 'code',
         override_default_response_type: true,
       },
@@ -76,14 +89,6 @@ export function FacebookConnect({
   const pick = (pageId: string) => {
     setStatus({ kind: 'loading' })
     choosePage(pageId).then(settle, fail)
-  }
-
-  if (!MESSAGING_CONFIG_ID) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Falta configurar el inicio de sesión de Facebook para mensajes en esta instalación.
-      </p>
-    )
   }
 
   if (status.kind === 'choosing') {

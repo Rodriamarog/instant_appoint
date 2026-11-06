@@ -15,8 +15,10 @@ checks `X-Hub-Signature-256` against one Meta app secret.
 
 ## Decision
 
-Both channels are connected with one Facebook Login for Business, on the same
-Meta app as WhatsApp. The person picks one Page; the Page answers Messenger
+Both channels are connected with one Facebook login, on the same Meta app as
+WhatsApp. It is the classic login asking for the permissions by name (as
+Neurocrow's old site did); a Login for Business configuration can replace it
+through `VITE_META_MESSAGING_CONFIG_ID` without code changes. The person picks one Page; the Page answers Messenger
 and its linked Instagram account answers Instagram, both with the Page's
 access token. Tokens are read with a long-lived user token, so they do not
 expire.

@@ -1,9 +1,13 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
+const config = vi.hoisted(() => ({ id: 'CONFIG-MESSAGING' }))
+
 vi.mock('@/lib/embedded-signup', () => ({
   FB_APP_ID: 'APP',
-  MESSAGING_CONFIG_ID: 'CONFIG-MESSAGING',
+  get MESSAGING_CONFIG_ID() {
+    return config.id
+  },
 }))
 
 vi.mock('@/lib/social-accounts', () => ({
@@ -19,6 +23,7 @@ type LoginCallback = (response: { authResponse?: { code: string } }) => void
 let logins: { cb: LoginCallback; opts: Record<string, unknown> }[]
 
 beforeEach(() => {
+  config.id = 'CONFIG-MESSAGING'
   logins = []
   window.FB = {
     init: () => {},
@@ -45,6 +50,19 @@ test('logs in with the messaging configuration and asks for a code', () => {
     response_type: 'code',
     override_default_response_type: true,
   })
+})
+
+test('without a configuration it asks for the messaging permissions by name', () => {
+  config.id = ''
+  render(<FacebookConnect onConnected={() => {}} />)
+
+  fireEvent.click(screen.getByRole('button', { name: /Conectar con Facebook/ }))
+
+  expect(logins[0].opts).not.toHaveProperty('config_id')
+  expect(logins[0].opts).toMatchObject({ response_type: 'code' })
+  expect(String(logins[0].opts.scope).split(',')).toEqual(
+    expect.arrayContaining(['pages_messaging', 'instagram_manage_messages', 'pages_manage_metadata']),
+  )
 })
 
 test('a single Page connects straight away', async () => {
