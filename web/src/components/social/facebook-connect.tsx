@@ -8,6 +8,7 @@ import { SDK_BLOCKED, useFacebookSdk, type FBLoginResponse } from '@/lib/faceboo
 import {
   choosePage,
   connectWithCode,
+  connectWithToken,
   type Connected,
   type ConnectResult,
   type PageChoice,
@@ -68,21 +69,24 @@ export function FacebookConnect({
     setStatus({ kind: 'loading' })
     window.FB.login(
       (response: FBLoginResponse) => {
-        if (!response.authResponse?.code) {
+        const { code, accessToken } = response.authResponse ?? {}
+        if (MESSAGING_CONFIG_ID && code) {
+          connectWithCode(code).then(settle, fail)
+        } else if (!MESSAGING_CONFIG_ID && accessToken) {
+          connectWithToken(accessToken).then(settle, fail)
+        } else {
           // Closed or declined: nothing happened, so nothing to report.
           setStatus({ kind: 'idle' })
-          return
         }
-        connectWithCode(response.authResponse.code).then(settle, fail)
       },
-      {
-        // A Login for Business configuration when one is set; otherwise the
-        // classic login asking for the permissions by name (all already
-        // approved on the app), which is how Neurocrow connected Pages before.
-        ...(MESSAGING_CONFIG_ID ? { config_id: MESSAGING_CONFIG_ID } : { scope: MESSAGING_SCOPES }),
-        response_type: 'code',
-        override_default_response_type: true,
-      },
+      MESSAGING_CONFIG_ID
+        ? // Login for Business: a code, exchanged on the server.
+          { config_id: MESSAGING_CONFIG_ID, response_type: 'code', override_default_response_type: true }
+        : // The classic login asking for the permissions by name (all already
+          // approved on the app), as Neurocrow connected Pages before. Its
+          // codes are bound to the SDK's own redirect_uri and can't be
+          // exchanged server-side, so it hands over a short-lived token.
+          { scope: MESSAGING_SCOPES, auth_type: 'rerequest' },
     )
   }
 

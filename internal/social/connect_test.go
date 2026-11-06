@@ -43,6 +43,8 @@ type graph struct {
 	calls     []string
 	pages     string
 	subscribe string
+
+	codeExchanges int
 }
 
 func newGraph(t *testing.T, pages string) *graph {
@@ -57,6 +59,9 @@ func newGraph(t *testing.T, pages string) *graph {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/oauth/access_token") && r.URL.Query().Get("code") != "":
+			g.mu.Lock()
+			g.codeExchanges++
+			g.mu.Unlock()
 			_, _ = w.Write([]byte(`{"access_token":"SHORT"}`))
 		case strings.HasSuffix(r.URL.Path, "/oauth/access_token"):
 			_, _ = w.Write([]byte(`{"access_token":"LONG"}`))
@@ -147,6 +152,27 @@ func TestOnePageConnectsMessengerAndItsInstagramAtOnce(t *testing.T) {
 
 	if !g.saw("POST /v25.0/P1/subscribed_apps") {
 		t.Error("the Page was not subscribed to webhooks")
+	}
+}
+
+// The classic login hands the browser a short-lived token, not a code: it is
+// extended directly, without a code exchange.
+func TestAShortLivedTokenConnectsWithoutACodeExchange(t *testing.T) {
+	app := newApp(t)
+	g := newGraph(t, onePageWithInstagram)
+
+	connected, _, err := social.NewConnector(app, g.client()).StartWithToken(context.Background(), "clinic-1", "SHORT")
+	if err != nil {
+		t.Fatalf("StartWithToken: %v", err)
+	}
+	if connected.PageName != "Clínica Sol" || !connected.HasInstagram {
+		t.Errorf("connected = %+v", connected)
+	}
+	if got := rows(t, app, "clinic-1"); got[social.Messenger] == nil || got[social.Instagram] == nil {
+		t.Errorf("rows = %v, want both channels", got)
+	}
+	if g.codeExchanges != 0 {
+		t.Errorf("a code exchange was made %d times", g.codeExchanges)
 	}
 }
 

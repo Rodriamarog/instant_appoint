@@ -14,7 +14,7 @@ import { FB_APP_ID } from '@/lib/embedded-signup'
  */
 
 export interface FBLoginResponse {
-  authResponse?: { code: string }
+  authResponse?: { code?: string; accessToken?: string }
 }
 
 declare global {

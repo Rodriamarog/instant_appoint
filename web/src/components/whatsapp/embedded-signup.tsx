@@ -133,7 +133,7 @@ export function WhatsAppEmbeddedSignup({ onConnected }: Props) {
         // died without a word — an SDK that lost track of the popup ends
         // exactly here — and staying quiet about that is what makes a broken
         // signup impossible to tell apart from one nobody attempted.
-        if (!response.authResponse) {
+        if (!response.authResponse?.code) {
           if (popupOutcome.current === null) {
             setStatus('error')
             setFailure(SIGNUP_DID_NOT_FINISH)

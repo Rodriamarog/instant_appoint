@@ -28,13 +28,14 @@ func Register(r *router.Router[*core.RequestEvent], connector *Connector) {
 	r.POST(DisconnectPath, disconnect(connector)).Bind(apis.RequireAuth("users"))
 }
 
-// connect takes either the login's code, or — when the login granted several
+// connect takes the login's code or short-lived token, or — when the login granted several
 // Pages — the one the person chose from them.
 func connect(connector *Connector) func(*core.RequestEvent) error {
 	return func(e *core.RequestEvent) error {
 		var body struct {
-			Code   string `json:"code"`
-			PageID string `json:"page_id"`
+			Code        string `json:"code"`
+			AccessToken string `json:"access_token"`
+			PageID      string `json:"page_id"`
 		}
 		if err := e.BindBody(&body); err != nil {
 			return e.BadRequestError("No se pudo leer la solicitud.", err)
@@ -47,6 +48,8 @@ func connect(connector *Connector) func(*core.RequestEvent) error {
 		switch {
 		case body.Code != "":
 			connected, choices, err = connector.Start(e.Request.Context(), e.Auth.Id, body.Code)
+		case body.AccessToken != "":
+			connected, choices, err = connector.StartWithToken(e.Request.Context(), e.Auth.Id, body.AccessToken)
 		case body.PageID != "":
 			connected, err = connector.Choose(e.Request.Context(), e.Auth.Id, body.PageID)
 		default:

@@ -66,6 +66,15 @@ export function connectWithCode(code: string): Promise<ConnectResult> {
   )
 }
 
+/** Hands the server the classic login's short-lived token, which it extends. */
+export function connectWithToken(accessToken: string): Promise<ConnectResult> {
+  return call<ConnectResult>(
+    '/api/social/connect',
+    { method: 'POST', body: JSON.stringify({ access_token: accessToken }) },
+    FAILED,
+  )
+}
+
 /** Connects one of the Pages the login offered. */
 export function choosePage(pageId: string): Promise<ConnectResult> {
   return call<ConnectResult>(

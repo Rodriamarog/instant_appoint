@@ -106,6 +106,15 @@ func (c *Connector) Start(ctx context.Context, userID, code string) (*Connected,
 		return nil, nil, fmt.Errorf("exchange the login code: %w", err)
 	}
 
+	return c.StartWithToken(ctx, userID, shortLived)
+}
+
+// StartWithToken is Start for the classic login, which hands the browser a
+// short-lived user token instead of a code: its codes are bound to the SDK's
+// own redirect_uri and cannot be exchanged here. The fb_exchange_token call
+// signed with this app's secret only succeeds for a token issued to this app,
+// so a token from anywhere else is refused by Meta.
+func (c *Connector) StartWithToken(ctx context.Context, userID, shortLived string) (*Connected, []PageChoice, error) {
 	longLived, err := c.client.LongLivedUserToken(ctx, shortLived)
 	if err != nil {
 		return nil, nil, fmt.Errorf("extend the user token: %w", err)

@@ -12,13 +12,14 @@ vi.mock('@/lib/embedded-signup', () => ({
 
 vi.mock('@/lib/social-accounts', () => ({
   connectWithCode: vi.fn(),
+  connectWithToken: vi.fn(),
   choosePage: vi.fn(),
 }))
 
 import { FacebookConnect } from '@/components/social/facebook-connect'
-import { choosePage, connectWithCode } from '@/lib/social-accounts'
+import { choosePage, connectWithCode, connectWithToken } from '@/lib/social-accounts'
 
-type LoginCallback = (response: { authResponse?: { code: string } }) => void
+type LoginCallback = (response: { authResponse?: { code?: string; accessToken?: string } }) => void
 
 let logins: { cb: LoginCallback; opts: Record<string, unknown> }[]
 
@@ -52,17 +53,27 @@ test('logs in with the messaging configuration and asks for a code', () => {
   })
 })
 
-test('without a configuration it asks for the messaging permissions by name', () => {
+test('without a configuration it asks for the permissions by name and sends the token', async () => {
   config.id = ''
-  render(<FacebookConnect onConnected={() => {}} />)
+  const connected = { page_name: 'Clínica Sol', has_instagram: false }
+  vi.mocked(connectWithToken).mockResolvedValue({ connected })
+  const onConnected = vi.fn()
+  render(<FacebookConnect onConnected={onConnected} />)
 
   fireEvent.click(screen.getByRole('button', { name: /Conectar con Facebook/ }))
 
   expect(logins[0].opts).not.toHaveProperty('config_id')
-  expect(logins[0].opts).toMatchObject({ response_type: 'code' })
+  // The classic login's codes are bound to the SDK's redirect_uri: never ask for one.
+  expect(logins[0].opts).not.toHaveProperty('response_type')
   expect(String(logins[0].opts.scope).split(',')).toEqual(
     expect.arrayContaining(['pages_messaging', 'instagram_manage_messages', 'pages_manage_metadata']),
   )
+
+  await act(async () => logins[0].cb({ authResponse: { accessToken: 'SHORT' } }))
+
+  expect(connectWithToken).toHaveBeenCalledWith('SHORT')
+  expect(connectWithCode).not.toHaveBeenCalled()
+  expect(onConnected).toHaveBeenCalledWith(connected)
 })
 
 test('a single Page connects straight away', async () => {
